@@ -8,7 +8,7 @@
         instance_name: "",
         endpoints: [
           {
-            address: "grpc://${NATIVELINK_ENDPOINT:-127.0.0.1}:50051",
+            address: "grpc://${FORGE_ENDPOINT:-127.0.0.1}:50051",
           },
         ],
         store_type: "cas",
@@ -22,7 +22,7 @@
         instance_name: "",
         endpoints: [
           {
-            address: "grpc://${NATIVELINK_ENDPOINT:-127.0.0.1}:50051",
+            address: "grpc://${FORGE_ENDPOINT:-127.0.0.1}:50051",
           },
         ],
         store_type: "ac",
@@ -33,8 +33,8 @@
       fast_slow: {
         fast: {
           filesystem: {
-            content_path: "/tmp/nativelink/content_path-cas",
-            temp_path: "/tmp/nativelink/tmp_path-cas",
+            content_path: "/tmp/forge/content_path-cas",
+            temp_path: "/tmp/forge/tmp_path-cas",
             eviction_policy: {
               max_bytes: "10Gb",
             },
@@ -53,13 +53,13 @@
     {
       local: {
         worker_api_endpoint: {
-          uri: "grpc://${NATIVELINK_ENDPOINT:-127.0.0.1}:50061",
+          uri: "grpc://${FORGE_ENDPOINT:-127.0.0.1}:50061",
         },
         cas_fast_slow_store: "WORKER_FAST_SLOW_STORE",
         upload_action_result: {
           ac_store: "GRPC_LOCAL_AC_STORE",
         },
-        work_directory: "/tmp/nativelink/work",
+        work_directory: "/tmp/forge/work",
         platform_properties: {
           cpu_count: {
             query_cmd: "nproc",
@@ -90,12 +90,12 @@
               // that is matched by the scheduler against the value specified in
               // the `exec_properties` of the corresponding platform at
               // `local-remote-execution/generated-cc/config/BUILD`.
-              "${NATIVELINK_WORKER_PLATFORM:-undefined_platform}",
+              "${FORGE_WORKER_PLATFORM:-undefined_platform}",
             ],
           },
           "lre-rs": {
             values: [
-              "${NATIVELINK_WORKER_LRE_RS:-undefined}",
+              "${FORGE_WORKER_LRE_RS:-undefined}",
             ],
           },
           ISA: {

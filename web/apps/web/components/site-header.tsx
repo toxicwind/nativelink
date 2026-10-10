@@ -1,6 +1,6 @@
 "use client";
 
-import { SiteHeader } from "@nativelink/ui";
+import { SiteHeader } from "@forge/ui";
 import { usePathname } from "next/navigation";
 
 /** Client wrapper so the shared header can mark the current route. */

@@ -1,21 +1,21 @@
 {
   "include": [
     {
-      "components": "nativelink-image-for-x64 nativelink-image-for-aarch64",
-      "image": "nativelink",
+      "components": "forge-image-for-x64 forge-image-for-aarch64",
+      "image": "forge",
       "multi-arch": true
     },
     {
-      "components": "nativelink-init-for-x64 nativelink-init-for-aarch64",
-      "image": "nativelink-worker-init",
+      "components": "forge-init-for-x64 forge-init-for-aarch64",
+      "image": "forge-worker-init",
       "multi-arch": true
     },
     {
-      "image": "nativelink-worker-lre-cc",
+      "image": "forge-worker-lre-cc",
       "multi-arch": false
     },
     {
-      "image": "nativelink-worker-lre-rs",
+      "image": "forge-worker-lre-rs",
       "multi-arch": false
     }
   ]

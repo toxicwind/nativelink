@@ -8,7 +8,7 @@
  */
 export const SOURCE_REF = "v1.6.5";
 
-export const REPO_URL = "https://github.com/TraceMachina/nativelink";
+export const REPO_URL = "https://github.com/toxicwind/forge";
 
 /**
  * Permalink to a repo-relative path at the pinned ref.

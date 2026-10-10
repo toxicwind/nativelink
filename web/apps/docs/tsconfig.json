@@ -11,7 +11,7 @@
     "node_modules",
     ".next"
   ],
-  "extends": "@nativelink/config/tsconfig/nextjs.json",
+  "extends": "@forge/config/tsconfig/nextjs.json",
   "include": [
     "next-env.d.ts",
     "**/*.ts",

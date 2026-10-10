@@ -1,4 +1,4 @@
-// Copyright 2026 The NativeLink Authors. All rights reserved.
+// Copyright 2026 The Forge Authors. All rights reserved.
 //
 // Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,14 +16,14 @@ use core::time::Duration;
 use std::sync::Arc;
 
 use clap::Parser;
-use nativelink_error::{Error, ResultExt};
-use nativelink_proto::build::bazel::remote::execution::v2::content_addressable_storage_client::ContentAddressableStorageClient;
-use nativelink_proto::build::bazel::remote::execution::v2::{
+use forge_error::{Error, ResultExt};
+use forge_proto::build::bazel::remote::execution::v2::content_addressable_storage_client::ContentAddressableStorageClient;
+use forge_proto::build::bazel::remote::execution::v2::{
     Digest, FindMissingBlobsRequest, digest_function,
 };
-use nativelink_util::spawn;
-use nativelink_util::telemetry::init_tracing;
-use nativelink_util::tls_utils::endpoint_from;
+use forge_util::spawn;
+use forge_util::telemetry::init_tracing;
+use forge_util::tls_utils::endpoint_from;
 use rand::{Rng, RngCore};
 use sha2::{Digest as _, Sha256};
 use tokio::sync::Mutex;
@@ -39,7 +39,7 @@ struct Args {
     endpoint: String,
 
     #[arg(short, long)]
-    nativelink_key: Option<String>,
+    forge_key: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn core::error::Error>> {
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn core::error::Error>> {
                 .map(|_| {
                     let local_timings = timings.clone();
                     let local_endpoint = args.endpoint.clone();
-                    let local_api_key = args.nativelink_key.clone();
+                    let local_api_key = args.forge_key.clone();
                     spawn!("CAS requester", async move {
                         let tls_config = ClientTlsConfig::new().with_enabled_roots();
                         let endpoint = endpoint_from(&local_endpoint, Some(tls_config))?;
@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn core::error::Error>> {
                             if let Some(ref api_key) = local_api_key {
                                 request
                                     .metadata_mut()
-                                    .insert("x-nativelink-api-key", api_key.parse().unwrap());
+                                    .insert("x-forge-api-key", api_key.parse().unwrap());
                             }
                             let start = Instant::now();
                             client

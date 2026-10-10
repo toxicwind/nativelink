@@ -37,7 +37,7 @@ current [execution stage](#execution-stage), its priority, and every client
 waiting on it. Two identical actions submitted at the same time join the same
 awaited action instead of running twice. By default this record lives in the
 scheduler process's memory
-(<SourceLink file="nativelink-scheduler/src/memory_awaited_action_db.rs" />),
+(<SourceLink file="forge-scheduler/src/memory_awaited_action_db.rs" />),
 which is why two scheduler replicas behind a load balancer do not share
 in-flight work. See [scheduler internals](/explanations/scheduler-internals).
 
@@ -72,7 +72,7 @@ missing the cache. Valid only on AC stores.
 ## Dedup store [#dedup-store]
 
 A store that splits blobs into content-defined chunks with FastCDC
-(<SourceLink file="nativelink-util/src/fastcdc.rs" />) and stores each chunk
+(<SourceLink file="forge-util/src/fastcdc.rs" />) and stores each chunk
 once, so two versions of a large file that differ in the middle share
 everything else. The cost is an index lookup per read. See
 [the store model](/explanations/store-model).
@@ -85,7 +85,7 @@ A content hash plus a size. Used everywhere instead of file paths.
 
 The hash a client and server agree on for [digests](#digest): SHA-256 or
 BLAKE3, negotiated per request rather than fixed at build time
-(<SourceLink file="nativelink-util/src/digest_hasher.rs" symbol="DigestHasherFunc" />).
+(<SourceLink file="forge-util/src/digest_hasher.rs" symbol="DigestHasherFunc" />).
 Two clients using different functions produce different keys for the same
 bytes, so they do not share cache entries.
 
@@ -100,7 +100,7 @@ store configured without a policy grows until the disk does.
 
 Where an action is in its life: `CacheCheck`, `Queued`, `Executing`, then
 `Completed` or `CompletedFromCache`
-(<SourceLink file="nativelink-util/src/action_messages.rs" symbol="ActionStage" />).
+(<SourceLink file="forge-util/src/action_messages.rs" symbol="ActionStage" />).
 An action stuck in `Queued` has no free [worker](#worker) whose
 [platform properties](#platform-properties) match what it asked for.
 `CacheCheck` is declared but the scheduler never reports it, because the
@@ -130,7 +130,7 @@ lookup are most of what a client does.
 ## Hermetic build [#hermetic-build]
 
 A build whose outputs depend only on its declared inputs. Same
-inputs → same outputs, on any machine, any time. What NativeLink does
+inputs → same outputs, on any machine, any time. What Forge does
 and does not guarantee here is in
 [correctness and hermeticity](/explanations/correctness-hermeticity).
 
@@ -143,12 +143,12 @@ changing one input file changes the cache key.
 
 ## Instance name [#instance-name]
 
-A namespace inside a NativeLink cluster. Each service entry maps an
+A namespace inside a Forge cluster. Each service entry maps an
 instance name to a store or scheduler, so one cluster can serve multiple
 isolated environments, and the scheduler keys in-flight actions by instance
 name as well as digest. Two instance names that point at the same store share
 its contents.
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="InstanceName" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="InstanceName" />
 
 ## Isolation [#isolation]
 
@@ -156,15 +156,15 @@ Keeping an action from seeing state outside its declared inputs.
 On Linux, workers can isolate actions with kernel namespaces via
 the `use_namespaces` and `use_mount_namespace` worker options,
 which also reap zombie processes and improve hermeticity.
-NativeLink doesn't currently integrate external sandboxing tools
+Forge doesn't currently integrate external sandboxing tools
 like `bwrap`, `landlock`, or `sandbox-exec`.
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="use_mount_namespace" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="use_mount_namespace" />
 
 ## JSON5 [#json5]
 
-The dialect NativeLink's configuration file is written in: JSON plus
+The dialect Forge's configuration file is written in: JSON plus
 comments, trailing commas, and unquoted keys. Every example in
-[the configuration reference](/reference/nativelink-config) is JSON5.
+[the configuration reference](/reference/forge-config) is JSON5.
 
 ## LRE: Local Remote Execution [#lre--local-remote-execution]
 
@@ -186,7 +186,7 @@ from re-running the work.
 
 An experimental stream of the requests and responses a server handled,
 published to a store for an external consumer to read
-(<SourceLink file="nativelink-proto/com/github/trace_machina/nativelink/remote_execution/events.proto" />).
+(<SourceLink file="forge-proto/com/github/trace_machina/forge/remote_execution/events.proto" />).
 Off unless `experimental_origin_events` is configured.
 
 ## Platform properties [#platform-properties]
@@ -194,16 +194,16 @@ Off unless `experimental_origin_events` is configured.
 Key/value tags attached to an action ("this action needs Linux,
 x86_64, a GPU") and to a worker ("this worker has Linux, x86_64, a
 GPU"). The scheduler matches them.
-<SourceLink file="nativelink-util/src/platform_properties.rs" symbol="is_satisfied_by" />
+<SourceLink file="forge-util/src/platform_properties.rs" symbol="is_satisfied_by" />
 
 ## Priority [#priority]
 
-An integer on `ExecuteRequest`'s `execution_policy`; NativeLink dequeues
+An integer on `ExecuteRequest`'s `execution_policy`; Forge dequeues
 the highest value first when workers are scarce (the RE-API leaves the
 direction to the server, and its suggested default is the reverse). It orders
 the queue and nothing more; an action already executing is not interrupted for
 a higher-priority one that arrives after it.
-<SourceLink file="nativelink-scheduler/src/awaited_action_db/awaited_action.rs" symbol="AwaitedActionSortKey" />
+<SourceLink file="forge-scheduler/src/awaited_action_db/awaited_action.rs" symbol="AwaitedActionSortKey" />
 
 ## Remote Execution API (RE-API) [#remote-execution-api-re-api]
 
@@ -223,7 +223,7 @@ one backend loses that backend's share of the data rather than none of it.
 
 ## Store [#store]
 
-NativeLink's unit of storage configuration: a named thing that gets and puts
+Forge's unit of storage configuration: a named thing that gets and puts
 bytes under a key. Stores compose, because a store's backend is another store,
 so the CAS a server serves is usually a stack of wrappers over one real
 backend. See [the store model](/explanations/store-model).
@@ -248,9 +248,9 @@ command, uploads outputs to CAS.
 
 ## Worker API [#worker-api]
 
-NativeLink's own gRPC service, not part of the RE-API, over which a worker
+Forge's own gRPC service, not part of the RE-API, over which a worker
 registers with a scheduler and receives work
-(<SourceLink file="nativelink-proto/com/github/trace_machina/nativelink/remote_execution/worker_api.proto" />).
+(<SourceLink file="forge-proto/com/github/trace_machina/forge/remote_execution/worker_api.proto" />).
 One bidirectional `ConnectWorker` stream carries the whole conversation, which
 is what keeps a worker talking to the same scheduler instance even behind a
 load balancer.

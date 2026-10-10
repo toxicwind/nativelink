@@ -1,5 +1,5 @@
 module(
-    name = "nativelink",
+    name = "forge",
     version = "1.7.6",
 )
 
@@ -19,7 +19,7 @@ bazel_dep(name = "llvm", version = "0.8.18")
 register_toolchains("@llvm//toolchain:all")
 
 # We use the Nix Python install, as per https://rules-python.readthedocs.io/en/latest/toolchains.html#local-toolchain
-# Can't use the rules_python download versions as it breaks with the genrule stuff in nativelink-proto
+# Can't use the rules_python download versions as it breaks with the genrule stuff in forge-proto
 # Also, this way around we get a Nix-locked Python binary
 local_runtime_repo = use_repo_rule(
     "@rules_python//python/local_toolchains:repos.bzl",
@@ -56,7 +56,7 @@ bazel_dep(name = "rules_rs", version = "0.0.108")
 # even when the target is musl, which leaves `__isoc23_*` symbols dangling at
 # link time; the rules_rs recipe below swaps that script for this module plus
 # pregenerated bindings. aws-lc-rs is only linked for the JWT signing behind
-# gcloud-auth's `jwt-aws-lc-rs` feature (see nativelink-store/Cargo.toml).
+# gcloud-auth's `jwt-aws-lc-rs` feature (see forge-store/Cargo.toml).
 bazel_dep(name = "aws-lc", version = "5.1.0.bcr.2")
 
 rules_rust_bindgen = use_extension("@rules_rs//rs:rules_rust_bindgen.bzl", "rules_rust_bindgen")
@@ -141,14 +141,14 @@ crate.annotation(
     deps = [
         "@crates//:aws_lc_sys_build_info",
         # glibc-named libc symbols AWS-LC references when linked against musl.
-        "@nativelink//nativelink-store:aws_lc_musl_shims",
+        "@forge//forge-store:aws_lc_musl_shims",
     ],
 )
 use_repo(crate, "crates")
 
 inject_repo(crate, "aws-lc")
 
-# NativeLink uses Local Remote Execution for Rust by default which automatically
+# Forge uses Local Remote Execution for Rust by default which automatically
 # handles Rust toolchain configuration via Nix.
 #
 # If you build outside of Nix you'll have to register these toolchains
@@ -157,7 +157,7 @@ inject_repo(crate, "aws-lc")
 #
 # WARNING: This configuration exists entirely as a convenience option and
 #          migration and is not a supported way of building production
-#          grade nativelink executables. It may be removed at any point in time.
+#          grade forge executables. It may be removed at any point in time.
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2024",

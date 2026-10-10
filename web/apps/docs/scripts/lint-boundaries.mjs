@@ -26,7 +26,7 @@
 // call to action with extra steps.
 //
 // Usage, from web/:
-//   bun --filter @nativelink/docs lint:boundaries
+//   bun --filter @forge/docs lint:boundaries
 // or directly:
 //   node scripts/lint-boundaries.mjs
 //
@@ -61,11 +61,11 @@ const RULES = [
   },
   {
     name: "hosted-product marketing link",
-    re: /https?:\/\/(?:www\.)?nativelink\.com\/(?:pricing|signup|sign-up|contact|demo|dashboard|app)\b/i,
+    re: /https?:\/\/(?:www\.)?forge\.com\/(?:pricing|signup|sign-up|contact|demo|dashboard|app)\b/i,
   },
   {
     name: "upsell framing",
-    re: /\b(upgrade to (?:the )?(?:cloud|enterprise|pro)|available (?:only )?(?:on|in) (?:nativelink )?cloud\b)/i,
+    re: /\b(upgrade to (?:the )?(?:cloud|enterprise|pro)|available (?:only )?(?:on|in) (?:forge )?cloud\b)/i,
   },
 ];
 

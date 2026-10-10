@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2022-2024 The NativeLink Authors. All rights reserved.
+# Copyright 2022-2024 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -74,8 +74,8 @@ fi
 # Get the sha256 value, this will fail due to empty string in the sha256 field.
 set +o pipefail
 SHA256_HASH=$(
-    nix run .#nativelink-worker-toolchain-buck2.copyTo \
-        docker://localhost:5001/nativelink-toolchain-buck2:latest \
+    nix run .#forge-worker-toolchain-buck2.copyTo \
+        docker://localhost:5001/forge-toolchain-buck2:latest \
         -- --dest-tls-verify=false 2>&1 |
         grep "got:" |
         grep -o 'sha256-[^[:space:]]*'
@@ -102,15 +102,15 @@ else
 fi
 
 # Add worker specific files and configurations.
-nix run .#nativelink-worker-toolchain-buck2.copyTo \
-    docker://localhost:5001/nativelink-toolchain-buck2:latest \
+nix run .#forge-worker-toolchain-buck2.copyTo \
+    docker://localhost:5001/forge-toolchain-buck2:latest \
     -- \
     --dest-tls-verify=false
 
 # Publish image to ECR.
 if [ "$ECR_PUBLISH" = "true" ]; then
     ecr_login
-    nix run .#nativelink-worker-toolchain-buck2.copyTo "${ECR}"
+    nix run .#forge-worker-toolchain-buck2.copyTo "${ECR}"
 else
     echo "Skipping ECR publishing"
 fi

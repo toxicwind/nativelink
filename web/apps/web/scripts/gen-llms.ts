@@ -2,7 +2,7 @@
 // Generate the marketing site's llms files, and the repository's.
 //
 //   public/llms.txt, public/llms-small.txt, public/llms-full.txt
-//     what nativelink.com serves; gitignored and rebuilt by `dev` and `build`.
+//     what forge.com serves; gitignored and rebuilt by `dev` and `build`.
 //   <repo root>/llms.txt, llms-small.txt, llms-full.txt
 //     the same bytes, committed, so a clone of the repository carries its own
 //     corpus. Written only when the repository root is on disk (it is not in a
@@ -15,7 +15,7 @@
 //   ../docs/scripts/gen-llms.mjs     the documentation corpus, built from the docs nav
 //
 // Usage, from web/:
-//   bun --filter @nativelink/web gen:llms
+//   bun --filter @forge/web gen:llms
 
 import { spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";

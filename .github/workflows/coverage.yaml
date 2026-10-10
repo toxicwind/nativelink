@@ -32,7 +32,7 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       # Ubuntu 24.04 restricts unprivileged user namespaces by default, which breaks
       # the worker tests that use namespaces (e.g. for sandboxing).
@@ -41,7 +41,7 @@ jobs:
 
       - name: Generate coverage
         run: |
-          nix build -L .#nativelinkCoverageForHost
+          nix build -L .#forgeCoverageForHost
           cat result/text/index.txt
 
       - name: Upload coverage artifact
@@ -54,8 +54,8 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nix_name: .#nativelinkCoverageForHost
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          nix_name: .#forgeCoverageForHost
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
   deploy:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

@@ -1,15 +1,15 @@
 ---
 title: Siso
-description: Point Siso at NativeLink for Chromium-style remote caching and execution.
+description: Point Siso at Forge for Chromium-style remote caching and execution.
 ---
 
 <Prerequisites>
-  A running NativeLink instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
+  A running Forge instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
 </Prerequisites>
 
 [Siso](https://chromium.googlesource.com/build/+/refs/heads/main/siso/README.md)
 is Chromium's Ninja replacement. It runs build actions on RBE natively,
-and NativeLink can be the RE API backend for Chromium and other
+and Forge can be the RE API backend for Chromium and other
 Siso-driven builds.
 
 For a production Chromium walkthrough, see
@@ -17,7 +17,7 @@ For a production Chromium walkthrough, see
 
 ## Local endpoint setup [#local-endpoint-setup]
 
-Start NativeLink on `localhost:50051` with instance name `main`, then
+Start Forge on `localhost:50051` with instance name `main`, then
 export the environment variables Siso reads:
 
 ```bash
@@ -32,7 +32,7 @@ CMake compiler-launcher workflows directly.
 
 ## Chromium-style setup [#chromium-style-setup]
 
-Chromium checks in Siso configs. Point them at NativeLink by enabling
+Chromium checks in Siso configs. Point them at Forge by enabling
 remote execution in GN:
 
 ```bash
@@ -57,23 +57,23 @@ advertise; see [Chromium](/getting-started/connect-your-build/chromium#worker-re
 
 ## Production TLS settings [#production-tls-settings]
 
-For a secured NativeLink endpoint, set the Siso TLS variables instead
+For a secured Forge endpoint, set the Siso TLS variables instead
 of `RBE_service_no_security=true`:
 
 ```bash
-export SISO_REAPI_ADDRESS=cas.nativelink.internal:50051
+export SISO_REAPI_ADDRESS=cas.forge.internal:50051
 export SISO_REAPI_INSTANCE=main
 export RBE_service_no_security=false
-export RBE_tls_client_auth_cert=/etc/nativelink/tls/client.crt
-export RBE_tls_client_auth_key=/etc/nativelink/tls/client.key
-export RBE_tls_ca_cert=/etc/nativelink/tls/ca.crt
+export RBE_tls_client_auth_cert=/etc/forge/tls/client.crt
+export RBE_tls_client_auth_key=/etc/forge/tls/client.key
+export RBE_tls_ca_cert=/etc/forge/tls/ca.crt
 ```
 
 ## Confirm it is working [#confirm-it-is-working]
 
 On a warm cache, cache hits should climb and network errors should stay at
 zero. If actions fall back to local execution, compare the platform
-properties Siso requests with the properties your NativeLink workers
+properties Siso requests with the properties your Forge workers
 advertise.
 
 ## FAQ [#faq]
@@ -92,5 +92,5 @@ advertise.
 </Accordions>
 
 <NextStep href="/getting-started/shared-cache" title="Share the cache">
-  Siso is pointed at NativeLink. Next is making that endpoint one your team and your CI both hit.
+  Siso is pointed at Forge. Next is making that endpoint one your team and your CI both hit.
 </NextStep>

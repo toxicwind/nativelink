@@ -21,7 +21,7 @@ That is the whole idea. It is worth stating what it is *not*, because the
 name invites a different reading.
 
 <Callout type="warn" title="LRE does not mean running a worker on your laptop">
-  No local NativeLink worker exists in this design, and no container runs
+  No local Forge worker exists in this design, and no container runs
   on your machine during a build. Your local build is an ordinary local
   Bazel build. What LRE changes is *which compiler that build invokes*. The
   toolchain container images are, in the source's own words, "never really
@@ -105,7 +105,7 @@ step was deliberately patched out, with the in-source justification that
 because our images are reproducible."
 
 **Not a URL that gets pulled.** `container-image` is a *raw string matched by
-the scheduler* against what a worker advertises. NativeLink does not fetch it.
+the scheduler* against what a worker advertises. Forge does not fetch it.
 Two different conventions coexist in-tree (`docker://lre-cc:<tag>` for C++
 and a `ghcr.io/...` reference for Rust), and a downstream user has to match
 whatever string their own workers advertise. See

@@ -19,7 +19,7 @@ sends each action to the right one. **Time:** twenty minutes.
 Start here, because the name is misleading and the misunderstanding is
 expensive.
 
-**NativeLink does not pull an image and launch a container for each action.**
+**Forge does not pull an image and launch a container for each action.**
 No code sits behind the `container-image` key. Search the source for it
 and you will find it in example configs, in the LRE platform definitions under
 `local-remote-execution/`, and in CI wiring; nothing in the scheduler or worker
@@ -49,7 +49,7 @@ far the most common way a container-image scheme goes wrong.
 
 <Mermaid>
 {`flowchart LR
-    I["base image<br/>(your toolchain)"] -->|createWorker| WI["nativelink-worker-*<br/>image"]
+    I["base image<br/>(your toolchain)"] -->|createWorker| WI["forge-worker-*<br/>image"]
     WI -->|"docker run / k8s pod"| WP["worker process<br/>advertises container-image"]
     WP -->|connect_worker| S[scheduler]
     A["action<br/>requests container-image"] --> S
@@ -67,43 +67,43 @@ actions in the queue. There's a safe sequence below.
 
 ## Build a worker image [#build-a-worker-image]
 
-A NativeLink worker image is any image that contains your toolchain and can
-run the `nativelink` binary with a worker config. The repo's Nix helper,
-`createWorker`, turns a toolchain image into a `nativelink-worker-*` image:
+A Forge worker image is any image that contains your toolchain and can
+run the `forge` binary with a worker config. The repo's Nix helper,
+`createWorker`, turns a toolchain image into a `forge-worker-*` image:
 
 ```nix
-nativelink-worker-lre-cc = createWorker pkgs.lre.lre-cc.image;
-nativelink-worker-lre-java = createWorker lre-java;
-nativelink-worker-lre-rs = createWorker pkgs.lre.lre-rs.image;
-nativelink-worker-siso-chromium = createWorker siso-chromium;
-nativelink-worker-toolchain-drake = createWorker toolchain-drake;
-nativelink-worker-toolchain-buck2 = createWorker toolchain-buck2;
+forge-worker-lre-cc = createWorker pkgs.lre.lre-cc.image;
+forge-worker-lre-java = createWorker lre-java;
+forge-worker-lre-rs = createWorker pkgs.lre.lre-rs.image;
+forge-worker-siso-chromium = createWorker siso-chromium;
+forge-worker-toolchain-drake = createWorker toolchain-drake;
+forge-worker-toolchain-buck2 = createWorker toolchain-buck2;
 ```
 
 <SourceLink file="tools/public/create-worker.nix" symbol="createWorker" />
 
-What it adds on top of the base image is small: a `nativelink` user (uid
+What it adds on top of the base image is small: a `forge` user (uid
 1000) and home directory, a world-writable `/tmp`, `/usr/bin/env`, and
 `coreutils`, `bash` and `gnused` on `/bin`. It keeps the base image's tag so
 the worker image and the toolchain it wraps stay visibly paired. It does
-*not* bake the `nativelink` binary in, whatever its header comment says: the
+*not* bake the `forge` binary in, whatever its header comment says: the
 Kubernetes examples inject the binary at pod start with the
-`nativelink-worker-init` init container, which copies it into a shared
-volume, and the worker container then runs `/shared/nativelink /worker.json5`.
-That keeps the toolchain image and the NativeLink version independently
+`forge-worker-init` init container, which copies it into a shared
+volume, and the worker container then runs `/shared/forge /worker.json5`.
+That keeps the toolchain image and the Forge version independently
 upgradable.
 
-<SourceLink file="tools/nativelink-worker-init.nix" />
+<SourceLink file="tools/forge-worker-init.nix" />
 <SourceLink file="kubernetes/components/worker/worker.yaml" />
 
 Push one to a registry the way the repo's own tooling does:
 
 ```bash
-nix run .#nativelink-worker-lre-cc.copyTo docker://localhost:5001/nativelink-worker-lre-cc:latest
+nix run .#forge-worker-lre-cc.copyTo docker://localhost:5001/forge-worker-lre-cc:latest
 ```
 
 You do not have to use Nix for this. Any image that contains your toolchain
-and runs `nativelink` with a config is a valid worker image: a Dockerfile
+and runs `forge` with a config is a valid worker image: a Dockerfile
 that starts `FROM your-toolchain-base`, copies in the binary, and sets the
 entrypoint works identically. Nix is how this repo gets *reproducible* images;
 it isn't a requirement of the worker protocol.
@@ -145,7 +145,7 @@ workers: [{
     worker_api_endpoint: { uri: "grpc://scheduler.internal:50061" },
     cas_fast_slow_store: "WORKER_FAST_SLOW_STORE",
     upload_action_result: { ac_store: "AC_MAIN_STORE" },
-    work_directory: "/tmp/nativelink/work",
+    work_directory: "/tmp/forge/work",
     platform_properties: {
       cpu_count: { query_cmd: "nproc" },
       OSFamily: { values: [""] },
@@ -252,11 +252,11 @@ string as a single program path, so point it at one executable and let that
 executable take the action's command as its arguments), which makes a script
 that launches a container and forwards the command possible. If that wrapper
 enforces its own timeouts, set
-`timeout_handled_externally` so NativeLink doesn't also time the action out.
+`timeout_handled_externally` so Forge doesn't also time the action out.
 This is a real deployment shape, but it is something you build, not something
 `container-image` gives you.
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
-<SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="inner_execute" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
+<SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="inner_execute" />
 </Accordion>
 
 <Accordion title="Do I need containers at all?" id="do-i-need-containers-at-all">

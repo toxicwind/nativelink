@@ -1,11 +1,11 @@
 ---
 title: Security hardening
-description: Open-source NativeLink has no inbound authentication on any service. What that means for your network, which ports must never be routable, how to configure mTLS, and why the worker sandbox is not a security boundary.
+description: Open-source Forge has no inbound authentication on any service. What that means for your network, which ports must never be routable, how to configure mTLS, and why the worker sandbox is not a security boundary.
 ---
 
 {/* archetype: how-to (deployment), see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** you are about to put NativeLink somewhere more than one
+**Who this is for:** you are about to put Forge somewhere more than one
 person can reach it. **What you'll have at the end:** a network layout where
 the dangerous ports are unreachable, mTLS on the ports that must be reachable,
 and an accurate picture of the trust you are extending to anyone who can submit
@@ -18,7 +18,7 @@ takes.
 
 ## Start here: there is no authentication [#start-here-there-is-no-authentication]
 
-Open-source NativeLink authenticates no inbound request, on any service, in any
+Open-source Forge authenticates no inbound request, on any service, in any
 deployment. Not the CAS. Not the Action Cache. Not the Execution service. Not
 the worker API. Not the admin endpoint. No bearer-token check, no API
 key, no mTLS-identity-to-permission mapping; the code that would do it does
@@ -31,7 +31,7 @@ enduser.id=...` header; the value is a telemetry label and is never checked
 against anything. **Your network is the authorization layer.** Everything below
 follows from that one fact.
 
-<SourceLink file="nativelink-util/src/telemetry.rs" symbol="OtlpLayer" />
+<SourceLink file="forge-util/src/telemetry.rs" symbol="OtlpLayer" />
 
 <Mermaid>
 {`flowchart TD
@@ -47,7 +47,7 @@ follows from that one fact.
     end
 
     subgraph W["Worker hosts: same blast radius as an action"]
-      WK["nativelink worker"]
+      WK["forge worker"]
     end
 
     DEV["developer / CI"] -->|"mTLS"| CAS
@@ -59,7 +59,7 @@ follows from that one fact.
 
 ## The port inventory [#the-port-inventory]
 
-Every listener NativeLink opens, what it serves, and who may reach it. Ports
+Every listener Forge opens, what it serves, and who may reach it. Ports
 are the ones the shipped examples use; nothing in the binary reserves them;
 [Production configuration](/operate/production-config) covers how the three
 processes divide these listeners between them.
@@ -80,7 +80,7 @@ The configuration crate says this itself, in the doc comment on the field:
 > different permission set than a client that makes the remote execution/cache
 > requests.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="ServicesConfig::worker_api" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="ServicesConfig::worker_api" />
 
 ## The worker API has no authentication [#the-worker-api-has-no-authentication]
 
@@ -126,7 +126,7 @@ firewall it. It should never appear in a load balancer.
 
 The admin REST API registers under `/admin` by default. Every shipped example
 that enables it puts it on the worker API listener; one
-(`nativelink-config/examples/worker_with_redis_scheduler.json5`) also enables it
+(`forge-config/examples/worker_with_redis_scheduler.json5`) also enables it
 on the public listener, which is the thing not to copy. Its only route is:
 
 ```text
@@ -141,7 +141,7 @@ is also the endpoint you will legitimately want during an incident (see
 [Runbooks](/operate/runbooks#a-worker-is-oom-killed)), so the answer is to make
 it reachable from your operator network and nowhere else, not to disable it.
 
-<SourceLink file="src/bin/nativelink.rs" symbol="set_drain_worker" />
+<SourceLink file="src/bin/forge.rs" symbol="set_drain_worker" />
 
 The `health` service is on the same footing: path `/status` by default, five
 second timeout, no authentication. It leaks less, but it is another reason the
@@ -188,7 +188,7 @@ once you have it.
 
 TLS is per-listener. Each server in the `servers` array carries its own
 optional `tls` block. Every field below is documented in
-[the configuration reference](/reference/nativelink-config):
+[the configuration reference](/reference/forge-config):
 
 ```json5
 {
@@ -199,10 +199,10 @@ optional `tls` block. Every field below is documented in
         http: {
           socket_address: "0.0.0.0:50071",
           tls: {
-            cert_file: "${NL_TLS_CERT:-/etc/nativelink/tls/tls.crt}",
-            key_file: "${NL_TLS_KEY:-/etc/nativelink/tls/tls.key}",
-            client_ca_file: "/etc/nativelink/tls/ca.crt",
-            client_crl_file: "/etc/nativelink/tls/ca.crl",
+            cert_file: "${NL_TLS_CERT:-/etc/forge/tls/tls.crt}",
+            key_file: "${NL_TLS_KEY:-/etc/forge/tls/tls.key}",
+            client_ca_file: "/etc/forge/tls/ca.crt",
+            client_crl_file: "/etc/forge/tls/ca.crl",
           },
         },
       },
@@ -214,7 +214,7 @@ optional `tls` block. Every field below is documented in
 }
 ```
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="TlsConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="TlsConfig" />
 
 | Field | Effect |
 | --- | --- |
@@ -234,7 +234,7 @@ happens once, at parse time; rotating a certificate on disk needs a restart.
   No read-only role, no per-instance-name restriction, and no way exists to
   let CI write to the cache while developers only read.
 
-  If you need that distinction, it lives in front of NativeLink: separate
+  If you need that distinction, it lives in front of Forge: separate
   listeners, separate CAs, and a proxy or network policy that decides which
   clients reach which listener.
 
@@ -258,9 +258,9 @@ provider).
       {
         address: "grpcs://cas.internal:50071",
         tls_config: {
-          ca_file: "/etc/nativelink/tls/upstream-ca.crt",
-          cert_file: "/etc/nativelink/tls/client.crt",
-          key_file: "/etc/nativelink/tls/client.key",
+          ca_file: "/etc/forge/tls/upstream-ca.crt",
+          cert_file: "/etc/forge/tls/client.crt",
+          key_file: "/etc/forge/tls/client.key",
           use_native_roots: false,
         },
       },
@@ -269,7 +269,7 @@ provider).
 }
 ```
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ClientTlsConfig" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ClientTlsConfig" />
 
 `use_native_roots: true` trusts the host's system trust store instead of a
 named CA. Convenient against a public endpoint, wrong against an internal one:
@@ -278,7 +278,7 @@ it means any publicly-trusted certificate for that hostname is accepted.
 ## The sandbox is not a security boundary [#the-sandbox-is-not-a-security-boundary]
 
 For isolation from state left by an earlier action, development builds offer
-the opt-in [`single_use` lifecycle](/reference/nativelink-config/main#localworkerconfig).
+the opt-in [`single_use` lifecycle](/reference/forge-config/main#localworkerconfig).
 It requires a launcher that replaces the container and its writable volumes
 after every action. This prevents reuse of local files, background processes,
 and worker caches. It does not create a new kernel boundary or make untrusted
@@ -286,7 +286,7 @@ actions safe on a privileged container host. Continue applying the network
 and process restrictions described on this page.
 
 The development-only
-[`experimental_buck2_file_capture`](/reference/nativelink-config/main#buck2filecaptureconfig)
+[`experimental_buck2_file_capture`](/reference/forge-config/main#buck2filecaptureconfig)
 option additionally runs an operator-supplied collector inside that dedicated
 Linux container. Configure it to exclude platform credentials and internal
 caches, and use narrowly scoped credentials for its ingest service. The hook
@@ -310,7 +310,7 @@ write /proc/self/uid_map    "<uid> <uid> 1"
 write /proc/self/gid_map    "<gid> <gid> 1"
 ```
 
-<SourceLink file="nativelink-worker/src/namespace_utils.rs" symbol="unshare" />
+<SourceLink file="forge-worker/src/namespace_utils.rs" symbol="unshare" />
 
 Read the uid map carefully. It is an **identity** map: uid *N* inside the
 namespace is uid *N* outside it. The action runs as the worker's own user, with
@@ -318,7 +318,7 @@ the worker's own privileges on the host filesystem. This is not a
 uid-remapping sandbox; it is a process-reaping and hermeticity mechanism. PID
 namespacing means orphaned children die with the action instead of leaking;
 IPC and UTS namespacing means actions cannot see each other's semaphores or
-hostname (the hostname is set to `nativelink`). With `use_mount_namespace`
+hostname (the hostname is set to `forge`). With `use_mount_namespace`
 the flag list also gains `CLONE_NEWNS`, the worker's own root action
 directory is masked so one action cannot see another's tree, and `/tmp` is
 replaced with the action's own temporary directory, on the worker's disk and
@@ -357,7 +357,7 @@ boundary. The shipped Compose executor runs `privileged: true` precisely so
 | --- | --- |
 | Put 50061 on a network only workers and operators reach | Everything else on this page is a smaller problem than this one |
 | Replace the committed certificates | They expired in 2024 and the key is public |
-| Set `client_ca_file` on every reachable listener | mTLS is the only client identity NativeLink can express |
+| Set `client_ca_file` on every reachable listener | mTLS is the only client identity Forge can express |
 | Give workers their own network segment with egress rules | An action has the worker's network |
 | Remove ambient credentials from worker hosts | An action can read them |
 | Put no secrets in `environment_variables` on the worker entrypoint | Every action sees them |

@@ -1,16 +1,16 @@
-import { AskAi, Badge, Button, Eyebrow, Reveal, Section, askAiPrompt } from "@nativelink/ui";
+import { AskAi, Badge, Button, Eyebrow, Reveal, Section, askAiPrompt } from "@forge/ui";
 
 export const metadata = {
   title: "For agents",
   description:
-    "Everything nativelink.com and its repository offer an AI agent: llms.txt in three sizes, one-click hand-off to hosted assistants, installable skills, the MCP server, and the rules for contributing with an agent.",
+    "Everything forge.com and its repository offer an AI agent: llms.txt in three sizes, one-click hand-off to hosted assistants, installable skills, the MCP server, and the rules for contributing with an agent.",
 };
 
-const SITE = "https://nativelink.com";
-const DOCS = "https://docs.nativelink.com";
-const REPO = "https://github.com/TraceMachina/nativelink";
+const SITE = "https://forge.com";
+const DOCS = "https://docs.forge.com";
+const REPO = "https://github.com/toxicwind/forge";
 const CONTACT_EMAIL = "contact@tracemachina.com";
-const PRICING_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("NativeLink pricing")}`;
+const PRICING_MAILTO = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Forge pricing")}`;
 
 const files = [
   {
@@ -35,14 +35,14 @@ const skills = [
     name: "migrate-to-bazelmod",
     tag: "Migration",
     body: "Move a Bazel project from WORKSPACE to MODULE.bazel: the hybrid gradual path, dependency translation, toolchain registration, and smoke tests for library authors who have to support both.",
-    credit: "By the NativeLink team.",
+    credit: "By the Forge team.",
     href: `${REPO}/tree/main/.claude/skills/migrate-to-bazelmod`,
   },
   {
-    name: "nativelink-*",
-    tag: "Working on NativeLink",
-    body: "Five playbooks the NativeLink team's own agents follow: Bazel verification, config and protocol changes, dependency updates, Local Remote Execution debugging, and Rust changes across the crates.",
-    credit: "By the NativeLink team.",
+    name: "forge-*",
+    tag: "Working on Forge",
+    body: "Five playbooks the Forge team's own agents follow: Bazel verification, config and protocol changes, dependency updates, Local Remote Execution debugging, and Rust changes across the crates.",
+    credit: "By the Forge team.",
     href: `${REPO}/tree/main/.claude/skills`,
   },
 ];
@@ -85,7 +85,7 @@ export default function AgentsPage() {
                 .
               </h1>
               <p className="mx-auto mt-6 max-w-[680px] text-[17px] leading-relaxed text-muted-foreground md:text-lg">
-                NativeLink is build infrastructure for the agentic era, so its website, its
+                Forge is build infrastructure for the agentic era, so its website, its
                 documentation and its repository are written for a machine reader too. The files on
                 this page need no account, no API key, and no JavaScript.
               </p>
@@ -143,7 +143,7 @@ export default function AgentsPage() {
                       href={`/${f.name}`}
                       className="text-brand underline-offset-4 hover:underline"
                     >
-                      nativelink.com/{f.name}
+                      forge.com/{f.name}
                     </a>
                   </li>
                   <li>
@@ -151,7 +151,7 @@ export default function AgentsPage() {
                       href={`${DOCS}/${f.name}`}
                       className="text-brand underline-offset-4 hover:underline"
                     >
-                      docs.nativelink.com/{f.name}
+                      docs.forge.com/{f.name}
                     </a>
                   </li>
                   <li>
@@ -182,7 +182,7 @@ export default function AgentsPage() {
             </a>
             , the map of the code for an agent changing it, and{" "}
             <a href={`${DOCS}/agents`} className="text-brand underline-offset-4 hover:underline">
-              docs.nativelink.com/agents
+              docs.forge.com/agents
             </a>
             , how to read the documentation end to end, cite it, and verify a claim against the
             source.
@@ -210,7 +210,7 @@ export default function AgentsPage() {
           <pre className="mb-8 overflow-x-auto rounded-2xl border border-border bg-surface p-5 font-mono text-[13px] leading-relaxed text-foreground/90">
             {`git clone ${REPO}\n`}
             {
-              "cp -r nativelink/.claude/skills/migrate-to-bazelmod ~/.claude/skills/   # Claude Code\n"
+              "cp -r forge/.claude/skills/migrate-to-bazelmod ~/.claude/skills/   # Claude Code\n"
             }
             {"# then, in your agent: /migrate-to-bazelmod"}
           </pre>
@@ -259,12 +259,12 @@ export default function AgentsPage() {
               <p>
                 Bazel is open, and its model of declared inputs, sandboxed actions and
                 content-addressed outputs is what makes a remote cache trustworthy in the first
-                place. NativeLink's source is public and its protocol is the open Remote Execution
+                place. Forge's source is public and its protocol is the open Remote Execution
                 API. Together they are a build pipeline with no black box in it.
               </p>
               <p className="text-foreground">
                 So: migrate to Bazel, modernise with migrate-to-bazelmod, and point the result at
-                NativeLink. Two lines in <span className="font-mono text-[0.95em]">.bazelrc</span>{" "}
+                Forge. Two lines in <span className="font-mono text-[0.95em]">.bazelrc</span>{" "}
                 against a local server, then a shared cache, then workers.
               </p>
             </div>
@@ -277,8 +277,8 @@ export default function AgentsPage() {
               </Button>
             </div>
             <p className="mt-6 text-sm leading-relaxed text-muted">
-              The NativeLink MCP server, which gives Claude Code, Cursor and Codex five tools for
-              configuring and tuning builds, is part of NativeLink Enterprise and requires an
+              The Forge MCP server, which gives Claude Code, Cursor and Codex five tools for
+              configuring and tuning builds, is part of Forge Enterprise and requires an
               Enterprise licence. Everything else on this page is free.
             </p>
           </Reveal>
@@ -336,7 +336,7 @@ export default function AgentsPage() {
           </h2>
           <p className="mx-auto mt-5 max-w-[560px] text-base leading-relaxed text-muted-foreground md:text-lg">
             Self-hosting is free. Enterprise pricing depends on your build farm, your hardware and
-            the support you need, so it is a conversation with the engineers who build NativeLink,
+            the support you need, so it is a conversation with the engineers who build Forge,
             not a number on a page. An assistant asked about it should send you to{" "}
             <span className="font-mono text-foreground">{CONTACT_EMAIL}</span>.
           </p>

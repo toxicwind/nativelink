@@ -123,7 +123,7 @@
           # the build is running in local or remote configuration.
           #
           # To make a remote executor compatible, make the remote execution image (for
-          # instance `nativelink-worker-lre-cc` available to the build.
+          # instance `forge-worker-lre-cc` available to the build.
           #
           # To make local execution compatible, add the `lre.installationscript` to the
           # flake's `mkShell.shellhook`:

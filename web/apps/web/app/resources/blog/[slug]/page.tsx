@@ -1,4 +1,4 @@
-import { Badge, Eyebrow, Prose, Section } from "@nativelink/ui";
+import { Badge, Eyebrow, Prose, Section } from "@forge/ui";
 import { marked } from "marked";
 import { notFound } from "next/navigation";
 import { formatPostDate, getAllPosts, getPost } from "../../../../lib/posts";
@@ -75,7 +75,7 @@ export default async function BlogPostPage({
           />
           <div className="mt-16 border-t border-border pt-8">
             <Eyebrow tone="muted" className="text-[10px]">
-              NativeLink Blog
+              Forge Blog
             </Eyebrow>
             <p className="mt-3 text-sm text-muted-foreground">
               <a

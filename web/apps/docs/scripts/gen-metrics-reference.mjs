@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Generate the NativeLink metrics reference from the Rust source.
+// Generate the Forge metrics reference from the Rust source.
 //
 // Unlike `gen-config-reference.mjs`, this generator needs no Rust toolchain: the
-// metric declarations live in one file (`nativelink-util/src/metrics.rs`) as
+// metric declarations live in one file (`forge-util/src/metrics.rs`) as
 // plain `meter.<kind>("name")` builder chains, and the question this page exists
 // to answer (*is this metric actually emitted?*) is answered by finding call
 // sites, which is a source scan either way. Running it costs a few hundred
 // milliseconds and no build.
 //
 // Usage, from web/:
-//   bun --filter @nativelink/docs gen:metrics-reference
+//   bun --filter @forge/docs gen:metrics-reference
 // or directly:
 //   node scripts/gen-metrics-reference.mjs
 //
@@ -22,7 +22,7 @@
 //   3. Scans every crate for `.field.add(..)` / `.field.record(..)` call sites,
 //      and for indirect references (a field handed to a helper), resolving the
 //      helper back to its own call sites. Test files do not count.
-//   4. Scans the shipped observability artifacts for `nativelink_*` series names
+//   4. Scans the shipped observability artifacts for `forge_*` series names
 //      and matches them back to instruments, so the page can report both
 //      directions of drift: instruments nothing emits, and series nothing
 //      declares.
@@ -40,41 +40,41 @@ const docsRoot = join(here, "..");
 // The checkout to scan. Defaults to the repository this docs app lives in;
 // override to document a different checkout, for example a newer main than the
 // docs branch is based on.
-const repoRoot = process.env.NATIVELINK_REPO_ROOT ?? join(docsRoot, "..", "..", "..");
+const repoRoot = process.env.FORGE_REPO_ROOT ?? join(docsRoot, "..", "..", "..");
 
-const METRICS_RS = "nativelink-util/src/metrics.rs";
-const GITHUB_BASE = "https://github.com/TraceMachina/nativelink";
+const METRICS_RS = "forge-util/src/metrics.rs";
+const GITHUB_BASE = "https://github.com/toxicwind/forge";
 const OUT_FILE = join(docsRoot, "content/docs/reference/metrics.mdx");
 
 /** Crates scanned for metric call sites. */
 const SOURCE_DIRS = [
-  "nativelink-store",
-  "nativelink-scheduler",
-  "nativelink-service",
-  "nativelink-worker",
-  "nativelink-util",
-  "nativelink-config",
+  "forge-store",
+  "forge-scheduler",
+  "forge-service",
+  "forge-worker",
+  "forge-util",
+  "forge-config",
   "src",
 ];
 
-/** Shipped observability artifacts scanned for `nativelink_*` series names. */
+/** Shipped observability artifacts scanned for `forge_*` series names. */
 const ARTIFACT_DIRS = ["deployment-examples/metrics", "kubernetes"];
 const ARTIFACT_EXTS = [".yaml", ".yml", ".json", ".md"];
 
 /** Which crate owns a call site, and what that implies about when it runs. */
 const GATES = [
   {
-    file: "nativelink-store/src/cache_metrics_store.rs",
+    file: "forge-store/src/cache_metrics_store.rs",
     verdict: "gated",
     gate: "only for stores explicitly wrapped in a `cache_metrics` spec",
   },
   {
-    prefix: "nativelink-scheduler/",
+    prefix: "forge-scheduler/",
     verdict: "gated",
     gate: "scheduler process only",
   },
   {
-    file: "nativelink-store/src/fast_slow_store.rs",
+    file: "forge-store/src/fast_slow_store.rs",
     verdict: "gated",
     gate: "only through a `fast_slow` store",
   },
@@ -436,11 +436,11 @@ function scanArtifacts() {
     for (const abs of walk(join(repoRoot, d), ARTIFACT_EXTS)) {
       const rel = relative(repoRoot, abs).split("\\").join("/");
       const text = readFileSync(abs, "utf8");
-      const re = /\bnativelink_[a-z0-9_]+/g;
+      const re = /\bforge_[a-z0-9_]+/g;
       let m = re.exec(text);
       while (m !== null) {
         const name = m[0];
-        // `- name: nativelink_performance` is a Prometheus *rule group*, not a
+        // `- name: forge_performance` is a Prometheus *rule group*, not a
         // series. Same for an alert-rule group. Skip those or every group name
         // reads as an orphan series.
         const lineStart = text.lastIndexOf("\n", m.index) + 1;
@@ -462,7 +462,7 @@ const SUFFIXES = ["_bucket", "_sum", "_count", "_total"];
 
 /** Base series name an instrument would produce, before exporter suffixes. */
 function promBase(otelName) {
-  return `nativelink_${otelName.replace(/\./g, "_")}`;
+  return `forge_${otelName.replace(/\./g, "_")}`;
 }
 
 function stripSuffix(name) {
@@ -493,7 +493,7 @@ const GROUP_GATES = {
   WORKER_METRICS:
     "Worker fleet instruments are emitted from the scheduler process as workers connect, heartbeat, pause, drain and leave. They describe the pool as this scheduler instance sees it.",
   RPC_METRICS:
-    "Emitted by the `OtlpLayer` tower middleware on every gRPC server NativeLink starts, so a CAS, a scheduler and a worker API endpoint each report their own.",
+    "Emitted by the `OtlpLayer` tower middleware on every gRPC server Forge starts, so a CAS, a scheduler and a worker API endpoint each report their own.",
   SCHEDULER_METRICS:
     "Emitted from the scheduler process once per matching pass, whether or not the pass assigned anything.",
   STORE_TIER_METRICS:
@@ -507,7 +507,7 @@ const GROUP_GATES = {
 function main() {
   const metricsPath = join(repoRoot, METRICS_RS);
   if (!existsSync(metricsPath)) {
-    throw new Error(`Cannot find ${METRICS_RS}. Is this running inside the NativeLink repo?`);
+    throw new Error(`Cannot find ${METRICS_RS}. Is this running inside the Forge repo?`);
   }
   const src = readFileSync(metricsPath, "utf8");
 
@@ -571,7 +571,7 @@ function main() {
   ].filter((g) => g.keys.length);
 
   // Series the shipped config mentions that no instrument produces. Names that
-  // are recording-rule outputs (`nativelink:`-prefixed in Prometheus, but written
+  // are recording-rule outputs (`forge:`-prefixed in Prometheus, but written
   // with an underscore in a few places) and the rule-group names themselves are
   // not series, so drop anything that matches no instrument *and* is a prefix of
   // no instrument base.
@@ -581,7 +581,7 @@ function main() {
     .filter(([name]) => {
       const base = stripSuffix(name);
       if (allBases.has(base)) return false;
-      // Rule-group names (`nativelink_execution`, `nativelink_cache`, …) and
+      // Rule-group names (`forge_execution`, `forge_cache`, …) and
       // truncated fragments are prefixes of a real base; they are not series.
       for (const b of allBases) if (b.startsWith(name) || b.startsWith(base)) return false;
       return true;

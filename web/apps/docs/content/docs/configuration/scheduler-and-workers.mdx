@@ -54,7 +54,7 @@ matches anything and queues silently. That failure mode gets its own page,
 [Platform properties](/remote-execution/platform-properties), because it's
 the first wall almost everyone hits.
 
-<SourceLink file="nativelink-config/src/schedulers.rs" symbol="SimpleSpec" />
+<SourceLink file="forge-config/src/schedulers.rs" symbol="SimpleSpec" />
 
 ## The minimum worker [#the-minimum-worker]
 
@@ -73,7 +73,7 @@ workers: [
       upload_action_result: {
         ac_store: "AC_MAIN_STORE",
       },
-      work_directory: "/tmp/nativelink/work",
+      work_directory: "/tmp/forge/work",
       platform_properties: {
         cpu_count: { values: ["16"] },
         OSFamily: { values: ["linux"] },
@@ -118,7 +118,7 @@ platform_properties: {
 Every key the scheduler declares as `minimum` or `exact` must appear here, or
 this worker will never be matched for any action requesting it.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
 
 <Callout type="warn" title="`upload_action_result` is one level, not two">
   The correct shape is `upload_action_result: { ac_store: "AC_MAIN_STORE" }`.
@@ -359,7 +359,7 @@ this, from an empty file, one block at a time.
 
 <Accordion title="Can one process be both scheduler and worker?" id="can-one-process-be-both-scheduler-and-worker">
 
-Yes, and that's what `nativelink-config/examples/basic_cas.json5` is: one
+Yes, and that's what `forge-config/examples/basic_cas.json5` is: one
 process with stores, a scheduler, a worker, a public server on `:50051` and a
 private one on `:50061`. It's the right shape for a laptop and for testing.
 Splitting into separate processes is a deployment change, not a config
@@ -393,7 +393,7 @@ rejected outright with `InvalidArgument: Action timeout of N seconds is
 greater than the maximum allowed timeout`. Either way, an action legitimately
 needing longer needs this raised on the worker, not just on the client.
 
-<SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="max_action_timeout" />
+<SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="max_action_timeout" />
 
 </Accordion>
 

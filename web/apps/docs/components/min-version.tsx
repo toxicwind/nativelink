@@ -1,4 +1,4 @@
-import { cn } from "@nativelink/ui";
+import { cn } from "@forge/ui";
 
 interface MinVersionProps {
   /** The first release in which this works, without the leading `v`. */

@@ -1,4 +1,4 @@
-# Copyright 2022 The NativeLink Authors. All rights reserved.
+# Copyright 2022 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# NativeLink Cloud configuration for this repository's own CI. Everything here
+# Forge Cloud configuration for this repository's own CI. Everything here
 # is opt-in via --config; plain local builds are unaffected. CI activates these
 # groups through a generated user.bazelrc (see
-# .github/actions/setup-nativelink-cloud), which injects the claim endpoints
+# .github/actions/setup-forge-cloud), which injects the claim endpoints
 # and the --remote_header/--bes_header credentials from repository secrets —
 # neither endpoints nor secrets belong in this file.
 
@@ -84,7 +84,7 @@ common:nl-rbe --experimental_remote_cache_eviction_retries=5
 # being buried under per-action progress and per-test success chatter. This
 # group suppresses ONLY presentation noise; it never hides warnings, errors,
 # or the compiler output that precedes them. On the full //... suite this turns
-# a hundreds-of-lines log into tens (verified: the nativelink-store test suite
+# a hundreds-of-lines log into tens (verified: the forge-store test suite
 # goes from 56 log lines to 10). Opt-in via --config=nl-quiet so local
 # interactive builds keep their live progress.
 # - noshow_progress: drop the "[N / M] Compiling ..." progress stream.

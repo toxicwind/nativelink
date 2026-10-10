@@ -16,15 +16,15 @@ compiling.
   A config you wrote (see [Your first full config](/configuration/your-first-full-config)), and a host with Docker on it.
 </Prerequisites>
 
-Of the deployment shapes NativeLink ships, Compose is the one that runs
+Of the deployment shapes Forge ships, Compose is the one that runs
 end-to-end out of the box. The Kubernetes building blocks need image tags and
 a Gateway you supply; the Compose files need nothing but Docker.
 
 ## The configuration [#the-configuration]
 
 ```sh
-git clone https://github.com/TraceMachina/nativelink
-cd nativelink/deployment-examples/docker-compose
+git clone https://github.com/toxicwind/forge
+cd forge/deployment-examples/docker-compose
 docker compose up -d
 ```
 
@@ -35,17 +35,17 @@ Three services come up:
 
 | Service | Config file | Role | Published ports |
 | --- | --- | --- | --- |
-| `nativelink_local_cas` | `local-storage-cas.json5` | CAS, Action Cache, ByteStream | `50051` (plain), `50071` (TLS), and a `127.0.0.1:50061` mapping that nothing in the CAS config listens on |
-| `nativelink_scheduler` | `scheduler.json5` | Execution, Capabilities, AC frontend; worker API | `50052` |
-| `nativelink_executor` | `worker.json5` | Runs actions. `privileged: true` | none |
+| `forge_local_cas` | `local-storage-cas.json5` | CAS, Action Cache, ByteStream | `50051` (plain), `50071` (TLS), and a `127.0.0.1:50061` mapping that nothing in the CAS config listens on |
+| `forge_scheduler` | `scheduler.json5` | Execution, Capabilities, AC frontend; worker API | `50052` |
+| `forge_executor` | `worker.json5` | Runs actions. `privileged: true` | none |
 
 <Mermaid>
 {`flowchart LR
     BZ["Bazel / Buck2"]
-    CAS["nativelink_local_cas<br/>50051 plain · 50071 TLS"]
-    SCH["nativelink_scheduler<br/>50052 frontend · 50061 worker API"]
-    EX["nativelink_executor<br/>privileged, no published port"]
-    D[("~/.cache/nativelink<br/>on the host")]
+    CAS["forge_local_cas<br/>50051 plain · 50071 TLS"]
+    SCH["forge_scheduler<br/>50052 frontend · 50061 worker API"]
+    EX["forge_executor<br/>privileged, no published port"]
+    D[("~/.cache/forge<br/>on the host")]
 
     BZ -->|"--remote_cache"| CAS
     BZ -->|"--remote_executor"| SCH
@@ -59,7 +59,7 @@ Three services come up:
 They talk to each other by service name. The worker config reaches the
 scheduler at `grpc://${SCHEDULER_ENDPOINT:-127.0.0.1}:50061` and the CAS at
 `grpc://${CAS_ENDPOINT:-127.0.0.1}:50051`; Compose sets both variables, and
-NativeLink expands them at config-parse time; see
+Forge expands them at config-parse time; see
 [CLI and environment](/reference/cli-and-env).
 
 ### Point a build at it [#point-a-build-at-it]
@@ -91,7 +91,7 @@ already correct for a single host.
 | Field | File | Why you'd change it |
 | --- | --- | --- |
 | `eviction_policy.max_bytes` | `local-storage-cas.json5`, `worker.json5` | Ships at 10 GB for the CAS and 500 MB for the AC, plus a separate 10 GB fast tier for the worker, all under the same host directory. Size them to your disk. The worker's tier can reach roughly **twice** its `max_bytes`, because the executable-variant directory the worker creates next to `content_path` is not counted against it. See [Runbooks](/operate/runbooks#the-disk-fills-up). |
-| `NATIVELINK_DIR` | environment | Where the CAS and worker caches land on the host. Defaults to `~/.cache/nativelink`. |
+| `FORGE_DIR` | environment | Where the CAS and worker caches land on the host. Defaults to `~/.cache/forge`. |
 | `RUST_LOG` | environment | Ships at `warn`, which hides the scheduler's `INFO`-level matching diagnostics. Set `info` the first time something does not run. |
 | `platform_properties` | `worker.json5` | The worker's advertised capabilities. Whatever you add here must also appear in the scheduler's `supported_platform_properties`, or the scheduler rejects the worker's registration with `Unknown platform property`. |
 | `ADDITIONAL_SETUP_WORKER_CMD` | build arg | A bash string run inside the final image. This is the hook for installing whatever toolchain your actions need. |
@@ -145,7 +145,7 @@ has the full path.
   before running this on anything with a routable address.
 
   The shipped `worker-shared-cas.json5` keeps the worker's fast tier under
-  `/root/.cache/nativelink/`, not under the `/data/cas` mount, so the three
+  `/root/.cache/forge/`, not under the `/data/cas` mount, so the three
   workers do not actually share the volume the compose file mounts for them.
   Point `content_path` and `temp_path` at `/data/cas/...` if you want the
   sharing the README describes.
@@ -160,7 +160,7 @@ disqualifying for production.
 ### The executor runs privileged [#the-executor-runs-privileged]
 
 ```yaml
-nativelink_executor:
+forge_executor:
   privileged: true # So we can do use_namespaces
 ```
 
@@ -169,7 +169,7 @@ which need `CLONE_NEWUSER`/`CLONE_NEWNS`, hence the flag. Note what this buys
 and what it does not: namespaces here are a hermeticity and process-reaping
 mechanism, not a security boundary. Actions still run as the worker's own uid
 through an identity uid map, still see the host filesystem apart from a
-private `/tmp`, and still have network access to every NativeLink port. A
+private `/tmp`, and still have network access to every Forge port. A
 privileged container running
 arbitrary build actions is a lateral-movement primitive.
 [Security hardening](/operate/security-hardening#the-sandbox-is-not-a-security-boundary)
@@ -187,7 +187,7 @@ supply real material yourself.
 
 ### Nothing is authenticated [#there-is-no-authentication-on-anything]
 
-Not a Compose limitation: open-source NativeLink has no inbound
+Not a Compose limitation: open-source Forge has no inbound
 authentication on any service, in any deployment. `docker-compose.yml` does not
 publish the scheduler's port 50061 at all; the worker reaches it over the
 Compose network by service name. That is the only thing standing between an
@@ -196,7 +196,7 @@ that way.
 
 ### The build is not fast [#the-build-is-not-fast]
 
-The `Dockerfile` compiles NativeLink from the repository root with Bazel, in a
+The `Dockerfile` compiles Forge from the repository root with Bazel, in a
 three-stage build, and the final image is a fresh Ubuntu with the binary copied
 in and `curl` installed. The Ubuntu base is digest-pinned and the bazelisk
 download is checksum-verified, so the build is reproducible, but it is a full
@@ -214,13 +214,13 @@ registry your hosts can pull from.
   A `bazel build` with the two flags above completes. Run it twice; the second
   run reports a high `remote cache hit` count in the summary line.
 
-  `docker compose logs nativelink_executor` contains
+  `docker compose logs forge_executor` contains
   `Worker registered with scheduler`. If it instead repeats
-  `Could not connect to endpoint grpc://nativelink_scheduler:50061` roughly
+  `Could not connect to endpoint grpc://forge_scheduler:50061` roughly
   twice a second, the worker never reached port 50061; reconnect is a hard-coded
   0.5-second retry with no backoff, so that cadence is the signature.
 
-  `ls ~/.cache/nativelink` shows `content_path-cas` growing as you build.
+  `ls ~/.cache/forge` shows `content_path-cas` growing as you build.
 
 </VerifyBlock>
 

@@ -1,0 +1,85 @@
+load(
+    "@rules_rust//rust:defs.bzl",
+    "rust_doc",
+    "rust_doc_test",
+    "rust_library",
+    "rust_test",
+    "rust_test_suite",
+)
+
+rust_library(
+    name = "forge-error",
+    srcs = [
+        "src/lib.rs",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//forge-metric",
+        "//forge-proto",
+        "@crates//:base64",
+        "@crates//:mongodb",
+        "@crates//:prost",
+        "@crates//:prost-types",
+        "@crates//:redis",
+        "@crates//:reqwest",
+        "@crates//:rustls-pki-types",
+        "@crates//:serde",
+        "@crates//:serde_json5",
+        "@crates//:tokio",
+        "@crates//:tonic",
+        "@crates//:url",
+        "@crates//:uuid",
+        "@crates//:walkdir",
+        "@crates//:zip",
+    ],
+)
+
+rust_test_suite(
+    name = "integration",
+    timeout = "short",
+    srcs = [
+        "tests/error_tests.rs",
+        "tests/lib_tests.rs",
+    ],
+    deps = [
+        "//forge-error",
+        "//forge-metric",
+        "//forge-proto",
+        "@crates//:prost",
+        "@crates//:redis",
+        "@crates//:tokio",
+        "@crates//:tonic",
+        "@crates//:tracing",
+        "@crates//:walkdir",
+    ],
+)
+
+rust_test(
+    name = "unit_test",
+    timeout = "short",
+    crate = ":forge-error",
+    deps = [
+        "//forge-metric",
+        "//forge-proto",
+        "@crates//:async-lock",
+        "@crates//:hex",
+        "@crates//:prost",
+        "@crates//:prost-types",
+        "@crates//:redis",
+        "@crates//:serde",
+        "@crates//:tokio",
+        "@crates//:tonic",
+    ],
+)
+
+rust_doc(
+    name = "docs",
+    crate = ":forge-error",
+    visibility = ["//visibility:public"],
+)
+
+rust_doc_test(
+    name = "doc_test",
+    timeout = "short",
+    crate = ":forge-error",
+)

@@ -1,5 +1,5 @@
 {
-  "name": "@nativelink/ui",
+  "name": "@forge/ui",
   "type": "module",
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.1",
@@ -9,7 +9,7 @@
     "tailwind-merge": "^3.0.0"
   },
   "devDependencies": {
-    "@nativelink/config": "workspace:*",
+    "@forge/config": "workspace:*",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "typescript": "^7.0.0"

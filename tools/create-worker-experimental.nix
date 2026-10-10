@@ -30,8 +30,8 @@
     ln -s /bin/env $out/usr/bin/env
   '';
 
-  user = "nativelink";
-  group = "nativelink";
+  user = "forge";
+  group = "forge";
   uid = "1000";
   gid = "1000";
 
@@ -73,7 +73,7 @@
   };
 in
   buildImage {
-    name = "nativelink-worker-${imageName}";
+    name = "forge-worker-${imageName}";
     maxLayers = 20;
     copyToRoot = [
       mkUser
@@ -97,12 +97,12 @@ in
       User = user;
       WorkingDir = "/home/${user}";
       Labels = {
-        "org.opencontainers.image.description" = "NativeLink worker generated from ${imageName}.";
-        "org.opencontainers.image.documentation" = "https://github.com/TraceMachina/nativelink";
+        "org.opencontainers.image.description" = "Forge worker generated from ${imageName}.";
+        "org.opencontainers.image.documentation" = "https://github.com/toxicwind/forge";
         "org.opencontainers.image.licenses" = "FSL-1.1-Apache-2.0";
         "org.opencontainers.image.revision" = "${self.rev or self.dirtyRev or "dirty"}";
-        "org.opencontainers.image.source" = "https://github.com/TraceMachina/nativelink";
-        "org.opencontainers.image.title" = "NativeLink worker for ${imageName}";
+        "org.opencontainers.image.source" = "https://github.com/toxicwind/forge";
+        "org.opencontainers.image.title" = "Forge worker for ${imageName}";
         "org.opencontainers.image.vendor" = "Trace Machina, Inc.";
       };
     };

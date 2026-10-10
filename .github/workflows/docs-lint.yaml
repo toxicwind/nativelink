@@ -53,7 +53,7 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Install dependencies
         working-directory: web
@@ -67,7 +67,7 @@ jobs:
       - name: Generate the changelog page
         working-directory: web
         run: |
-          nix develop --impure --command bash -c "bun --filter @nativelink/docs gen:changelog"
+          nix develop --impure --command bash -c "bun --filter @forge/docs gen:changelog"
 
       # Each lint runs even if an earlier one failed, so a PR gets the whole
       # list of problems in one pass rather than one problem per push.
@@ -75,7 +75,7 @@ jobs:
         working-directory: web
         run: |
           nix develop --impure --command bash -c "
-            bun --filter @nativelink/docs lint:anchors
+            bun --filter @forge/docs lint:anchors
           "
 
       - name: Internal links resolve
@@ -83,7 +83,7 @@ jobs:
         working-directory: web
         run: |
           nix develop --impure --command bash -c "
-            bun --filter @nativelink/docs lint:links
+            bun --filter @forge/docs lint:links
           "
 
       - name: Config snippets match the schema
@@ -91,7 +91,7 @@ jobs:
         working-directory: web
         run: |
           nix develop --impure --command bash -c "
-            bun --filter @nativelink/docs lint:snippets
+            bun --filter @forge/docs lint:snippets
           "
 
       - name: No calls to action outside the boundary page
@@ -99,7 +99,7 @@ jobs:
         working-directory: web
         run: |
           nix develop --impure --command bash -c "
-            bun --filter @nativelink/docs lint:boundaries
+            bun --filter @forge/docs lint:boundaries
           "
 
       - name: The reading path has no dead ends
@@ -107,7 +107,7 @@ jobs:
         working-directory: web
         run: |
           nix develop --impure --command bash -c "
-            bun --filter @nativelink/docs lint:navigation
+            bun --filter @forge/docs lint:navigation
           "
 
       # Generated surfaces must come from their generator. If regenerating
@@ -118,7 +118,7 @@ jobs:
         working-directory: web
         run: |
           nix develop --impure --command bash -c "
-            bun --filter @nativelink/docs gen:llms
+            bun --filter @forge/docs gen:llms
           "
           if ! git diff --quiet -- apps/docs; then
             echo "::error::Regenerating changed committed files. Run the generator and commit the result, and do not hand-edit generated pages."
@@ -130,7 +130,7 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
   external-links:
     name: External links (weekly)
@@ -148,7 +148,7 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       # lychee comes from the dev shell. `--exclude-path` skips the generated
       # config reference, whose links are the generator's output rather than an
@@ -160,7 +160,7 @@ jobs:
               --no-progress \
               --max-concurrency 8 \
               --accept 200,206,429 \
-              --exclude-path web/apps/docs/content/docs/reference/nativelink-config \
+              --exclude-path web/apps/docs/content/docs/reference/forge-config \
               'web/apps/docs/content/docs/**/*.mdx'
           "
 
@@ -168,4 +168,4 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}

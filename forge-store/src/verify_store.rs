@@ -1,0 +1,357 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::pin::Pin;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use forge_config::stores::VerifySpec;
+use forge_error::{Code, Error, ResultExt, make_err, make_input_err};
+use forge_metric::MetricsComponent;
+use forge_util::buf_channel::{
+    DropCloserReadHalf, DropCloserWriteHalf, make_buf_channel_pair,
+};
+use forge_util::common::PackedHash;
+use forge_util::digest_hasher::{
+    DigestHasher, DigestHasherFunc, digest_hasher_func_from_context,
+};
+use forge_util::health_utils::{HealthStatusIndicator, default_health_status_indicator};
+use forge_util::metrics_utils::CounterWithTime;
+use forge_util::store_trait::{
+    RemoveCallback, Store, StoreDriver, StoreKey, StoreLike, UploadSizeInfo,
+};
+use tracing::warn;
+
+#[derive(Debug, MetricsComponent)]
+pub struct VerifyStore {
+    #[metric(group = "inner_store")]
+    inner_store: Store,
+    #[metric(help = "If the verification store is verifying the size of the data")]
+    verify_size: bool,
+    #[metric(help = "If the verification store is verifying the hash of the data")]
+    verify_hash: bool,
+
+    // Metrics.
+    #[metric(help = "Number of failures the verification store had due to size mismatches")]
+    size_verification_failures: CounterWithTime,
+    #[metric(help = "Number of failures the verification store had due to hash mismatches")]
+    hash_verification_failures: CounterWithTime,
+}
+
+impl VerifyStore {
+    pub fn new(spec: &VerifySpec, inner_store: Store) -> Arc<Self> {
+        Arc::new(Self {
+            inner_store,
+            verify_size: spec.verify_size,
+            verify_hash: spec.verify_hash,
+            size_verification_failures: CounterWithTime::default(),
+            hash_verification_failures: CounterWithTime::default(),
+        })
+    }
+
+    async fn inner_check_update<D: DigestHasher>(
+        &self,
+        mut tx: DropCloserWriteHalf,
+        mut rx: DropCloserReadHalf,
+        maybe_expected_digest_size: Option<u64>,
+        original_hash: &PackedHash,
+        digest_function: Option<DigestHasherFunc>,
+        mut maybe_hasher: Option<&mut D>,
+    ) -> Result<u64, Error> {
+        let mut sum_size: u64 = 0;
+        loop {
+            let chunk = rx
+                .recv()
+                .await
+                .err_tip(|| "Failed to read chunk in check_update in verify store")?;
+            sum_size += chunk.len() as u64;
+
+            // Ensure if a user sends us too much data we fail quickly.
+            if let Some(expected_size) = maybe_expected_digest_size {
+                match sum_size.cmp(&expected_size) {
+                    core::cmp::Ordering::Greater => {
+                        self.size_verification_failures.inc();
+                        return Err(make_input_err!(
+                            "Expected size {} but already received {} on insert",
+                            expected_size,
+                            sum_size
+                        ));
+                    }
+                    core::cmp::Ordering::Equal => {
+                        // Ensure our next chunk is the EOF chunk.
+                        // If this was an error it'll be caught on the .recv()
+                        // on next cycle.
+                        if let Ok(eof_chunk) = rx.peek().await
+                            && !eof_chunk.is_empty()
+                        {
+                            self.size_verification_failures.inc();
+                            return Err(make_input_err!(
+                                "Expected EOF chunk when exact size was hit on insert in verify store - {}",
+                                expected_size,
+                            ));
+                        }
+                    }
+                    core::cmp::Ordering::Less => {}
+                }
+            }
+
+            // If is EOF.
+            if chunk.is_empty() {
+                if let Some(expected_size) = maybe_expected_digest_size
+                    && sum_size != expected_size
+                {
+                    self.size_verification_failures.inc();
+                    return Err(make_input_err!(
+                        "Expected size {} but got size {} on insert",
+                        expected_size,
+                        sum_size
+                    ));
+                }
+                if let Some(hasher) = maybe_hasher.as_mut() {
+                    let digest = hasher.finalize_digest();
+                    let hash_result = digest.packed_hash();
+                    if original_hash != hash_result {
+                        self.hash_verification_failures.inc();
+                        let Some(digest_function) = digest_function else {
+                            return Err(make_input_err!(
+                                "Hash verification failed without a digest function"
+                            ));
+                        };
+                        return Err(make_input_err!(
+                            "Hash verification using {digest_function} failed: client declared {digest_function}:{original_hash}, but the server computed {digest_function}:{hash_result}",
+                        ));
+                    }
+                }
+                tx.send_eof().err_tip(|| "In verify_store::check_update")?;
+                break;
+            }
+
+            // This will allows us to hash while sending data to another thread.
+            let write_future = tx.send(chunk.clone());
+
+            if let Some(hasher) = maybe_hasher.as_mut() {
+                hasher.update(chunk.as_ref());
+            }
+
+            write_future
+                .await
+                .err_tip(|| "Failed to write chunk to inner store in verify store")?;
+        }
+        Ok(sum_size)
+    }
+}
+
+impl VerifyStore {
+    async fn inner_check_read(
+        &self,
+        mut rx: DropCloserReadHalf,
+        writer: &mut DropCloserWriteHalf,
+        expected: u64,
+        key: StoreKey<'_>,
+    ) -> Result<(), Error> {
+        let mut sum_size: u64 = 0;
+        loop {
+            let chunk = rx
+                .recv()
+                .await
+                .err_tip(|| "Failed to read chunk in check_read in verify store")?;
+            if chunk.is_empty() {
+                if sum_size != expected {
+                    self.size_verification_failures.inc();
+                    return Err(make_err!(
+                        Code::DataLoss,
+                        "Read {sum_size} bytes of the {expected} expected for {key:?} in verify store"
+                    ));
+                }
+                return writer.send_eof().err_tip(|| "In verify_store::check_read");
+            }
+            sum_size += chunk.len() as u64;
+            if sum_size > expected {
+                self.size_verification_failures.inc();
+                return Err(make_err!(
+                    Code::DataLoss,
+                    "Read {sum_size} bytes, more than the {expected} expected for {key:?} in verify store"
+                ));
+            }
+            writer
+                .send(chunk)
+                .await
+                .err_tip(|| "Failed to forward chunk in verify store")?;
+        }
+    }
+}
+
+#[async_trait]
+impl StoreDriver for VerifyStore {
+    async fn post_init(self: Arc<Self>) -> Result<(), Error> {
+        self.inner_store.clone().into_inner().post_init().await?;
+        Ok(())
+    }
+
+    async fn has_with_results(
+        self: Pin<&Self>,
+        digests: &[StoreKey<'_>],
+        results: &mut [Option<u64>],
+    ) -> Result<(), Error> {
+        self.inner_store.has_with_results(digests, results).await
+    }
+
+    async fn update(
+        self: Pin<&Self>,
+        key: StoreKey<'_>,
+        reader: DropCloserReadHalf,
+        size_info: UploadSizeInfo,
+    ) -> Result<u64, Error> {
+        let StoreKey::Digest(digest) = key else {
+            return Err(make_input_err!(
+                "Only digests are supported in VerifyStore. Got {key:?}"
+            ));
+        };
+        let digest_size = digest.size_bytes();
+        if let UploadSizeInfo::ExactSize(expected_size) = size_info
+            && self.verify_size
+            && expected_size != digest_size
+        {
+            self.size_verification_failures.inc();
+            return Err(make_input_err!(
+                "Expected size to match. Got {} but digest says {} on update",
+                expected_size,
+                digest_size
+            ));
+        }
+
+        let digest_function = if self.verify_hash {
+            Some(digest_hasher_func_from_context())
+        } else {
+            None
+        };
+        let mut hasher = digest_function.map(|digest_function| digest_function.hasher());
+
+        let maybe_digest_size = if self.verify_size {
+            Some(digest_size)
+        } else {
+            None
+        };
+        let (tx, rx) = make_buf_channel_pair();
+
+        let update_fut = self.inner_store.update(digest, rx, size_info);
+        let check_fut = self.inner_check_update(
+            tx,
+            reader,
+            maybe_digest_size,
+            digest.packed_hash(),
+            digest_function,
+            hasher.as_mut(),
+        );
+
+        let (update_res, check_res) = tokio::join!(update_fut, check_fut);
+
+        match (update_res, check_res) {
+            // Prioritize the check future's error, as it's more specific.
+            (_, Err(e)) | (Err(e), Ok(_)) => Err(e),
+            (Ok(size), Ok(_)) => Ok(size),
+        }
+    }
+
+    async fn get_part(
+        self: Pin<&Self>,
+        key: StoreKey<'_>,
+        writer: &mut DropCloserWriteHalf,
+        offset: u64,
+        length: Option<u64>,
+    ) -> Result<(), Error> {
+        // A digest names its size, so a read that ends short of it is a
+        // truncated blob, whatever tier below lost the tail: handed on as
+        // EOF it would be cached as complete by every store above and fed
+        // to actions as an input. The hash is not recomputed on reads.
+        let expected = match &key {
+            StoreKey::Digest(digest) if self.verify_size => {
+                let to_end = digest.size_bytes().saturating_sub(offset);
+                Some(length.map_or(to_end, |length| length.min(to_end)))
+            }
+            _ => None,
+        };
+        let Some(expected) = expected else {
+            return self.inner_store.get_part(key, writer, offset, length).await;
+        };
+        let (mut tx, rx) = make_buf_channel_pair();
+        // The writer half lives inside the read future, so an inner read that
+        // fails after some data closes the channel as it returns; held out
+        // here it kept the forwarding loop waiting for bytes that never came.
+        let read_key = key.borrow().into_owned();
+        let read_fut = async move {
+            self.inner_store
+                .get_part(read_key, &mut tx, offset, length)
+                .await
+        };
+        let check_fut = self.inner_check_read(rx, writer, expected, key.borrow());
+        let (read_res, check_res) = tokio::join!(read_fut, check_fut);
+        // The checker's verdict first: on a read past the expected size it
+        // drops its receiver and the inner send then fails with Internal,
+        // which must not hide the DataLoss. Otherwise the inner error (a
+        // NotFound from below) comes before the checker's closed-channel
+        // Internal, as `update` orders the same pair.
+        let result = match (read_res, check_res) {
+            (_, Err(e)) if e.code == Code::DataLoss => Err(e),
+            (Err(e), _) | (Ok(()), Err(e)) => Err(e),
+            (Ok(()), Ok(())) => Ok(()),
+        };
+        if let Err(err) = &result
+            && err.code == Code::DataLoss
+        {
+            // The copy that served this read is bad; drop it from every
+            // cache below so the next read repopulates from the durable
+            // tier, or fails with NotFound and the client re-uploads.
+            match self
+                .inner_store
+                .as_store_driver_pin()
+                .remove(key.borrow())
+                .await
+            {
+                Ok(removed) => warn!(
+                    ?key,
+                    removed, "Dropped a copy that failed size verification"
+                ),
+                Err(remove_err) => warn!(
+                    ?key,
+                    ?remove_err,
+                    "Could not drop a copy that failed size verification"
+                ),
+            }
+        }
+        result
+    }
+
+    async fn remove(self: Pin<&Self>, key: StoreKey<'_>) -> Result<bool, Error> {
+        self.inner_store.as_store_driver_pin().remove(key).await
+    }
+
+    fn inner_store(&self, _digest: Option<StoreKey>) -> &'_ dyn StoreDriver {
+        self
+    }
+
+    fn as_any<'a>(&'a self) -> &'a (dyn core::any::Any + Sync + Send + 'static) {
+        self
+    }
+
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn core::any::Any + Sync + Send + 'static> {
+        self
+    }
+
+    fn register_remove_callback(self: Arc<Self>, callback: RemoveCallback) -> Result<(), Error> {
+        self.inner_store.register_remove_callback(callback)
+    }
+}
+
+default_health_status_indicator!(VerifyStore);

@@ -1,6 +1,6 @@
 ---
 title: Testing guide
-description: How NativeLink's tests are organised, what `#[nativelink_test]` gives you, and which local environment problems cause which confusing failure.
+description: How Forge's tests are organised, what `#[forge_test]` gives you, and which local environment problems cause which confusing failure.
 ---
 
 {/* archetype: how-to. See /web/apps/docs/templates/how-to.mdx */}
@@ -11,7 +11,7 @@ end:** the commands, the conventions, the fixtures that already exist, and
 a diagnosis list for the local failures that are not your code's fault.
 **Time:** twenty minutes.
 
-NativeLink has two test runners over the same tests. Cargo is faster to
+Forge has two test runners over the same tests. Cargo is faster to
 iterate with; Bazel is what CI runs and what gates a merge. Both matter,
 and the vocabulary differs between them in a way that trips people up.
 
@@ -20,13 +20,13 @@ and the vocabulary differs between them in a way that trips people up.
 ```bash
 # Cargo: fastest loop. `smol` keeps target/ around 1GB instead of ~12GB.
 cargo test --all --profile=smol
-cargo test -p nativelink-store
+cargo test -p forge-store
 
 # Bazel: what CI runs.
 bazel test //...              # everything, plus rustfmt and clippy aspects
 bazel test //:unit_tests      # in-file `mod tests` across all crates
 bazel test doctests           # doc examples
-bazel test //nativelink-store:integration   # one crate's tests/ directory
+bazel test //forge-store:integration   # one crate's tests/ directory
 ```
 
 <Callout type="info" title="Bazel's `unit_test` and `integration` do not mean what you expect">
@@ -48,21 +48,21 @@ modules; only nine `mod tests` blocks exist in the whole tree.
 
 | Crate | Test files under `tests/` |
 | --- | --- |
-| `nativelink-store` | 28 |
-| `nativelink-util` | 20 |
-| `nativelink-service` | 13 |
-| `nativelink-scheduler` | 10 |
-| `nativelink-worker` | 7 |
-| `nativelink-config` | 3 |
-| `nativelink-error` | 2 |
+| `forge-store` | 28 |
+| `forge-util` | 20 |
+| `forge-service` | 13 |
+| `forge-scheduler` | 10 |
+| `forge-worker` | 7 |
+| `forge-config` | 3 |
+| `forge-error` | 2 |
 
 A new test file has to be added to its crate's `rust_test_suite` in
 `BUILD.bazel`. Cargo picks it up automatically; Bazel does not.
 
-## `#[nativelink_test]` [#nativelink-test]
+## `#[forge_test]` [#forge-test]
 
 Around 780 tests use it. It is defined in
-<SourceLink file="nativelink-macro/src/lib.rs" symbol="nativelink_test" />
+<SourceLink file="forge-macro/src/lib.rs" symbol="forge_test" />
 and it is not a thin wrapper; it expands to five things:
 
 - `#[tokio::test]`, so the test body can be `async`
@@ -81,29 +81,29 @@ you touched is now logging a `Debug` of a buffer.
 The forms:
 
 ```rust
-#[nativelink_test]                          // the usual case
-#[nativelink_test("crate")]                 // inside nativelink-util itself
-#[nativelink_test(flavor = "multi_thread")] // args forwarded to tokio::test
-#[nativelink_test(start_paused = true)]     // virtual clock, see below
+#[forge_test]                          // the usual case
+#[forge_test("crate")]                 // inside forge-util itself
+#[forge_test(flavor = "multi_thread")] // args forwarded to tokio::test
+#[forge_test(start_paused = true)]     // virtual clock, see below
 ```
 
 ## Fixtures that already exist [#fixtures-that-already-exist]
 
 Reach for these before writing your own.
 
-**Redis**: `nativelink-redis-tester` provides a fake Redis, a `MockPubSub`,
+**Redis**: `forge-redis-tester` provides a fake Redis, a `MockPubSub`,
 and a read-only Redis wrapper. Note that it is a regular dependency of
-`nativelink-store`, not a dev-dependency.
+`forge-store`, not a dev-dependency.
 
 **Time**: `MockInstantWrapped` plus `mock_instant::MockClock::advance` lets
 you move a store's clock forward without sleeping. Combine with
-`#[nativelink_test(start_paused = true)]` for Tokio's virtual time.
+`#[forge_test(start_paused = true)]` for Tokio's virtual time.
 
-**Scheduler helpers**: `nativelink-scheduler/tests/utils/scheduler_utils.rs`,
+**Scheduler helpers**: `forge-scheduler/tests/utils/scheduler_utils.rs`,
 pulled in with an inline `mod utils { pub(crate) mod scheduler_utils; }`
 block rather than as a crate.
 
-**Mongo**: `nativelink-store/tests/mongo_runner/` downloads and starts a
+**Mongo**: `forge-store/tests/mongo_runner/` downloads and starts a
 real `mongod`. This is why the store crate's Bazel timeout is `moderate`
 rather than `short`, and why that suite needs network on a cold cache.
 
@@ -123,13 +123,13 @@ ports 50051, 50052 and 50071 before starting. It drives
 run one of them.
 
 Beyond those, `integration_tests/` also holds BuildStream, Buck2 and Mongo
-suites driven from Nix, and `nativelink-test/fuzz` holds a single fuzz
+suites driven from Nix, and `forge-test/fuzz` holds a single fuzz
 target (`cas_config.rs`) run by ClusterFuzzLite.
 
 ## Coverage [#coverage]
 
 ```bash
-nix build .#nativelinkCoverageForHost
+nix build .#forgeCoverageForHost
 ```
 
 The `result` symlink contains an HTML report. **No coverage
@@ -143,11 +143,11 @@ Most of these are environment, not code.
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Namespace/worker tests fail on Ubuntu 24.04 | `kernel.apparmor_restrict_unprivileged_userns` is on by default | Disable it for the session, or skip those tests locally and let CI run them |
-| `Too many open files` | `ulimit -n` too low for the store tests | Raise it; NativeLink itself defaults to a 24576 fd budget |
+| `Too many open files` | `ulimit -n` too low for the store tests | Raise it; Forge itself defaults to a 24576 fd budget |
 | `run_integration_tests.sh` exits immediately | Running as root, or Docker not reachable without `sudo` | Run as a non-root user with Docker access |
 | The Mongo store suite times out | It downloads a real `mongod` on a cold Bazel cache | Give it network, and don't run it on a plane |
 | Two tests pass alone, fail together | Both touch process environment; they are marked `#[serial(env)]` for a reason | Don't parallelise them, and mark new env-touching tests the same way |
-| `Non-redacted data in "..."` | The `#[nativelink_test]` log assertion caught new `Debug` output containing a buffer | Redact the log line rather than the assertion |
+| `Non-redacted data in "..."` | The `#[forge_test]` log assertion caught new `Debug` output containing a buffer | Redact the log line rather than the assertion |
 | Formatting failures from `bazel test` | Stable `cargo fmt` ignores the nightly-only rustfmt options | `bazel run --config=rustfmt @rules_rust//:rustfmt` |
 
 ## Common questions [#common-questions]
@@ -160,13 +160,13 @@ Most of these are environment, not code.
     Cargo run does not.
   </Accordion>
   <Accordion title="Why do doc examples need their own target?" id="why-doctests">
-    Doc comments in `nativelink-config` are the source text for the generated
-    [configuration reference](/reference/nativelink-config), so their examples
+    Doc comments in `forge-config` are the source text for the generated
+    [configuration reference](/reference/forge-config), so their examples
     are user-facing documentation. `bazel test doctests` is what stops them
     rotting.
   </Accordion>
   <Accordion title="My test needs to wait for something. Should I sleep?" id="should-i-sleep">
-    No. Use `#[nativelink_test(start_paused = true)]` with Tokio's virtual
+    No. Use `#[forge_test(start_paused = true)]` with Tokio's virtual
     clock, or `MockInstantWrapped` with `MockClock::advance` where a store's
     own clock is what matters. A real sleep makes the suite slower and
     flakier at the same time.
@@ -185,5 +185,5 @@ Most of these are environment, not code.
 
 <NextStep href="/contribute/release-versioning" title="Releases and versioning">
   How a version becomes a tag, what the tag triggers, and what compatibility
-  NativeLink does and does not promise.
+  Forge does and does not promise.
 </NextStep>

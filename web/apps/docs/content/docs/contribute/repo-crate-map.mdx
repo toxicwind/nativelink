@@ -1,17 +1,17 @@
 ---
 title: Repository and crate map
-description: What every crate and top-level directory in the NativeLink repository is for, and which one your change belongs in.
+description: What every crate and top-level directory in the Forge repository is for, and which one your change belongs in.
 ---
 
 {/* archetype: explanation. See /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone opening the NativeLink repository for the first
+**Who this is for:** anyone opening the Forge repository for the first
 time and trying to work out where their change goes. **What you'll have at
 the end:** the crate layering, the size of each piece, the directories that
 are not crates, and the half-dozen places where the first guess is wrong.
 **Time:** fifteen minutes.
 
-NativeLink is one Cargo workspace of twelve crates plus a root binary, and
+Forge is one Cargo workspace of twelve crates plus a root binary, and
 the layering is strict enough that you can usually name the crate a change
 belongs in before you open an editor. The exceptions are worth learning
 early, because two of them put code in a crate whose name actively points
@@ -27,7 +27,7 @@ declares `[workspace]` with only `exclude` and `resolver`. It has no
 depending on it**, not by editing a list.
 
 Three directories are explicitly excluded and build on their own:
-`nativelink-config/generate-stores-config`, `nativelink-test/fuzz`, and
+`forge-config/generate-stores-config`, `forge-test/fuzz`, and
 `tools/generate-bazel-rc`.
 
 <Callout type="info" title="The root Cargo.toml is a package, not just a workspace">
@@ -45,18 +45,18 @@ files directly under `tests/`.
 
 | Crate | Source | Tests | What lives here |
 | --- | --- | --- | --- |
-| `nativelink` (root `src/`) | 3 files, ~1.4k lines | none | `main()`, runtime setup, service wiring, TLS and listener construction; also the `redis_store_tester` and `cas_speed_check` binaries |
-| `nativelink-store` | 39 files, ~18.4k | 28 | Every store implementation and the composition machinery |
-| `nativelink-util` | 29 files, ~11.9k | 20 | The shared hub: store traits, scheduler traits, task spawning, fs, health, telemetry |
-| `nativelink-worker` | 12 files, ~9.0k | 7 | The worker runtime: action execution, materialization, upload |
-| `nativelink-scheduler` | 20 files, ~8.3k | 10 | Queueing, matching, state managers, worker bookkeeping |
-| `nativelink-service` | 13 files, ~5.4k | 13 | The gRPC service implementations |
-| `nativelink-config` | 7 files, ~4.7k | 3 | The config schema, the source of truth for the generated reference, plus the `build-schema` binary |
-| `nativelink-proto` | 20 files, ~18.3k | none | Vendored protos and their **checked-in** generated Rust |
-| `nativelink-redis-tester` | 5 files, ~0.9k | none | Fake Redis, mock pub-sub, read-only Redis |
-| `nativelink-error` | 1 file, ~0.6k | 2 | `Error`, `Code`, `ResultExt`, the error macros |
-| `nativelink-metric` (with the nested `nativelink-metric-macro-derive`) | 2 files, ~0.8k | none | The `MetricsComponent` trait, its derive, and the `publish!`/`group!` macros |
-| `nativelink-macro` | 1 file, 99 lines | none | `#[nativelink_test]` |
+| `forge` (root `src/`) | 3 files, ~1.4k lines | none | `main()`, runtime setup, service wiring, TLS and listener construction; also the `redis_store_tester` and `cas_speed_check` binaries |
+| `forge-store` | 39 files, ~18.4k | 28 | Every store implementation and the composition machinery |
+| `forge-util` | 29 files, ~11.9k | 20 | The shared hub: store traits, scheduler traits, task spawning, fs, health, telemetry |
+| `forge-worker` | 12 files, ~9.0k | 7 | The worker runtime: action execution, materialization, upload |
+| `forge-scheduler` | 20 files, ~8.3k | 10 | Queueing, matching, state managers, worker bookkeeping |
+| `forge-service` | 13 files, ~5.4k | 13 | The gRPC service implementations |
+| `forge-config` | 7 files, ~4.7k | 3 | The config schema, the source of truth for the generated reference, plus the `build-schema` binary |
+| `forge-proto` | 20 files, ~18.3k | none | Vendored protos and their **checked-in** generated Rust |
+| `forge-redis-tester` | 5 files, ~0.9k | none | Fake Redis, mock pub-sub, read-only Redis |
+| `forge-error` | 1 file, ~0.6k | 2 | `Error`, `Code`, `ResultExt`, the error macros |
+| `forge-metric` (with the nested `forge-metric-macro-derive`) | 2 files, ~0.8k | none | The `MetricsComponent` trait, its derive, and the `publish!`/`group!` macros |
+| `forge-macro` | 1 file, 99 lines | none | `#[forge_test]` |
 
 ## The layering [#the-layering]
 
@@ -64,18 +64,18 @@ Every internal dependency points down this stack. It has no cycles, and
 the shape is worth memorising because it tells you what a change can reach.
 
 <Mermaid>{`graph TD
-  proto["nativelink-proto"]
-  macroderive["nativelink-metric-macro-derive"]
-  metric["nativelink-metric"]
-  error["nativelink-error"]
-  config["nativelink-config"]
-  util["nativelink-util<br/>the hub"]
-  redis["nativelink-redis-tester"]
-  store["nativelink-store"]
-  sched["nativelink-scheduler"]
-  worker["nativelink-worker"]
-  service["nativelink-service"]
-  bin["nativelink<br/>root binary"]
+  proto["forge-proto"]
+  macroderive["forge-metric-macro-derive"]
+  metric["forge-metric"]
+  error["forge-error"]
+  config["forge-config"]
+  util["forge-util<br/>the hub"]
+  redis["forge-redis-tester"]
+  store["forge-store"]
+  sched["forge-scheduler"]
+  worker["forge-worker"]
+  service["forge-service"]
+  bin["forge<br/>root binary"]
   macroderive --> metric
   proto --> error
   metric --> error
@@ -95,16 +95,16 @@ the shape is worth memorising because it tells you what a change can reach.
   worker --> bin
 `}</Mermaid>
 
-`nativelink-util` is the hub. Almost every trait that two crates need to
+`forge-util` is the hub. Almost every trait that two crates need to
 agree on lives there rather than in the crate that looks like it owns the
-concept: `Store` and `StoreDriver` are in `nativelink-util`, not
-`nativelink-store`, and the four scheduler state-manager traits are in
-`nativelink-util`, not `nativelink-scheduler`. This is deliberate: the
+concept: `Store` and `StoreDriver` are in `forge-util`, not
+`forge-store`, and the four scheduler state-manager traits are in
+`forge-util`, not `forge-scheduler`. This is deliberate: the
 implementations depend on the traits, and the traits must not depend on the
 implementations.
 
-<Callout type="warn" title="`nativelink-redis-tester` is a production dependency">
-  Its name says test utility; `nativelink-store` depends on it in
+<Callout type="warn" title="`forge-redis-tester` is a production dependency">
+  Its name says test utility; `forge-store` depends on it in
   `[dependencies]`, not `[dev-dependencies]`. Treat changes to it as changes
   to shipping code.
 </Callout>
@@ -115,26 +115,26 @@ Six of these, and each one has cost somebody an afternoon.
 
 **Worker bookkeeping lives in the scheduler.** `worker.rs`,
 `worker_registry.rs` and `api_worker_scheduler.rs` are in
-`nativelink-scheduler`. The scheduler's *model* of a worker (its
+`forge-scheduler`. The scheduler's *model* of a worker (its
 properties, its consumed resources, its liveness) belongs to the scheduler.
-`nativelink-worker` is only the runtime that executes actions.
+`forge-worker` is only the runtime that executes actions.
 
-**`nativelink-test/` contains only `fuzz/`.** The `#[nativelink_test]`
-attribute macro is in `nativelink-macro`. The directory name is a leftover.
+**`forge-test/` contains only `fuzz/`.** The `#[forge_test]`
+attribute macro is in `forge-macro`. The directory name is a leftover.
 
-**`nativelink-metric` does not depend on `nativelink-error`.** It cannot;
-`nativelink-error` depends on `nativelink-metric`, and the source carries a
+**`forge-metric` does not depend on `forge-error`.** It cannot;
+`forge-error` depends on `forge-metric`, and the source carries a
 comment explaining that the direction was chosen to break the cycle. A
-metrics change that wants to return a `nativelink_error::Error` is a change
+metrics change that wants to return a `forge_error::Error` is a change
 that needs rethinking.
 
-**Generated proto code is checked in.** `nativelink-proto/genproto/` holds
+**Generated proto code is checked in.** `forge-proto/genproto/` holds
 committed Rust, and the `[lib]` path points at it. You do not need `protoc`
 to build; you do need to regenerate and commit when a proto changes. See
 [how to extend](/contribute/how-to-extend#adding-a-grpc-service).
 
 **Store composition is not in one file.** A `verify` store wrapping a
-`fast_slow` over a `filesystem` is three files in `nativelink-store`, and
+`fast_slow` over a `filesystem` is three files in `forge-store`, and
 the thing that decides what wraps what is
 `default_store_factory.rs`. [The store model](/explanations/store-model)
 explains the semantics.
@@ -149,7 +149,7 @@ are introspecting structure or graphing a number. See
 | --- | --- |
 | `deploy/` | Kustomize overlays (`dev`, `kubernetes-example`, `lre-manual`, `chromium-example`) that assemble the pieces under `kubernetes/` |
 | `deployment-examples/` | Reference deployments you copy and adapt: `docker-compose`, `metrics`, `persistent-workers`, `rhel` |
-| `kubernetes/` | The Kustomize building blocks (`components/`, `resources/`, `workers/`) the overlays reference; Kubernetes deployments proper, including the Helm charts, ship with [NativeLink Enterprise](https://enterprise.nativelink.com) |
+| `kubernetes/` | The Kustomize building blocks (`components/`, `resources/`, `workers/`) the overlays reference; Kubernetes deployments proper, including the Helm charts, ship with [Forge Enterprise](https://enterprise.forge.com) |
 | `integration_tests/` | Shell-driven end-to-end suites plus BuildStream, Buck2 and Mongo harnesses |
 | `local-remote-execution/` | The Nix-based LRE toolchain generation; see [LRE](/explanations/lre) |
 | `toolchain-examples/`, `templates/` | Starting points for downstream projects; both are `.bazelignore`d |
@@ -169,25 +169,25 @@ Every manifest except the nested macro-derive crate's starts with
 `#:schema tools/cargo-with-detailed-deps.json`, which is what gives you
 completion and validation in a TOML-aware editor.
 
-Every crate except `nativelink-proto` (generated code) and
-`nativelink-metric-macro-derive` has `lints.workspace = true` and no lint
+Every crate except `forge-proto` (generated code) and
+`forge-metric-macro-derive` has `lints.workspace = true` and no lint
 configuration of its own; all of it is centralised in the root
 `[workspace.lints]`.
 
 Three license headers are in use. FSL-1.1-Apache-2.0 is the default and
 covers the overwhelming majority of files; a handful are Apache-2.0; and two
 areas are **Business Source License**:
-`nativelink-util/src/metrics.rs` and all of
-`nativelink-worker/src/persistent_worker/`. Copy the header from the file
+`forge-util/src/metrics.rs` and all of
+`forge-worker/src/persistent_worker/`. Copy the header from the file
 next to the one you are creating rather than from memory.
 
 ## Common questions [#common-questions]
 
 <Accordions type="multiple">
   <Accordion title="I want to add a store. Which crates do I touch?" id="which-crates-for-a-store">
-    Two, plus a Bazel file: the spec goes in `nativelink-config`, the
-    implementation and its factory arm go in `nativelink-store`, and the new
-    file has to be added to `nativelink-store/BUILD.bazel`. The step-by-step
+    Two, plus a Bazel file: the spec goes in `forge-config`, the
+    implementation and its factory arm go in `forge-store`, and the new
+    file has to be added to `forge-store/BUILD.bazel`. The step-by-step
     is in [how to extend](/contribute/how-to-extend#adding-a-store).
   </Accordion>
   <Accordion title="Why is there no `members` list in the workspace?" id="no-members-list">
@@ -202,7 +202,7 @@ next to the one you are creating rather than from memory.
     submitting. See [the testing guide](/contribute/testing-guide).
   </Accordion>
   <Accordion title="Where does `main()` live?" id="where-is-main">
-    `src/bin/nativelink.rs`, in the root package. It builds the Tokio runtime
+    `src/bin/forge.rs`, in the root package. It builds the Tokio runtime
     by hand, constructs the stores, then assembles the gRPC routes. It is the
     single best file to read first if you want to see how the pieces connect.
   </Accordion>

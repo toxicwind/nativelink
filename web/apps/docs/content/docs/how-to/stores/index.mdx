@@ -1,6 +1,6 @@
 ---
 title: Storage backends
-description: Every place NativeLink can put bytes, compared on durability, latency and cost, and the composition almost every real deployment lands on.
+description: Every place Forge can put bytes, compared on durability, latency and cost, and the composition almost every real deployment lands on.
 ---
 
 {/* archetype: how-to (chooser), see /web/apps/docs/templates/how-to.mdx */}
@@ -25,8 +25,8 @@ stores: [
   {
     name: "CAS_MAIN_STORE",
     filesystem: {
-      content_path: "/var/lib/nativelink/cas",
-      temp_path: "/var/lib/nativelink/tmp",
+      content_path: "/var/lib/forge/cas",
+      temp_path: "/var/lib/forge/tmp",
       eviction_policy: { max_bytes: "50gb" },
     },
   },
@@ -61,7 +61,7 @@ and `noop` takes nothing at all. All three are covered in
   Six providers (`aws`, `r2`, `ontap`, `gcs`, `azure`, `oci`) are declared
   under `experimental_cloud_object_store`, and Mongo under `experimental_mongo`. The prefix signals that the
   configuration key may be renamed in a future release. It is not a claim
-  that the store is unfinished. Pin your NativeLink version and read the
+  that the store is unfinished. Pin your Forge version and read the
   release notes before upgrading, the same as for any config surface.
 </Callout>
 
@@ -79,8 +79,8 @@ tier:
   fast_slow: {
     fast: {
       filesystem: {
-        content_path: "/var/lib/nativelink/cas",
-        temp_path: "/var/lib/nativelink/tmp",
+        content_path: "/var/lib/forge/cas",
+        temp_path: "/var/lib/forge/tmp",
         eviction_policy: { max_bytes: "50gb" },
       },
     },
@@ -88,7 +88,7 @@ tier:
       experimental_cloud_object_store: {
         provider: "aws",
         region: "us-east-1",
-        bucket: "my-nativelink-cas",
+        bucket: "my-forge-cas",
         key_prefix: "cas/",
       },
     },
@@ -98,7 +98,7 @@ tier:
 
 Reads hit the filesystem first and only fall through to the bucket on a miss.
 Writes go to both. Every shipped cloud example in
-`nativelink-config/examples/` is built this way (some with a `memory` fast
+`forge-config/examples/` is built this way (some with a `memory` fast
 tier instead of `filesystem`), and every backend page below shows its own
 version of it.
 
@@ -109,7 +109,7 @@ verification, sharding) and the order the layers have to go in.
 ## Shrinking what you move [#shrinking-what-you-move]
 
 Two pages in this group are not backends at all. They change how many bytes
-travel between the client and NativeLink, whichever backend is underneath:
+travel between the client and Forge, whichever backend is underneath:
 
 - [Remote cache compression](/how-to/stores/compression): zstd on the wire,
   for compressible artifacts on a real network.

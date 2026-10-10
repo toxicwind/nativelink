@@ -1,4 +1,4 @@
-// Copyright 2026 The NativeLink Authors. All rights reserved.
+// Copyright 2026 The Forge Authors. All rights reserved.
 //
 // Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,17 +22,17 @@ use std::sync::{Arc, RwLock};
 use bytes::Bytes;
 use clap::{Parser, ValueEnum};
 use futures::TryStreamExt;
-use nativelink_config::stores::{RedisMode, RedisSpec};
-use nativelink_error::{Code, Error, ResultExt};
-use nativelink_store::redis_store::RedisStore;
-use nativelink_util::buf_channel::make_buf_channel_pair;
-use nativelink_util::store_trait::{
+use forge_config::stores::{RedisMode, RedisSpec};
+use forge_error::{Code, Error, ResultExt};
+use forge_store::redis_store::RedisStore;
+use forge_util::buf_channel::make_buf_channel_pair;
+use forge_util::store_trait::{
     RemoveItemCallback, SchedulerCurrentVersionProvider, SchedulerIndexProvider, SchedulerStore,
     SchedulerStoreDataProvider, SchedulerStoreDecodeTo, SchedulerStoreKeyProvider, StoreDriver,
     StoreKey, StoreLike, TrueValue, UploadSizeInfo,
 };
-use nativelink_util::telemetry::init_tracing;
-use nativelink_util::{background_spawn, spawn};
+use forge_util::telemetry::init_tracing;
+use forge_util::{background_spawn, spawn};
 use rand::Rng;
 use tokio::time::sleep;
 use tracing::{error, info};

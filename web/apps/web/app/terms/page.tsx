@@ -1,8 +1,8 @@
-import { Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Eyebrow, Reveal, Section } from "@forge/ui";
 
 export const metadata = {
   title: "Terms & Privacy",
-  description: "Terms of Service and Privacy Policy for NativeLink.",
+  description: "Terms of Service and Privacy Policy for Forge.",
 };
 
 const toc = [
@@ -34,7 +34,7 @@ export default function TermsPage() {
                 Terms & Privacy
               </h1>
               <p className="mx-auto mt-5 max-w-[600px] text-base leading-relaxed text-muted-foreground md:text-lg">
-                The terms that govern your use of NativeLink and our commitment to
+                The terms that govern your use of Forge and our commitment to
                 handling your data responsibly.
               </p>
               <p className="mt-4 font-mono text-xs uppercase tracking-[0.18em] text-muted">
@@ -75,7 +75,7 @@ export default function TermsPage() {
                 Terms of Service
               </h2>
               <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-                These Terms of Service govern your use of NativeLink, the hosted
+                These Terms of Service govern your use of Forge, the hosted
                 cloud service, and any related products operated by Trace Machina
                 ("we," "us"). By accessing or using the service, you agree to be
                 bound by these terms.
@@ -85,7 +85,7 @@ export default function TermsPage() {
                 1. Acceptance of Terms
               </h3>
               <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-                By creating an account, deploying NativeLink, or otherwise using our
+                By creating an account, deploying Forge, or otherwise using our
                 service, you confirm that you have read these terms, agree to them,
                 and have the authority to bind your organization where applicable.
                 By agreeing, you also consent to our collection and processing of
@@ -105,15 +105,15 @@ export default function TermsPage() {
                 2. License & Use
               </h3>
               <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-                NativeLink is distributed from a monorepo with module-aware
+                Forge is distributed from a monorepo with module-aware
                 licensing. Most modules are licensed under FSL-1.1-Apache-2.0,
                 while some commercial modules, including metrics and remote
                 persistent workers, are licensed under the Business Source License.
-                Developers using NativeLink for an individual cache do not need a
+                Developers using Forge for an individual cache do not need a
                 commercial license; team and production usage of commercial modules
                 can be covered by an intentionally very inexpensive separate license.
                 See the <a href="/license">license page</a> for details.
-                NativeLink Enterprise offerings are provided under the
+                Forge Enterprise offerings are provided under the
                 separate agreement you accept when you sign up for those services.
               </p>
 

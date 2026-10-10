@@ -1,11 +1,11 @@
 import { source } from "@/lib/source";
 import { getMDXComponents } from "@/mdx-components";
-import { AskAi } from "@nativelink/ui";
+import { AskAi } from "@forge/ui";
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/page";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-const DOCS_URL = "https://docs.nativelink.com";
+const DOCS_URL = "https://docs.forge.com";
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -29,7 +29,7 @@ export default async function Page(props: {
       <AskAi
         size="sm"
         siteUrl={DOCS_URL}
-        prompt={`Read ${DOCS_URL}/llms.txt, then explain this NativeLink documentation page and answer my questions about it: ${pageUrl}`}
+        prompt={`Read ${DOCS_URL}/llms.txt, then explain this Forge documentation page and answer my questions about it: ${pageUrl}`}
         className="not-prose mt-12 mb-8 border-t border-border pt-8"
       />
     </DocsPage>

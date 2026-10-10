@@ -9,7 +9,7 @@
       pkgs,
       ...
     }: let
-      namespace = "nativelink";
+      namespace = "forge";
       cfg = config.${namespace};
     in {
       options.${namespace} = {
@@ -27,9 +27,9 @@
         prefix = lib.mkOption {
           type = lib.types.str;
           description = lib.mdDoc ''
-            An optional Bazel config prefix for the flags in `nativelink.bazelrc`.
+            An optional Bazel config prefix for the flags in `forge.bazelrc`.
 
-            If set, builds need to explicitly enable the nativelink config via
+            If set, builds need to explicitly enable the forge config via
             `--config=<prefix>`.
 
             Defaults to an empty string, enabling the cache by default.
@@ -42,13 +42,13 @@
         installationScript = let
           bazelrcContent = lib.concatLines maybePrefixedConfig;
 
-          # These flags cause Bazel builds to connect to NativeLink's read-only cache.
+          # These flags cause Bazel builds to connect to Forge's read-only cache.
           #
           # ```nix
           # devShells.default = pkgs.mkShell {
           #   shellHook = ''
           #   # Generate the `lre.bazelrc` config file.
-          #   ${config.nativelink.installationScript}
+          #   ${config.forge.installationScript}
           #   '';
           # };
           # ```
@@ -58,9 +58,9 @@
             "--remote_cache_async"
           ];
 
-          # If the `nativelink.prefix` is set to a nonempty string,
+          # If the `forge.prefix` is set to a nonempty string,
           # prefix the Bazel build commands with that string. This will disable
-          # connecting to the nativelink-cloud by default and require adding
+          # connecting to the forge-cloud by default and require adding
           # `--config=<prefix>` to Bazel invocations.
           maybePrefixedConfig =
             if (cfg.prefix == "")

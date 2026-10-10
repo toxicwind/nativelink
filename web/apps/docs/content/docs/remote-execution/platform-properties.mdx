@@ -41,7 +41,7 @@ key to a **type**, and that type decides how the value on the action is
 compared against the value on the worker. A key that isn't in this map is
 not a valid key anywhere, for either side.
 
-<SourceLink file="nativelink-config/src/schedulers.rs" symbol="PropertyType" />
+<SourceLink file="forge-config/src/schedulers.rs" symbol="PropertyType" />
 
 ## The four property types [#the-four-property-types]
 
@@ -55,7 +55,7 @@ not a valid key anywhere, for either side.
 Most documentation you'll find elsewhere describes three of these. `ignore`
 exists and is the only one that exempts a worker from carrying the key.
 
-<SourceLink file="nativelink-util/src/platform_properties.rs" symbol="is_satisfied_by" />
+<SourceLink file="forge-util/src/platform_properties.rs" symbol="is_satisfied_by" />
 
 ### Why `priority` is not the escape hatch people assume [#why-priority-is-not-the-escape-hatch-people-assume]
 
@@ -79,7 +79,7 @@ When the scheduler assigns an action to a worker, it **subtracts** every
 `minimum` value the action requested from the worker's advertised value. When
 the action completes, it adds them back.
 
-<SourceLink file="nativelink-scheduler/src/worker.rs" symbol="reduce_platform_properties" />
+<SourceLink file="forge-scheduler/src/worker.rs" symbol="reduce_platform_properties" />
 
 A worker advertising `cpu_count: 16` that receives four actions each asking
 for `cpu_count=4` is, at that moment, advertising `cpu_count: 0`, and will
@@ -111,7 +111,7 @@ with `Bad Property during connect_worker()` and never joins the pool. You'll
 see this in the worker's log at startup, and the effect is a fleet that looks
 smaller than you provisioned.
 
-<SourceLink file="nativelink-service/src/worker_api_server.rs" symbol="connect_worker" />
+<SourceLink file="forge-service/src/worker_api_server.rs" symbol="connect_worker" />
 
 **An unknown key on an action queues forever.** The scheduler types an
 action's properties at match time, not at submission time. When that typing
@@ -122,7 +122,7 @@ is not told anything. Because the pass ended in an error, the scheduler
 re-runs it after 100 ms, failing identically each time. From the build's
 side this is indistinguishable from a busy queue.
 
-<SourceLink file="nativelink-scheduler/src/simple_scheduler.rs" symbol="do_try_match" />
+<SourceLink file="forge-scheduler/src/simple_scheduler.rs" symbol="do_try_match" />
 
 <Callout type="warn" title="A queued build is a configuration bug until proven otherwise">
   If a build sits at `0s remote` for more than a few seconds on an idle
@@ -152,7 +152,7 @@ schedulers: [
 ]
 ```
 
-<SourceLink file="nativelink-config/src/schedulers.rs" symbol="SimpleSpec" />
+<SourceLink file="forge-config/src/schedulers.rs" symbol="SimpleSpec" />
 
 On each interval it logs, for every queued action, why no worker took it,
 plus the oldest five actions in each state (`Oldest actions in state`).
@@ -173,7 +173,7 @@ Property mismatch on worker property cpu_count. Minimum(8) < Minimum(32)
 Worker <id> cannot accept work: is_paused=false, is_draining=false, inflight=4/4
 ```
 
-<SourceLink file="nativelink-scheduler/src/worker_capability_index.rs" symbol="find_matching_workers" />
+<SourceLink file="forge-scheduler/src/worker_capability_index.rs" symbol="find_matching_workers" />
 
 Read those lines literally, because they mean different things:
 
@@ -196,7 +196,7 @@ than matching; look for `Unknown platform property` in the same log, which
 is the unknown-key-on-an-action case above.
 
 The example config
-<SourceLink file="nativelink-config/examples/scheduler_match_logging_disable.json5" />
+<SourceLink file="forge-config/examples/scheduler_match_logging_disable.json5" />
 shows the opposite setting for clusters where this output is too noisy in
 steady state.
 
@@ -260,14 +260,14 @@ with `shlex` and executed directly, with a cleared environment) and
 splitting its output on newlines, one value per line. `nproc` is the
 canonical use.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="WorkerProperty" />
-<SourceLink file="nativelink-worker/src/worker_utils.rs" symbol="make_connect_worker_request" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="WorkerProperty" />
+<SourceLink file="forge-worker/src/worker_utils.rs" symbol="make_connect_worker_request" />
 
 ## About `container-image` [#about-container-image]
 
 It appears in nearly every example config and it is worth being precise about
 what it does, because the name suggests something that isn't happening:
-**NativeLink does not pull or launch a container per action.** No
+**Forge does not pull or launch a container per action.** No
 code sits behind this key. It is an ordinary string property like any other.
 
 What it actually means is *this worker process is running inside this image*,

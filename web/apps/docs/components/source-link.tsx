@@ -1,8 +1,8 @@
 import { SOURCE_REF, sourceUrl } from "@/lib/source-ref";
-import { cn } from "@nativelink/ui";
+import { cn } from "@forge/ui";
 
 interface SourceLinkProps {
-  /** Repo-relative path, for example `nativelink-config/src/stores.rs`. */
+  /** Repo-relative path, for example `forge-config/src/stores.rs`. */
   file: string;
   /** Symbol to name in the link text, for example `FastSlowSpec`. */
   symbol?: string;

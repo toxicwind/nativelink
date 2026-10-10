@@ -3,7 +3,7 @@ import createMDX from "@next/mdx";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@nativelink/ui"],
+  transpilePackages: ["@forge/ui"],
   pageExtensions: ["ts", "tsx", "js", "jsx", "md", "mdx"],
   images: {
     remotePatterns: [
@@ -11,11 +11,11 @@ const nextConfig = {
       { protocol: "https", hostname: "github.com" },
       {
         protocol: "https",
-        hostname: "nativelink-cdn.s3.us-east-1.amazonaws.com",
+        hostname: "forge-cdn.s3.us-east-1.amazonaws.com",
       },
     ],
   },
-  // Marketing serves the apex; the docs app lives on docs.nativelink.com.
+  // Marketing serves the apex; the docs app lives on docs.forge.com.
   // Redirect /docs links there so old URLs and local nav links keep working.
   //
   //   Production: target is process.env.DOCS_URL (set on Vercel).

@@ -1,9 +1,9 @@
-import { Badge, Button, Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Badge, Button, Eyebrow, Reveal, Section } from "@forge/ui";
 
 export const metadata = {
   title: "Careers",
   description:
-    "Join NativeLink. We are a small team building the open source remote build cache and execution platform, and we are growing.",
+    "Join Forge. We are a small team building the open source remote build cache and execution platform, and we are growing.",
 };
 
 const roles = [
@@ -44,7 +44,7 @@ export default function CareersPage() {
                 </Button>
                 <Button size="lg" variant="outline" asChild>
                   <a
-                    href="https://github.com/TraceMachina/nativelink"
+                    href="https://github.com/toxicwind/forge"
                     target="_blank"
                     rel="noreferrer"
                   >

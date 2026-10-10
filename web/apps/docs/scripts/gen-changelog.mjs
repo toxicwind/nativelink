@@ -28,7 +28,7 @@
 // outside code reaches the page as escaped `\<` prose, so no HTML comment or
 // tag can survive into the rendered page, however it is split across lines.
 //
-// Source resolution: CHANGELOG.md sits at the nativelink repository root,
+// Source resolution: CHANGELOG.md sits at the forge repository root,
 // which is ABOVE the web/ workspace. Local checkouts and GitHub CI have it on
 // disk, so we walk up from this script until we find it (next to cliff.toml,
 // so an unrelated CHANGELOG.md can't be picked up). Vercel only mounts the
@@ -37,7 +37,7 @@
 // VERCEL_GIT_* variables — same bytes, no drift.
 //
 // Usage from web/:
-//   bun --filter @nativelink/docs gen:changelog
+//   bun --filter @forge/docs gen:changelog
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -48,7 +48,7 @@ const targetFile = join(here, "../content/docs/reference/changelog.md");
 
 /**
  * Find CHANGELOG.md by walking up from this script towards the filesystem
- * root. Requiring cliff.toml as a sibling pins the match to the nativelink
+ * root. Requiring cliff.toml as a sibling pins the match to the forge
  * repository root rather than any stray changelog on the way up.
  */
 function findLocalChangelog() {
@@ -94,7 +94,7 @@ async function readChangelog() {
     [
       `gen-changelog: CHANGELOG.md not found next to a cliff.toml in any directory above ${here},`,
       "and the VERCEL_GIT_* variables needed to fetch it for the deployed commit are unset.",
-      "Run from a nativelink checkout, or on Vercel enable 'Include source",
+      "Run from a forge checkout, or on Vercel enable 'Include source",
       "files outside of the Root Directory' so the repository root is available to the build.",
     ].join(" "),
   );
@@ -190,7 +190,7 @@ description: Notable changes per release. Latest first.
 <!-- The source of truth is CHANGELOG.md at the repository root. -->
 
 This page mirrors
-[\`CHANGELOG.md\`](https://github.com/TraceMachina/nativelink/blob/main/CHANGELOG.md),
+[\`CHANGELOG.md\`](https://github.com/toxicwind/forge/blob/main/CHANGELOG.md),
 the canonical changelog maintained with [git-cliff](https://git-cliff.org)
 as part of each release.
 

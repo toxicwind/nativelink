@@ -1,6 +1,6 @@
 {
   "pages": [
-    "nativelink-config",
+    "forge-config",
     "protocol-api",
     "metrics",
     "cli-and-env",

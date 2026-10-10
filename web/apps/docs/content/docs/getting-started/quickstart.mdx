@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Install NativeLink and point your build system at it in under 10 minutes.
+description: Install Forge and point your build system at it in under 10 minutes.
 ---
 
 <Prerequisites>
@@ -17,7 +17,7 @@ system to the running cluster.
   Docker. For the Nix path, a recent Nix install with flakes enabled.
 </Callout>
 
-## Install NativeLink [#install-nativelink]
+## Install Forge [#install-forge]
 
 The fastest way is the prebuilt container image. It runs anywhere Docker
 runs; the configuration it needs is a single JSON5 file from the
@@ -29,13 +29,13 @@ repository.
 
 ```bash
 # Grab a known-good basic configuration
-curl -O https://raw.githubusercontent.com/TraceMachina/nativelink/v1.6.5/nativelink-config/examples/basic_cas.json5
+curl -O https://raw.githubusercontent.com/toxicwind/forge/v1.6.5/forge-config/examples/basic_cas.json5
 
 # Run the official image
 docker run \
   -v $(pwd)/basic_cas.json5:/config \
   -p 50051:50051 \
-  ghcr.io/tracemachina/nativelink:v1.6.5 config
+  ghcr.io/tracemachina/forge:v1.6.5 config
 ```
 
 The image is multi-arch: x86_64 and ARM64 both run natively (use
@@ -47,9 +47,9 @@ listening on `localhost:50051`.
   <Tab value="macOS / Linux (Nix)">
 
 ```bash
-curl -O https://raw.githubusercontent.com/TraceMachina/nativelink/refs/tags/v1.6.5/nativelink-config/examples/basic_cas.json5
+curl -O https://raw.githubusercontent.com/toxicwind/forge/refs/tags/v1.6.5/forge-config/examples/basic_cas.json5
 
-nix run github:TraceMachina/nativelink/v1.6.5 ./basic_cas.json5
+nix run github:toxicwind/forge/v1.6.5 ./basic_cas.json5
 ```
 
 Slower than the prebuilt image because it builds from source, but works on
@@ -72,13 +72,13 @@ runs natively on Apple Silicon.
 
 ```powershell
 Invoke-WebRequest `
-  -Uri "https://raw.githubusercontent.com/TraceMachina/nativelink/v1.6.5/nativelink-config/examples/basic_cas.json5" `
+  -Uri "https://raw.githubusercontent.com/toxicwind/forge/v1.6.5/forge-config/examples/basic_cas.json5" `
   -OutFile "basic_cas.json5"
 
 docker run `
   -v ${PWD}/basic_cas.json5:/config `
   -p 50051:50051 `
-  ghcr.io/tracemachina/nativelink:v1.6.5 config
+  ghcr.io/tracemachina/forge:v1.6.5 config
 ```
 
 The image is a Linux image published for x86_64 and ARM64, so Docker
@@ -125,7 +125,7 @@ bazel build //... \
 Run any build target. Subsequent rebuilds of unchanged targets should
 report a `remote cache hit` count in the final `processes:` summary line.
 Leave `--remote_executor` off for now: the container image holds only the
-NativeLink binary, no shell or compilers, so actions sent to its worker
+Forge binary, no shell or compilers, so actions sent to its worker
 cannot run. [Remote execution](/remote-execution) sets up workers with a
 toolchain.
 
@@ -209,7 +209,7 @@ section below.
 ## Troubleshooting [#troubleshooting]
 
 <Callout type="warn" title="Connection refused">
-  The NativeLink server isn't listening on the port your client is
+  The Forge server isn't listening on the port your client is
   pointing at. Confirm with `lsof -i :50051` (macOS / Linux) or
   `netstat -ano | findstr 50051` (Windows). Check the Docker container is
   still running with `docker ps`.
@@ -249,7 +249,7 @@ section below.
   </Accordion>
   <Accordion title="Do I need --remote_cache when --remote_executor is set?" id="do-i-need-remote-cache-when-remote-executor-is-set">
     No. When `--remote_cache` is empty Bazel reuses the `--remote_executor`
-    endpoint for the cache, so one flag is enough when the same NativeLink
+    endpoint for the cache, so one flag is enough when the same Forge
     serves both. Set `--remote_cache` explicitly only when the cache lives
     at a different address from the scheduler.
   </Accordion>

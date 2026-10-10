@@ -1,0 +1,154 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+mod utils {
+    pub(crate) mod scheduler_utils;
+}
+
+use futures::join;
+use forge_config::stores::MemorySpec;
+use forge_error::Error;
+use forge_macro::forge_test;
+use forge_proto::build::bazel::remote::execution::v2::ActionResult as ProtoActionResult;
+use forge_scheduler::cache_lookup_scheduler::CacheLookupScheduler;
+use forge_scheduler::mock_scheduler::MockActionScheduler;
+use forge_store::memory_store::MemoryStore;
+use forge_util::action_messages::{
+    ActionResult, ActionStage, ActionState, ActionUniqueQualifier, OperationId,
+};
+use forge_util::common::DigestInfo;
+use forge_util::operation_state_manager::{ClientStateManager, OperationFilter};
+use forge_util::store_trait::{Store, StoreLike};
+use pretty_assertions::assert_eq;
+use prost::Message;
+use tokio::sync::watch;
+use tokio::{self};
+use tokio_stream::StreamExt;
+use utils::scheduler_utils::{TokioWatchActionStateResult, make_base_action_info};
+
+struct TestContext {
+    mock_scheduler: Arc<MockActionScheduler>,
+    ac_store: Store,
+    cache_scheduler: CacheLookupScheduler,
+}
+
+fn make_cache_scheduler() -> Result<TestContext, Error> {
+    let mock_scheduler = Arc::new(MockActionScheduler::new());
+    let ac_store = Store::new(MemoryStore::new(&MemorySpec::default()));
+    let cache_scheduler = CacheLookupScheduler::new(ac_store.clone(), mock_scheduler.clone())?;
+    Ok(TestContext {
+        mock_scheduler,
+        ac_store,
+        cache_scheduler,
+    })
+}
+
+#[forge_test]
+async fn different_invocations_share_completed_cache_results() -> Result<(), Error> {
+    let context = make_cache_scheduler()?;
+    let action_info = make_base_action_info(UNIX_EPOCH, DigestInfo::new([42; 32], 123));
+    let result = ProtoActionResult::try_from(ActionResult::default())?;
+    context
+        .ac_store
+        .update_oneshot(action_info.digest(), result.encode_to_vec().into())
+        .await?;
+    for scope in ["invocation-one", "invocation-two"] {
+        let mut scoped_action = action_info.clone();
+        let ActionUniqueQualifier::Cacheable(key) =
+            &mut Arc::make_mut(&mut scoped_action).unique_qualifier
+        else {
+            panic!("Expected cacheable action");
+        };
+        key.execution_scope = Some(scope.to_string());
+        // No mock scheduler response: a regression that rekeys the cache would
+        // delegate to execution and fail this bounded wait.
+        let listener = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            context
+                .cache_scheduler
+                .add_action(OperationId::default(), scoped_action),
+        )
+        .await
+        .expect("Completed cache entry must be reusable across invocations")?;
+        let (state, _) = listener.as_state().await?;
+        assert_eq!(state.action_digest, action_info.digest());
+        assert_eq!(state.stage, ActionStage::CompletedFromCache(result.clone()));
+    }
+    Ok(())
+}
+
+#[forge_test]
+async fn add_action_handles_skip_cache() -> Result<(), Error> {
+    let context = make_cache_scheduler()?;
+    let action_info = make_base_action_info(UNIX_EPOCH, DigestInfo::zero_digest());
+    let action_result = ProtoActionResult::try_from(ActionResult::default())?;
+    context
+        .ac_store
+        .update_oneshot(action_info.digest(), action_result.encode_to_vec().into())
+        .await?;
+    let (_forward_watch_channel_tx, forward_watch_channel_rx) =
+        watch::channel(Arc::new(ActionState {
+            client_operation_id: OperationId::default(),
+            stage: ActionStage::Queued,
+            action_digest: action_info.unique_qualifier.digest(),
+            last_transition_timestamp: SystemTime::now(),
+        }));
+    let ActionUniqueQualifier::Cacheable(action_key) = action_info.unique_qualifier.clone() else {
+        panic!("This test should be testing when item was cached first");
+    };
+    let mut skip_cache_action = action_info.as_ref().clone();
+    skip_cache_action.unique_qualifier = ActionUniqueQualifier::Uncacheable(action_key);
+    let skip_cache_action = Arc::new(skip_cache_action);
+    let client_operation_id = OperationId::default();
+    let _unused = join!(
+        context
+            .cache_scheduler
+            .add_action(client_operation_id.clone(), skip_cache_action),
+        context
+            .mock_scheduler
+            .expect_add_action(Ok(Box::new(TokioWatchActionStateResult::new(
+                client_operation_id,
+                action_info,
+                forward_watch_channel_rx
+            ))))
+    );
+    Ok(())
+}
+
+#[forge_test]
+async fn find_by_client_operation_id_call_passed() -> Result<(), Error> {
+    let context = make_cache_scheduler()?;
+    let client_operation_id = OperationId::default();
+    let (actual_result, actual_filter) = join!(
+        context.cache_scheduler.filter_operations(OperationFilter {
+            client_operation_id: Some(client_operation_id.clone()),
+            ..Default::default()
+        }),
+        context
+            .mock_scheduler
+            .expect_filter_operations(Ok(Box::pin(futures::stream::empty()))),
+    );
+    assert_eq!(true, actual_result.unwrap().next().await.is_none());
+    assert_eq!(
+        OperationFilter {
+            client_operation_id: Some(client_operation_id),
+            ..Default::default()
+        },
+        actual_filter
+    );
+    Ok(())
+}

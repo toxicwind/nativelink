@@ -1,19 +1,19 @@
 disallowed-methods = [
-  { path = "std::thread::Builder::new", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "std::thread::spawn", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::runtime::Builder::new_current_thread", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::runtime::Builder::new_multi_thread", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::runtime::Builder::new_multi_thread_alt", reason = "use one of the `nativelink-util::task` functions instead", allow-invalid = true },                     # Can be invalid because depends on feature flags
+  { path = "std::thread::Builder::new", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "std::thread::spawn", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::runtime::Builder::new_current_thread", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::runtime::Builder::new_multi_thread", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::runtime::Builder::new_multi_thread_alt", reason = "use one of the `forge-util::task` functions instead", allow-invalid = true },                     # Can be invalid because depends on feature flags
   { path = "tokio::runtime::Handle::block_on", reason = "never block_on an async op from a blocking-pool thread: it needs a second pool thread and can deadlock the pool" },
-  { path = "tokio::runtime::Runtime::block_on", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::runtime::Runtime::new", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::runtime::Runtime::spawn", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::runtime::Runtime::spawn_blocking", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::spawn", reason = "use `nativelink-util::task::spawn` or `nativelink-util::task::background_spawn` instead" },
-  { path = "tokio::task::block_in_place", reason = "use one of the `nativelink-util::task` functions instead" },
-  { path = "tokio::task::spawn", reason = "use `nativelink-util::task::spawn` or `nativelink-util::task::background_spawn` instead" },
-  { path = "tokio::task::spawn_blocking", reason = "use `nativelink-util::task::spawn_blocking` instead" },
-  { path = "tokio::task::spawn_local", reason = "use one of the `nativelink-util::task` functions instead" },
+  { path = "tokio::runtime::Runtime::block_on", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::runtime::Runtime::new", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::runtime::Runtime::spawn", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::runtime::Runtime::spawn_blocking", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::spawn", reason = "use `forge-util::task::spawn` or `forge-util::task::background_spawn` instead" },
+  { path = "tokio::task::block_in_place", reason = "use one of the `forge-util::task` functions instead" },
+  { path = "tokio::task::spawn", reason = "use `forge-util::task::spawn` or `forge-util::task::background_spawn` instead" },
+  { path = "tokio::task::spawn_blocking", reason = "use `forge-util::task::spawn_blocking` instead" },
+  { path = "tokio::task::spawn_local", reason = "use one of the `forge-util::task` functions instead" },
 ]
 # Started from the default at https://doc.rust-lang.org/clippy/lint_configuration.html#doc-valid-idents
 doc-valid-idents = [

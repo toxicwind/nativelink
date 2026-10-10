@@ -6,7 +6,7 @@ import {
   type FAQItem,
   Reveal,
   Section,
-} from "@nativelink/ui";
+} from "@forge/ui";
 import { ArchitectureDiagram } from "@/components/architecture-diagram";
 
 export const metadata = { title: "Product" };
@@ -45,7 +45,7 @@ const pillars = [
   {
     eyebrow: "Built on Rust",
     title: "Performance that doesn't stall.",
-    body: "No garbage collector. No race conditions at scale. No mystery latency spikes. Memory safety without the runtime tax — which is why NativeLink can serve ten billion requests a month on infrastructure that would buckle other systems.",
+    body: "No garbage collector. No race conditions at scale. No mystery latency spikes. Memory safety without the runtime tax — which is why Forge can serve ten billion requests a month on infrastructure that would buckle other systems.",
     metric: "0",
     metricLabel: "GC pauses",
     icon: (
@@ -80,11 +80,11 @@ const securityPoints = [
 
 const faqItems: FAQItem[] = [
   {
-    q: "What is NativeLink?",
+    q: "What is Forge?",
     a: "A high-performance build cache and remote execution system designed to accelerate compilation and testing while cutting infrastructure spend.",
   },
   {
-    q: "How do I set up NativeLink?",
+    q: "How do I set up Forge?",
     a: "Deploy it as a Docker image — the documentation walks through every step, from a single-node local setup to a multi-region cluster.",
   },
   {
@@ -92,16 +92,16 @@ const faqItems: FAQItem[] = [
     a: "Linux, macOS, and Windows for clients. Linux and macOS for the server. Workers can target any platform your toolchains support.",
   },
   {
-    q: "Is NativeLink free?",
+    q: "Is Forge free?",
     a: "Most of the monorepo is FSL-1.1-Apache-2.0. Individual cache use does not need a commercial license. Metrics and remote persistent workers are Business Source License modules; Enterprise or a very inexpensive separate license covers shared production use.",
   },
   {
     q: "Why Rust?",
-    a: "Memory safety without garbage collection. No mystery pauses, no race conditions at scale, no runtime tax — which is how a single NativeLink cluster serves over ten billion requests a month.",
+    a: "Memory safety without garbage collection. No mystery pauses, no race conditions at scale, no runtime tax — which is how a single Forge cluster serves over ten billion requests a month.",
   },
   {
     q: "How does remote execution work?",
-    a: "NativeLink distributes build and test actions across a network of workers. The scheduler decides who runs what, hermetically, and content-addresses every input and output.",
+    a: "Forge distributes build and test actions across a network of workers. The scheduler decides who runs what, hermetically, and content-addresses every input and output.",
   },
   {
     q: "Does it work with my existing tools?",
@@ -109,10 +109,10 @@ const faqItems: FAQItem[] = [
   },
   {
     q: "How do I keep my Bazel setup hermetic?",
-    a: "NativeLink eliminates external dependencies and enforces consistency across builds. The docs cover the configuration in depth.",
+    a: "Forge eliminates external dependencies and enforces consistency across builds. The docs cover the configuration in depth.",
   },
   {
-    q: "Why should I choose NativeLink?",
+    q: "Why should I choose Forge?",
     a: "Trusted by some of the largest engineering organizations in the world for cutting both build wall-time and CI compute cost. Handles over one billion requests a month, designed for scale.",
   },
 ];
@@ -135,7 +135,7 @@ export default function ProductPage() {
                 </span>
               </h1>
               <p className="mx-auto mt-6 max-w-[700px] text-[17px] leading-relaxed text-muted-foreground md:text-lg">
-                NativeLink unifies remote caching, remote execution, and observability
+                Forge unifies remote caching, remote execution, and observability
                 into a single Rust-native platform — built to keep up with codebases
                 that grow faster than you can provision them.
               </p>
@@ -215,7 +215,7 @@ export default function ProductPage() {
             </h2>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground md:text-lg">
               When humans commit code, you need traceability. When agents commit code,
-              you need it doubly. NativeLink makes every input explicit and every
+              you need it doubly. Forge makes every input explicit and every
               output verifiable.
             </p>
             <div className="mt-8 flex flex-wrap gap-2">
@@ -289,13 +289,13 @@ export default function ProductPage() {
           <Reveal>
             <Eyebrow className="mb-5">Proof at scale</Eyebrow>
             <h2 className="text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.03em] md:text-[56px]">
-              LLVM builds <span className="text-brand">4× faster</span> on NativeLink.
+              LLVM builds <span className="text-brand">4× faster</span> on Forge.
             </h2>
             <p className="mx-auto mt-6 max-w-[620px] text-base leading-relaxed text-muted-foreground md:text-lg">
-              LLVM contributors are using NativeLink with CMake and recc to distribute
+              LLVM contributors are using Forge with CMake and recc to distribute
               builds of clang and the LLVM toolchain — cutting full-project compile
               time from 17 minutes to 4. No build-system migration. No proprietary
-              client. Just your existing CMake setup, pointed at NativeLink.
+              client. Just your existing CMake setup, pointed at Forge.
             </p>
             <div className="mt-10 grid grid-cols-3 gap-6">
               <div>
@@ -320,7 +320,7 @@ export default function ProductPage() {
             <div className="mt-10 flex justify-center">
               <Button variant="link" asChild>
                 <a
-                  href="https://reidkleckner.dev/posts/llvm-recc-nativelink/"
+                  href="https://reidkleckner.dev/posts/llvm-recc-forge/"
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -348,7 +348,7 @@ export default function ProductPage() {
             <p className="mt-8 text-center text-sm text-muted-foreground">
               For more details, see the{" "}
               <a href="/docs" className="text-brand underline-offset-4 hover:underline">
-                NativeLink documentation
+                Forge documentation
               </a>
               .
             </p>

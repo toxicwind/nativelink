@@ -13,4 +13,4 @@ runs:
     - name: Install Azurite
       run: bun install --frozen-lockfile
       shell: bash -euo pipefail {0}
-      working-directory: nativelink-store/tests/azurite_runner
+      working-directory: forge-store/tests/azurite_runner

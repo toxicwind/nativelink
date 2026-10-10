@@ -5,7 +5,7 @@
 Expose consistent, low-cardinality cache metrics (CAS/AC/store backends) without needing to implement bespoke instrumentation inside every individual store implementation.
 
 The implementation is intentionally opt-in through the `cache_metrics` store
-wrapper. If a store isn't wrapped, NativeLink constructs the same store graph
+wrapper. If a store isn't wrapped, Forge constructs the same store graph
 as before and doesn't add timers, attribute allocation, or OpenTelemetry
 recording calls to that store's hot path.
 
@@ -77,14 +77,14 @@ Assuming OpenTelemetry metric names like:
 - `cache.io` (counter)
 
 Prometheus/OpenMetrics typically exposes:
-- `nativelink_cache_operations_total`
-- `nativelink_cache_operation_duration_bucket` / `_sum` / `_count`
-- `nativelink_cache_io_total`
+- `forge_cache_operations_total`
+- `forge_cache_operation_duration_bucket` / `_sum` / `_count`
+- `forge_cache_io_total`
 
 Recording rules can derive:
-- `nativelink:cache_hit_rate`
-- `nativelink:cache_read_throughput_bytes`
-- `nativelink:cache_operation_latency_p95`, etc.
+- `forge:cache_hit_rate`
+- `forge:cache_read_throughput_bytes`
+- `forge:cache_operation_latency_p95`, etc.
 
 ### Labels (low-cardinality)
 
@@ -143,9 +143,9 @@ To keep dashboards stable:
 Ideal outcome: **no documentation changes** once wrapper metrics land.
 
 To reach that:
-- Keep Prometheus-facing metric names/labels stable (`nativelink_cache_operations_total`, `cache_type`, `cache_operation_name`, `cache_operation_result`).
+- Keep Prometheus-facing metric names/labels stable (`forge_cache_operations_total`, `cache_type`, `cache_operation_name`, `cache_operation_result`).
 - Ensure `deployment-examples/metrics/prometheus-recording-rules.yml` references `_total` counter names.
-- Keep existing dashboards querying recording rules (for example, `nativelink:cache_hit_rate`) instead of raw high-cardinality series.
+- Keep existing dashboards querying recording rules (for example, `forge:cache_hit_rate`) instead of raw high-cardinality series.
 
 Wrapper metrics are config-gated. Wrap only the logical store layer you want to
 measure, for example:
@@ -155,8 +155,8 @@ measure, for example:
   "cache_type": "cas",
   "backend": {
     "filesystem": {
-      "content_path": "~/.cache/nativelink/content_path-cas",
-      "temp_path": "~/.cache/nativelink/tmp_path-cas"
+      "content_path": "~/.cache/forge/content_path-cas",
+      "temp_path": "~/.cache/forge/tmp_path-cas"
     }
   }
 }

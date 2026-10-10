@@ -16,7 +16,7 @@ You're ready to build the provided example with `bazel build hello-world`.
   Add development tools and build dependencies under `packages`.
   If you add build dependencies, add them to the RBE image and update the
   image URL.
-  If you change the NativeLink input to another git hash, adjust the URL of
+  If you change the Forge input to another git hash, adjust the URL of
   the LRE Bazel module in `MODULE.bazel`, the URL to the container image in
   `platforms/BUILD.bazel`, and update the flake inputs with
   `nix flake update`.
@@ -28,7 +28,7 @@ You're ready to build the provided example with `bazel build hello-world`.
   [Command-Line Reference](https://bazel.build/reference/command-line-reference).
   Don't forget to set `remote_cache`
   and `remote_executor` to your on-prem solution, see
-  [remote execution infrastructure](https://www.nativelink.com/docs/rbe/remote-execution-examples#preparing-the-remote-execution-infrastructure).
+  [remote execution infrastructure](https://www.forge.com/docs/rbe/remote-execution-examples#preparing-the-remote-execution-infrastructure).
 
 - **`BUILD.bazel`**:
   The top level Bazel build file, see
@@ -36,7 +36,7 @@ You're ready to build the provided example with `bazel build hello-world`.
 
 - **`platforms/BUILD.bazel`**:
   The platform `lre-cc` specifies the URL of the `container-image` that gets
-  passed to your Nativelink instance with `exec_properties`.
+  passed to your Forge instance with `exec_properties`.
   This platform inherits its properties from the LRE Bazel module.
 
 # Code quality and CI

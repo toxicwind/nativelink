@@ -8,7 +8,7 @@ import {
   Eyebrow,
   Reveal,
   Section,
-} from "@nativelink/ui";
+} from "@forge/ui";
 
 export const metadata = { title: "Company" };
 
@@ -49,7 +49,7 @@ const contactCards = [
   },
   {
     title: "Sales inquiries",
-    body: "Curious if NativeLink fits your team? Our sales engineers can help.",
+    body: "Curious if Forge fits your team? Our sales engineers can help.",
     cta: { label: "Talk to sales", href: "mailto:contact@tracemachina.com" },
     variant: "primary" as const,
   },
@@ -73,7 +73,7 @@ export default function CompanyPage() {
                 .
               </h1>
               <p className="mx-auto mt-6 max-w-[680px] text-[17px] leading-relaxed text-muted-foreground md:text-lg">
-                NativeLink is built by Trace Machina. Our mission is to accelerate the
+                Forge is built by Trace Machina. Our mission is to accelerate the
                 reindustrialization of the world by making advanced build and simulation processes
                 that move at machine speed.
               </p>

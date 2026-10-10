@@ -10,8 +10,8 @@ patches:
 - path: worker-lre-rs.yaml
   target:
     kind: Deployment
-    name: nativelink-worker
+    name: forge-worker
 
 images:
-- name: nativelink-worker
-  newName: nativelink-worker-lre-rs
+- name: forge-worker
+  newName: forge-worker-lre-rs

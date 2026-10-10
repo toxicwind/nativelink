@@ -5,19 +5,19 @@ description: The four roles, who actually writes to the action cache, and which 
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone deciding how to deploy NativeLink, or trying to
+**Who this is for:** anyone deciding how to deploy Forge, or trying to
 predict which component's failure costs them what. **What you'll have at the
 end:** the four roles, the path an action takes on a miss and on a hit, and
 an accurate answer to "what do I have to back up". **Time:** fifteen minutes.
 
-NativeLink implements the
+Forge implements the
 [Remote Execution API](https://github.com/bazelbuild/remote-apis), and that
 API describes four roles: a content-addressable store, an action cache, a
 scheduler, and workers. It is worth being precise about what "four roles"
 means here, because it is the source of the most common deployment mistake.
 
 **Four roles is the shape of the protocol, not the shape of the program.**
-One `nativelink` binary exists. Which roles it plays is decided by the
+One `forge` binary exists. Which roles it plays is decided by the
 config file you hand it; there are no per-role images and no build features.
 A single-developer setup runs all four in one process; a large cluster runs
 several deployments of the same image with different configs. See
@@ -47,7 +47,7 @@ that binary actually does at startup.
 
 ### CAS: content-addressable storage [#cas]
 
-Every byte NativeLink touches lives in the CAS, keyed by a digest of its
+Every byte Forge touches lives in the CAS, keyed by a digest of its
 content. Source files, object files, binaries, stdout, all of it. Two
 identical files anywhere in your organisation collapse into one stored blob,
 because they hash to the same key.
@@ -103,7 +103,7 @@ deliberately not clean between actions;
 means for hermeticity.
 
 The development configuration adds an opt-in
-[`single_use` worker lifecycle](/reference/nativelink-config/main#localworkerconfig).
+[`single_use` worker lifecycle](/reference/forge-config/main#localworkerconfig).
 A worker accepts one action, uploads its results, and exits. Run it as the only
 worker in its process and have the launcher replace the whole container with
 fresh writable volumes. This removes local files, processes, and caches left
@@ -111,16 +111,16 @@ by previous actions. Restarting a process inside an existing container does
 not provide that isolation. The shared CAS and action cache remain available.
 
 Development builds also offer
-[`experimental_buck2_file_capture`](/reference/nativelink-config/main#buck2filecaptureconfig)
-for dedicated Linux execution containers. NativeLink starts an operator-supplied
+[`experimental_buck2_file_capture`](/reference/forge-config/main#buck2filecaptureconfig)
+for dedicated Linux execution containers. Forge starts an operator-supplied
 collector only for Buck2 assignments with invocation metadata, then waits for
 bounded final capture before deleting action files. The collector owns storage
 and access control. Capture failure does not change the action's execution result.
 This option requires the `single_use` lifecycle and does not add a file server to
-NativeLink.
+Forge.
 
 To keep overlapping Buck2 builds on separate workers, also enable
-[`experimental_buck2_invocation_isolation`](/reference/nativelink-config/main)
+[`experimental_buck2_invocation_isolation`](/reference/forge-config/main)
 on the Execution services for that instance. Identical in-flight actions from
 different invocations then schedule separately. Retries in the same invocation
 can still join their existing action. Completed action-cache hits remain shared
@@ -132,7 +132,7 @@ instance before enabling this option; it does not change other build tools.
   scheduler is what answered the client. It does not. The worker writes the
   `ActionResult` into its configured `upload_action_result.ac_store` itself
   (as an `UpdateActionResult` call when that store is a gRPC proxy), from
-  <SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="upload_ac_results" />.
+  <SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="upload_ac_results" />.
 
   The operational consequence: **the worker's `ac_store` is what decides
   whether anything gets cached.** A worker with no `ac_store` refuses to

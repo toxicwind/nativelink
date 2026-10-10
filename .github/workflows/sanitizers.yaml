@@ -46,16 +46,16 @@ jobs:
           bazelisk-cache: true
           repository-cache: true
 
-      - name: Setup NativeLink Cloud
-        uses: ./.github/actions/setup-nativelink-cloud
+      - name: Setup Forge Cloud
+        uses: ./.github/actions/setup-forge-cloud
         with:
-          ci-mode: ${{ vars.NATIVELINK_CI_MODE }}
-          claim-base: ${{ secrets.NATIVELINK_STAGING_CLAIM_BASE }}
-          bes-results-url: ${{ secrets.NATIVELINK_STAGING_BES_RESULTS_URL }}
+          ci-mode: ${{ vars.FORGE_CI_MODE }}
+          claim-base: ${{ secrets.FORGE_STAGING_CLAIM_BASE }}
+          bes-results-url: ${{ secrets.FORGE_STAGING_BES_RESULTS_URL }}
           api-key: >-
             ${{ github.event_name == 'push'
-                && secrets.NATIVELINK_STAGING_API_KEY_RW
-                || secrets.NATIVELINK_STAGING_API_KEY_RO }}
+                && secrets.FORGE_STAGING_API_KEY_RW
+                || secrets.FORGE_STAGING_API_KEY_RO }}
           mode: ${{ github.event_name == 'push' && 'write' || 'read' }}
           # Remote execution only on Linux; the action hard-fails exec on
           # non-Linux runners, so macOS lanes fall back to cache.

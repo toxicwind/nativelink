@@ -5,12 +5,12 @@ description: "The traits, the error model, the async rules and the two metric sy
 
 {/* archetype: explanation. See /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone about to write NativeLink code rather than read
+**Who this is for:** anyone about to write Forge code rather than read
 it. **What you'll have at the end:** the four things that are enforced
 rather than suggested: the store trait split, the error model, the
 spawning rules, and which metric system to use. **Time:** thirty minutes.
 
-Most of NativeLink's review feedback is about conventions, not logic. The
+Most of Forge's review feedback is about conventions, not logic. The
 conventions are strong, mostly mechanically enforced, and each one exists
 for a reason you can point at in the source. This page is the set of them
 that a first contribution reliably trips over.
@@ -22,7 +22,7 @@ The repository targets Rust edition 2024 with `rust-version = "1.97.1"`.
 Three of them exist, and they are not interchangeable.
 
 **`StoreDriver`**
-(<SourceLink file="nativelink-util/src/store_trait.rs" symbol="StoreDriver" />)
+(<SourceLink file="forge-util/src/store_trait.rs" symbol="StoreDriver" />)
 is the one you implement. Its supertraits are
 `Sync + Send + Unpin + MetricsComponent + HealthStatusIndicator + 'static`,
 so a new store is observable and health-checkable by construction, not by
@@ -58,7 +58,7 @@ Register health with the `default_health_status_indicator!(YourType);`
 macro as the last line of the file, unless the store has something real to
 report. Health checks across all components run **concurrently**
 (`buffer_unordered(usize::MAX)`), with a comment in
-<SourceLink file="nativelink-util/src/health_utils.rs" symbol="health_utils.rs" />
+<SourceLink file="forge-util/src/health_utils.rs" symbol="health_utils.rs" />
 explaining that a serial sweep would blow the kubelet's probe timeout.
 
 ## The scheduler traits are split by caller [#the-scheduler-traits-are-split-by-caller]
@@ -66,7 +66,7 @@ explaining that a serial sweep would blow the kubelet's probe timeout.
 No `ActionScheduler` trait exists. The state layer is split into
 `ClientStateManager`, `WorkerStateManager` and `MatchingEngineStateManager`
 in
-<SourceLink file="nativelink-util/src/operation_state_manager.rs" symbol="operation_state_manager.rs" />,
+<SourceLink file="forge-util/src/operation_state_manager.rs" symbol="operation_state_manager.rs" />,
 plus `WorkerScheduler`, `KnownPlatformPropertyProvider` and
 `AwaitedActionDb`. The split by *caller* is what allows the in-memory and
 Redis-backed implementations to be swapped wholesale. See
@@ -75,7 +75,7 @@ Redis-backed implementations to be swapped wholesale. See
 ## The error model [#the-error-model]
 
 `Code` **is** `tonic::Code`, re-exported from
-<SourceLink file="nativelink-error/src/lib.rs" symbol="Error" />.
+<SourceLink file="forge-error/src/lib.rs" symbol="Error" />.
 No separate internal code enum and no mapping layer exist, which is why
 an error raised deep in a store arrives at a client with a sensible gRPC
 status without anyone writing a conversion.
@@ -122,7 +122,7 @@ that bans `tokio::spawn` everywhere else bans the runtime builder too.
 Fourteen entries in
 <SourceLink file="clippy.toml" symbol="clippy.toml" />
 make the standard spawning API a lint error. Use the three macros in
-<SourceLink file="nativelink-util/src/task.rs" symbol="task.rs" />
+<SourceLink file="forge-util/src/task.rs" symbol="task.rs" />
 instead:
 
 | Macro | Returns | Use when |
@@ -142,13 +142,13 @@ tasks automatically.
   survive, use `background_spawn!` and say why in a comment.
 </Callout>
 
-File I/O goes through `nativelink_util::fs`, which serialises open file
+File I/O goes through `forge_util::fs`, which serialises open file
 descriptors behind a global semaphore (`DEFAULT_OPEN_FILE_LIMIT` is 24576).
 Opening a file with `std::fs` or `tokio::fs` directly bypasses the limit and
 will eventually exhaust the process's descriptors under load.
 
 Shutdown is coordinated by
-<SourceLink file="nativelink-util/src/shutdown_guard.rs" symbol="ShutdownGuard" />
+<SourceLink file="forge-util/src/shutdown_guard.rs" symbol="ShutdownGuard" />
 with three priorities: `P0`, `P1`, `LeastImportant`. Awaiting `wait_for` at
 a given priority blocks until everything less important has drained. `SIGTERM`
 drains and then exits `143`; `SIGINT` is a hard exit `130`.
@@ -158,18 +158,18 @@ drains and then exits `143`; `SIGINT` is a hard exit `130`.
 They are not redundant, and picking the wrong one is a common review
 comment.
 
-**System A: `nativelink-metric`.** A `#[derive(MetricsComponent)]` plus
+**System A: `forge-metric`.** A `#[derive(MetricsComponent)]` plus
 `#[metric(help = …, kind = …, group = …, handler = …)]` on fields, with
 `RootMetricsComponent` marking a tree root. Roughly 190 `#[metric]`
 attributes exist. Publishing a tree walks the live object graph and emits
 one `tracing` span per component and one event per field, on the target
-`nativelink_metric`, so what it describes is the *structure* of a running
+`forge_metric`, so what it describes is the *structure* of a running
 process. Nothing in the v1.6.5 binary serves that tree over HTTP; the old
 metrics collector went away with the OpenTelemetry migration, so today the
 derive is what keeps every store and scheduler describable, and the trait
 bound on `StoreDriver` is what forces new ones to be.
 
-**System B: `nativelink-util/src/metrics.rs`.** OpenTelemetry instruments
+**System B: `forge-util/src/metrics.rs`.** OpenTelemetry instruments
 in eight `LazyLock` bundles (`CACHE_METRICS`, `EXECUTION_METRICS`,
 `WORKER_METRICS`, `RPC_METRICS`, `SCHEDULER_METRICS`, `STORE_TIER_METRICS`,
 `HEALTH_METRICS`, `CONNECTION_METRICS`), wired up in
@@ -183,12 +183,12 @@ stores, which config, what state. Choose B when you want a number someone
 will graph or alert on.
 
 <Callout type="warn" title="Two hazards in the OTel path">
-  `nativelink-util/src/metrics.rs` carries the **Business Source License**
+  `forge-util/src/metrics.rs` carries the **Business Source License**
   header, not the FSL header the rest of the crate uses; do not paste the
   wrong one in. And never attach a per-action or per-worker identifier to a
   hot instrument; the pre-computed attribute structs exist precisely to stop
   that, and adding a high-cardinality dimension will take down a Prometheus
-  before it takes down NativeLink.
+  before it takes down Forge.
 </Callout>
 
 Instrument names are dotted OpenTelemetry style, with `.with_description`
@@ -226,7 +226,7 @@ for one.
   <Accordion title="Why can't I use `tokio::spawn`?" id="why-not-tokio-spawn">
     Because a bare spawn has no name, no tracing span, no OpenTelemetry
     context and no cancellation story. The three macros in
-    `nativelink-util::task` supply all four, and the clippy config makes the
+    `forge-util::task` supply all four, and the clippy config makes the
     alternative a build failure rather than a review comment.
   </Accordion>
   <Accordion title="Should my new metric be a derive or an OTel instrument?" id="derive-or-otel">
@@ -244,8 +244,8 @@ for one.
   </Accordion>
   <Accordion title="Which license header do I put on a new file?" id="which-license-header">
     Copy it from the file next to yours. FSL-1.1-Apache-2.0 is the default;
-    `nativelink-util/src/metrics.rs` and everything under
-    `nativelink-worker/src/persistent_worker/` are Business Source License,
+    `forge-util/src/metrics.rs` and everything under
+    `forge-worker/src/persistent_worker/` are Business Source License,
     and a handful of files are Apache-2.0.
   </Accordion>
   <Accordion title="`cargo fmt` keeps fighting with CI. Why?" id="cargo-fmt-fights-ci">
@@ -255,7 +255,7 @@ for one.
   </Accordion>
 </Accordions>
 
-<NextStep href="/contribute/how-to-extend" title="How to extend NativeLink">
+<NextStep href="/contribute/how-to-extend" title="How to extend Forge">
   The four recipes (a store, a config field, a metric, a gRPC service),
   each with the complete list of files a working change touches.
 </NextStep>

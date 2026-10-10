@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "@nativelink/docs#build": {
+    "@forge/docs#build": {
       "dependsOn": [
         "^build"
       ],
@@ -21,7 +21,7 @@
         "public/llms-full.txt"
       ]
     },
-    "@nativelink/web#build": {
+    "@forge/web#build": {
       "dependsOn": [
         "^build"
       ],

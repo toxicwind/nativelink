@@ -1,12 +1,12 @@
 ---
 title: Autonomous operation
-description: "What it takes for a build farm to grow and shrink with demand without anyone watching it: which properties NativeLink gives you, which pieces you assemble yourself, and where the seams are."
+description: "What it takes for a build farm to grow and shrink with demand without anyone watching it: which properties Forge gives you, which pieces you assemble yourself, and where the seams are."
 ---
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
 
 **Who this is for:** whoever would otherwise be paged about the build farm.
-**What you'll have at the end:** an accurate picture of how close NativeLink
+**What you'll have at the end:** an accurate picture of how close Forge
 gets you to a hands-off farm, and exactly which parts you build. **Time:**
 about fifteen minutes.
 
@@ -18,7 +18,7 @@ farm sized for the peak is idle most of the time and expensive all of the time.
 A farm sized for the average has a queue during every moment anybody cares
 about.
 
-The way out is a farm that changes size on its own. That is not a NativeLink
+The way out is a farm that changes size on its own. That is not a Forge
 feature you switch on. It's a property that emerges when the components have
 the right characteristics, and most of this page is about which characteristics
 those are and which ones you have to supply.
@@ -43,7 +43,7 @@ scheduler notices, increments an attempt counter, and requeues the action,
 with its worker affinity cleared, so it goes to whichever worker is free rather
 than waiting for a machine that is gone.
 
-<SourceLink file="nativelink-scheduler/src/simple_scheduler_state_manager.rs" symbol="update_operation" />
+<SourceLink file="forge-scheduler/src/simple_scheduler_state_manager.rs" symbol="update_operation" />
 
 That last property is what makes preemptible and spot instances viable, and it
 is the single largest cost lever available. The retry budget is
@@ -75,7 +75,7 @@ That is exactly the right response to a spot-termination notice or a rolling
 node upgrade: call it when the notice arrives, and the in-flight work completes
 instead of being thrown away and redone.
 
-<SourceLink file="nativelink-scheduler/src/worker.rs" symbol="Worker" />
+<SourceLink file="forge-scheduler/src/worker.rs" symbol="Worker" />
 
 Nothing in the repository wires this to any cloud provider's interruption
 signal. The handler is a short script you write, and it is the highest-value
@@ -111,10 +111,10 @@ An autoscaler needs a number that says "more work is waiting than there is
 capacity for." That number is queue depth: actions sitting in the `queued`
 stage rather than `executing`.
 
-NativeLink emits it as `execution.active.count`, an up-down counter attributed
+Forge emits it as `execution.active.count`, an up-down counter attributed
 by `execution.stage`.
 
-<SourceLink file="nativelink-util/src/metrics.rs" symbol="EXECUTION_METRICS" />
+<SourceLink file="forge-util/src/metrics.rs" symbol="EXECUTION_METRICS" />
 
 Three things about that metric decide your architecture, and all three surprise
 people:
@@ -127,12 +127,12 @@ what a Prometheus-shaped world reads from.
 **Queue depth is a derived series, not a metric name.** What you scale on is a
 recording rule that sums the counter filtered to the `queued` stage. The
 example rules in `deployment-examples/metrics/prometheus-recording-rules.yml`
-define `nativelink:queue_depth`, `nativelink:worker_utilization` and
-`nativelink:actions_per_worker`. An HPA reads the recording rule through an
+define `forge:queue_depth`, `forge:worker_utilization` and
+`forge:actions_per_worker`. An HPA reads the recording rule through an
 external-metrics adapter; there is no metric the binary emits that an HPA can
 target directly.
 
-**The metrics module is Business Source Licensed.** `nativelink-util/src/metrics.rs`
+**The metrics module is Business Source Licensed.** `forge-util/src/metrics.rs`
 carries a header requiring an enterprise license agreement, unlike the
 Functional Source License covering most of the repository. Production
 observability is exactly the case that header describes, so settle the licensing
@@ -149,13 +149,13 @@ question before you design around it.
 
 Being direct, because this is the part most likely to be assumed:
 
-**The repository contains no autoscaling manifests for NativeLink.** The Helm
-charts for Kubernetes ship with [NativeLink Enterprise](https://enterprise.nativelink.com),
+**The repository contains no autoscaling manifests for Forge.** The Helm
+charts for Kubernetes ship with [Forge Enterprise](https://enterprise.forge.com),
 not with this repository. The Kustomize building blocks under `kubernetes/`
 set fixed replica counts. No HorizontalPodAutoscaler for workers, no KEDA `ScaledObject`,
 no cluster-autoscaler or Karpenter configuration, and no node pools or
 tolerations for build workers. The one HPA in the tree scales the OpenTelemetry
-collector, not NativeLink.
+collector, not Forge.
 
 What the repository does give you is the harder half: a worker that is safe to
 kill, a scheduler that requeues what it loses, a drain hook for planned
@@ -164,12 +164,12 @@ shutdown, a queue-depth signal, and a working metrics pipeline to carry it.
 What you assemble is the standard Kubernetes half: an HPA on the derived queue
 metric via an external-metrics adapter, a cluster autoscaler or Karpenter for
 the nodes underneath, spot node pools with the drain hook wired to interruption
-notices, and node affinity for heterogeneous pools. These are not NativeLink
+notices, and node affinity for heterogeneous pools. These are not Forge
 concepts, which is the point: nothing here needs a bespoke controller.
 
 <Callout type="info" title="Where the manifests are">
   Kubernetes deployments, including the Helm charts, are part of
-  [NativeLink Enterprise](https://enterprise.nativelink.com). This repository ships
+  [Forge Enterprise](https://enterprise.forge.com). This repository ships
   only the Kustomize building blocks under `kubernetes/` that its own examples
   use, and no KEDA adapter.
 </Callout>

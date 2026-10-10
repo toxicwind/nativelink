@@ -7,10 +7,10 @@ bazel-out
 bazel-remote-bin
 bazel-remote-out
 bazel-remote-testlogs
-bazel-remote-nativelink
+bazel-remote-forge
 bazel-root
 bazel-testlogs
-bazel-nativelink
+bazel-forge
 toolchain-examples
 local-remote-execution/generated-cc
 local-remote-execution/generated-java

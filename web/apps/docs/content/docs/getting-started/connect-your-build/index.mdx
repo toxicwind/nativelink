@@ -1,34 +1,34 @@
 ---
 title: Connect your build tool
-description: "Use NativeLink without Bazel: Buck2, Siso, Pants, BuildStream, and CMake with recc."
+description: "Use Forge without Bazel: Buck2, Siso, Pants, BuildStream, and CMake with recc."
 ---
 
 <Prerequisites>
-  A running NativeLink instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
+  A running Forge instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
 </Prerequisites>
 
-NativeLink speaks the standard Remote Execution API. If your build tool
-speaks the same protocol, you can point it at NativeLink without rewriting
+Forge speaks the standard Remote Execution API. If your build tool
+speaks the same protocol, you can point it at Forge without rewriting
 your build files.
 
 ## Options [#options]
 
 - [Buck2](/getting-started/connect-your-build/buck2): use Buck2's
-  built-in remote execution client with NativeLink as CAS, Action Cache,
+  built-in remote execution client with Forge as CAS, Action Cache,
   and executor.
 - [Siso](/getting-started/connect-your-build/siso): configure
-  Chromium's Ninja replacement to use NativeLink through the RE API.
+  Chromium's Ninja replacement to use Forge through the RE API.
 - [Pants](/getting-started/connect-your-build/pants): enable remote
   cache reads and writes from `pants.toml`.
 - [BuildStream](/getting-started/connect-your-build/buildstream): point
-  BuildStream artifact storage and remote execution at NativeLink.
+  BuildStream artifact storage and remote execution at Forge.
 - [CMake with recc](/getting-started/connect-your-build/cmake-recc):
   wrap CMake compile actions with `recc` and share compile outputs
-  through NativeLink.
+  through Forge.
 
-## Common NativeLink endpoint [#common-nativelink-endpoint]
+## Common Forge endpoint [#common-forge-endpoint]
 
-The examples below assume a NativeLink server exposing CAS, Action Cache,
+The examples below assume a Forge server exposing CAS, Action Cache,
 execution, capabilities, and ByteStream on port `50051` with instance name
 `main`.
 
@@ -52,14 +52,14 @@ test shape, see
   <Accordion title="Why does the instance name matter so much?" id="why-does-the-instance-name-matter-so-much">
     The instance name selects which configured store or scheduler a
     request is routed to. If a client sends an instance name the server
-    does not expose, NativeLink rejects the request with an error of the
+    does not expose, Forge rejects the request with an error of the
     form `'instance_name' not configured for '...'`; depending on the
     client, that shows up as a cache warning or a failed build rather than
     a cache hit. Every client targeting a cache must send an instance name
     the server exposes.
-    <SourceLink file="nativelink-service/src/ac_server.rs" symbol="inner_get_action_result" />
+    <SourceLink file="forge-service/src/ac_server.rs" symbol="inner_get_action_result" />
   </Accordion>
-  <Accordion title="Which client is the fastest way to try NativeLink?" id="which-client-is-the-fastest-way-to-try-nativelink">
+  <Accordion title="Which client is the fastest way to try Forge?" id="which-client-is-the-fastest-way-to-try-forge">
     If you're on CMake,
     [recc in cache-only mode](/getting-started/connect-your-build/cmake-recc)
     needs no worker fleet and no build-file changes. For Bazel, two

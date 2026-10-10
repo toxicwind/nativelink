@@ -5,19 +5,19 @@ description: "Common teardown for all runs using Nix."
 inputs:
   nix_name:
     default: ""
-  nativelink_attic_token:
+  forge_attic_token:
     required: true
 runs:
   using: "composite"
   steps:
       - name: Check attic push
-        if: ${{ inputs.nativelink_attic_token != '' }}
+        if: ${{ inputs.forge_attic_token != '' }}
         run: |
           cat /tmp/attic-push.log
         shell: bash -euo pipefail {0}
 
       - name: Attic push
-        if: ${{ inputs.nix_name != '' && inputs.nativelink_attic_token != '' }}
+        if: ${{ inputs.nix_name != '' && inputs.forge_attic_token != '' }}
         uses: >- # v4
           nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60
         with:
@@ -25,5 +25,5 @@ runs:
           max_attempts: 3
           command: |
             set -euo pipefail
-            /tmp/result/bin/attic push nativelink $(nix eval --raw ${{ inputs.nix_name }})
+            /tmp/result/bin/attic push forge $(nix eval --raw ${{ inputs.nix_name }})
           shell: bash

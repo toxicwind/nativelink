@@ -39,7 +39,7 @@ export function HeroVisual({ className }: HeroVisualProps) {
           </div>
           <div className="ml-3 flex items-center gap-2 rounded-md bg-background/70 px-3 py-1 font-mono text-[11px] text-muted-foreground">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" />
-            nativelink.cloud / dashboard
+            forge.cloud / dashboard
           </div>
           <div className="ml-auto flex items-center gap-1">
             <span className="rounded-md bg-foreground/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">

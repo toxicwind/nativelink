@@ -2,7 +2,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "NativeLink Documentation";
+export const alt = "Forge Documentation";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -61,7 +61,7 @@ export default async function OpenGraphImage() {
           </svg>
         </div>
         <div style={{ fontSize: 32, fontWeight: 600, letterSpacing: "-0.02em", color: "#F5F4F8" }}>
-          nativelink
+          forge
         </div>
         <div
           style={{

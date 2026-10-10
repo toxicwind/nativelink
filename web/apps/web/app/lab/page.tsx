@@ -10,7 +10,7 @@ import {
   Logo,
   Prose,
   Section,
-} from "@nativelink/ui";
+} from "@forge/ui";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -44,7 +44,7 @@ export default function LabPage() {
           Design system lab
         </h1>
         <p className="mt-3 max-w-[60ch] text-base text-muted">
-          Every primitive in <code>@nativelink/ui</code>, in every meaningful state.
+          Every primitive in <code>@forge/ui</code>, in every meaningful state.
           The living reference for the "Technical Warmth" system.
         </p>
       </header>

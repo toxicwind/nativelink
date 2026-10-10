@@ -25,7 +25,7 @@ body:
     id: version
     attributes:
       label: Version (if applicable)
-      description: What version of NativeLink are you running?
+      description: What version of Forge are you running?
       placeholder: "e.g. v1.0.0, main@abc1234"
 
   - type: textarea

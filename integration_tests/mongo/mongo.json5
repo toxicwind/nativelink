@@ -5,7 +5,7 @@
       name: "MONGO_CAS",
       experimental_mongo: {
         connection_string: "mongodb://localhost:27017",
-        database: "nativelink",
+        database: "forge",
         cas_collection: "cas",
         key_prefix: "cas:",
         read_chunk_size: "64kb",
@@ -21,7 +21,7 @@
       name: "MONGO_SCHEDULER",
       experimental_mongo: {
         connection_string: "mongodb://localhost:27017",
-        database: "nativelink",
+        database: "forge",
         scheduler_collection: "scheduler",
         key_prefix: "sched:",
         enable_change_streams: true,

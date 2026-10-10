@@ -1,4 +1,4 @@
-import { cn } from "@nativelink/ui";
+import { cn } from "@forge/ui";
 import type * as React from "react";
 
 /**

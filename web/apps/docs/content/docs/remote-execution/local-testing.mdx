@@ -1,6 +1,6 @@
 ---
 title: Local testing
-description: Keep a NativeLink cluster on your own machine to test config changes, reproduce scheduler behaviour, and prove a client works, in the two shapes the repo itself uses.
+description: Keep a Forge cluster on your own machine to test config changes, reproduce scheduler behaviour, and prove a client works, in the two shapes the repo itself uses.
 ---
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
@@ -41,7 +41,7 @@ as a test fixture, and know which shape to run for what you're testing.
 {`flowchart LR
     subgraph client[Your machine]
         B[Bazel]
-        subgraph nl["nativelink process"]
+        subgraph nl["forge process"]
             direction LR
             L["0.0.0.0:50051\\ncas · ac · bytestream\\nexecution · capabilities"]
             W["0.0.0.0:50061\\nworker_api (private)"]
@@ -58,16 +58,16 @@ as a test fixture, and know which shape to run for what you're testing.
 never talks to it.
 
 ```bash
-nativelink ./nativelink-config/examples/local_rbe_self_test.json5
+forge ./forge-config/examples/local_rbe_self_test.json5
 ```
 
 ```plaintext
-INFO nativelink: Ready, listening on 0.0.0.0:50051
-INFO nativelink: Ready, listening on 0.0.0.0:50061
-INFO nativelink_worker::local_worker: Worker registered with scheduler, worker_id: 1f175824-...
+INFO forge: Ready, listening on 0.0.0.0:50051
+INFO forge: Ready, listening on 0.0.0.0:50061
+INFO forge_worker::local_worker: Worker registered with scheduler, worker_id: 1f175824-...
 ```
 
-<SourceLink file="nativelink-config/examples/local_rbe_self_test.json5" />
+<SourceLink file="forge-config/examples/local_rbe_self_test.json5" />
 
 The interesting parts of that config, for when you start editing it:
 
@@ -238,7 +238,7 @@ worker exit at startup. Leave them unset for local testing.
 
 <Accordion title="Stale state between runs" id="stale-state-between-runs">
 Everything the example config writes lives under
-`/tmp/nativelink-local-rbe-test/`. Stop the server and delete that tree for
+`/tmp/forge-local-rbe-test/`. Stop the server and delete that tree for
 a genuinely cold start; `bazel clean` only clears Bazel's side.
 </Accordion>
 

@@ -5,7 +5,7 @@ description: JSON5 mechanics, environment substitution, how the binary is pointe
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone about to edit a NativeLink config for the first
+**Who this is for:** anyone about to edit a Forge config for the first
 time. **What you'll know at the end:** what dialect the file is written in,
 how to keep secrets and addresses out of it, how the binary finds it, and how
 to check one is valid without waiting for a production rollout to tell you.
@@ -17,7 +17,7 @@ to check one is valid without waiting for a production rollout to tell you.
 
 ## It's JSON5, not JSON [#its-json5-not-json]
 
-NativeLink parses its config with `serde_json5`, not `serde_json`. The
+Forge parses its config with `serde_json5`, not `serde_json`. The
 difference matters every time you edit a file:
 
 ```json5
@@ -28,8 +28,8 @@ difference matters every time you edit a file:
     {
       name: "CAS_MAIN_STORE", // unquoted keys are legal too
       filesystem: {
-        content_path: "/tmp/nativelink/data/content_path-cas",
-        temp_path: "/tmp/nativelink/tmp_path-cas",
+        content_path: "/tmp/forge/data/content_path-cas",
+        temp_path: "/tmp/forge/tmp_path-cas",
         eviction_policy: {
           max_bytes: 10000000000, // trailing comma is legal
         },
@@ -41,7 +41,7 @@ difference matters every time you edit a file:
 
 Three things are legal here that plain JSON rejects: `//` and `/* */`
 comments, unquoted object keys, and trailing commas. Nearly every shipped
-example in `nativelink-config/examples/` uses all three, so a strict-JSON tool
+example in `forge-config/examples/` uses all three, so a strict-JSON tool
 pointed at one of them will report syntax errors that aren't real.
 
 <Callout type="warn" title="Tell your editor it's JSON5">
@@ -51,7 +51,7 @@ pointed at one of them will report syntax errors that aren't real.
   happy, the tool will be happy and wrong.
 </Callout>
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CasConfig::try_from_json5_file" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CasConfig::try_from_json5_file" />
 
 ## Environment substitution [#environment-substitution]
 
@@ -85,13 +85,13 @@ those are parsed from strings:
 {
   memory: {
     eviction_policy: {
-      max_bytes: "${NATIVELINK_CAS_MEMORY_CONTENT_LIMIT:-100mb}",
+      max_bytes: "${FORGE_CAS_MEMORY_CONTENT_LIMIT:-100mb}",
     },
   },
 }
 ```
 
-<SourceLink file="nativelink-config/src/serde_utils.rs" symbol="convert_string_with_shellexpand" />
+<SourceLink file="forge-config/src/serde_utils.rs" symbol="convert_string_with_shellexpand" />
 
 <Callout type="info" title="Not every field expands">
   Substitution is opt-in per field, applied by the deserializer the field
@@ -105,14 +105,14 @@ those are parsed from strings:
 One way only, and it is positional:
 
 ```sh
-nativelink /path/to/config.json5
+forge /path/to/config.json5
 ```
 
 No `--config` flag, no search path, no default location, no environment
 variable naming the file. The single positional argument is the whole
 interface.
 
-<SourceLink file="src/bin/nativelink.rs" symbol="Args" />
+<SourceLink file="src/bin/forge.rs" symbol="Args" />
 
 That has one practical consequence worth internalising: **a container image
 does not carry its config**. Every deployment recipe in this repo mounts a
@@ -143,7 +143,7 @@ struct in the config crate, that gives you a fast, precise loop:
 **Start the binary against the config.**
 
 ```sh
-nativelink ./my-config.json5
+forge ./my-config.json5
 ```
 
 </li>
@@ -183,10 +183,10 @@ The config crate can emit a JSON Schema for the whole `CasConfig` type, which
 editors will use for completion and inline errors:
 
 ```sh
-cargo run --bin build-schema --features dev-schema --package nativelink-config
+cargo run --bin build-schema --features dev-schema --package forge-config
 ```
 
-That writes `nativelink_config.schema.json` into the working directory. The
+That writes `forge_config.schema.json` into the working directory. The
 file is **not committed to the repo**; it's generated on demand, and it's
 generated from the same Rust types the binary parses with, so it can't drift
 from them. Point your editor's JSON5 schema mapping at the file you generated
@@ -194,7 +194,7 @@ and misspellings show up as you type rather than at startup.
 
 <Callout type="info" title="Generated, not maintained">
   Because the schema comes from `schema_for!(CasConfig)`, regenerating it after
-  you change NativeLink versions is the whole upgrade procedure. There's no
+  you change Forge versions is the whole upgrade procedure. There's no
   hand-written schema to fall out of date.
 </Callout>
 
@@ -228,7 +228,7 @@ which is safe to commit.
 Every valid JSON document is also a valid JSON5 document, so that direction
 never breaks. The other direction does: a config using comments or trailing
 commas will be rejected by any strict-JSON tooling you point at it. If a
-linter, formatter, or CI check complains about a file that NativeLink accepts
+linter, formatter, or CI check complains about a file that Forge accepts
 happily, the tool is the thing that's misconfigured.
 
 </Accordion>
@@ -251,6 +251,6 @@ you go to read them.
   config: stores compose, and one store can refer to another by name.
 </NextStep>
 
-<NextStep href="/reference/nativelink-config" kind="aside" title="Configuration reference">
+<NextStep href="/reference/forge-config" kind="aside" title="Configuration reference">
   Every field and default, generated from the same Rust types described here.
 </NextStep>

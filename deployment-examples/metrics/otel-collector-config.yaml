@@ -1,8 +1,8 @@
-# OpenTelemetry Collector Configuration for NativeLink Metrics
-# This configuration receives metrics from NativeLink via OTLP and exports them to various backends
+# OpenTelemetry Collector Configuration for Forge Metrics
+# This configuration receives metrics from Forge via OTLP and exports them to various backends
 
 receivers:
-  # Receive metrics from NativeLink via OTLP gRPC
+  # Receive metrics from Forge via OTLP gRPC
   otlp:
     protocols:
       grpc:
@@ -15,7 +15,7 @@ processors:
   resource:
     attributes:
       - key: service.namespace
-        value: nativelink
+        value: forge
         action: upsert
       - key: deployment.environment
         from_attribute: deployment_environment
@@ -24,14 +24,14 @@ processors:
         from_attribute: deployment_region
         action: insert
 
-  # Transform metrics to add NativeLink-specific attributes
-  transform/nativelink:
+  # Transform metrics to add Forge-specific attributes
+  transform/forge:
     metric_statements:
       - context: datapoint
         statements:
           # Add instance name from resource attributes if available
-          - set(attributes["instance_name"], resource.attributes["nativelink.instance_name"])
-            where resource.attributes["nativelink.instance_name"] != nil
+          - set(attributes["instance_name"], resource.attributes["forge.instance_name"])
+            where resource.attributes["forge.instance_name"] != nil
 
   # Batch metrics for efficiency
   batch:
@@ -49,13 +49,13 @@ exporters:
   # Export metrics to Prometheus format
   prometheus:
     endpoint: 0.0.0.0:9090
-    namespace: nativelink
+    namespace: forge
     const_labels:
-      service: nativelink
+      service: forge
     resource_to_telemetry_conversion:
       enabled: true
     enable_open_metrics: true
-    # Add metric descriptions for NativeLink metrics
+    # Add metric descriptions for Forge metrics
     metric_expiration: 10m
 
   # Direct OTLP export to Prometheus (when Prometheus has OTLP receiver enabled)
@@ -113,13 +113,13 @@ service:
     # Main metrics pipeline - exports to Prometheus scrape endpoint
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, resource, transform/nativelink, batch]
+      processors: [memory_limiter, resource, transform/forge, batch]
       exporters: [prometheus]
 
     # Direct to Prometheus OTLP endpoint (if enabled)
     metrics/prometheus_otlp:
       receivers: [otlp]
-      processors: [memory_limiter, resource, transform/nativelink, batch]
+      processors: [memory_limiter, resource, transform/forge, batch]
       exporters: [otlphttp/prometheus]
 
     # Traces pipeline - exports to Jaeger
@@ -132,7 +132,7 @@ service:
     # Uncomment and configure OTLP_BACKEND_ENDPOINT environment variable
     # metrics/backend:
     #   receivers: [otlp]
-    #   processors: [memory_limiter, resource, transform/nativelink, batch]
+    #   processors: [memory_limiter, resource, transform/forge, batch]
     #   exporters: [otlp/backend]
 
     # Debug pipeline for development

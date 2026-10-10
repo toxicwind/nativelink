@@ -20,13 +20,13 @@ questions.
 
 | You want | Look in |
 | --- | --- |
-| A NativeLink config for a specific backend or shape | [`nativelink-config/examples/`](#server-configs) |
+| A Forge config for a specific backend or shape | [`forge-config/examples/`](#server-configs) |
 | A whole deployment topology to run | [`deployment-examples/`](#deployment-topologies) |
 | A client project pre-wired to a hermetic toolchain | [`nix flake init`](#project-templates) |
 
 ## Server configs [#server-configs]
 
-<SourceLink file="nativelink-config/examples" dir symbol="nativelink-config/examples/" />
+<SourceLink file="forge-config/examples" dir symbol="forge-config/examples/" />
 is the largest and most useful collection. Every file is a complete,
 loadable config.
 
@@ -46,7 +46,7 @@ loadable config.
 | `tmpfs-worker.json5` | A worker whose fast tier and work directory sit on a tmpfs mount |
 | `legacy_service_config.json5` | The older service config shape, for migrations |
 
-<SourceLink file="nativelink-config/examples/README.md" />
+<SourceLink file="forge-config/examples/README.md" />
 
 Start from the file closest to your situation and read its comments;
 several of them explain constraints you'd otherwise discover the hard way,
@@ -84,7 +84,7 @@ The flake ships templates for the client side: a project already wired to a
 Nix-pinned toolchain.
 
 ```bash
-nix flake show github:TraceMachina/nativelink
+nix flake show github:toxicwind/forge
 ```
 
 <Callout type="info" title="That command is the source of truth">
@@ -99,12 +99,12 @@ nix flake show github:TraceMachina/nativelink
 
 ```bash
 mkdir my-rbe-test && cd my-rbe-test
-nix flake init -t github:TraceMachina/nativelink#bazel
+nix flake init -t github:toxicwind/forge#bazel
 git init && git add -A   # what templates/README.md tells you to do; a flake in a git repo only sees tracked files
 nix develop
 ```
 
-The template does **not** bundle a NativeLink server; you point it at one you
+The template does **not** bundle a Forge server; you point it at one you
 already have. It is also Linux-only, because the `lre-cc` toolchain it wires
 in currently supports `x86_64-linux` only.
 [Toolchains and hermeticity](/remote-execution/toolchains-and-hermeticity)
@@ -112,7 +112,7 @@ walks the whole flow with real output, including the `user.bazelrc` values.
 
 <Callout type="warn" title="cargo, lre, and kubernetes templates do not exist">
   Older material referenced them. `nix flake init -t
-  github:TraceMachina/nativelink#lre` (or `#cargo`, `#kubernetes`) fails with
+  github:toxicwind/forge#lre` (or `#cargo`, `#kubernetes`) fails with
   `does not provide attribute 'templates.<name>'`. If you came looking for one:
 
   - **A local cluster with no Nix**:
@@ -122,13 +122,13 @@ walks the whole flow with real output, including the `user.bazelrc` values.
 
   The repo also has a `templates/cmake/` directory (CMake with `recc`,
   cache-only), but `flake.nix` does not expose it under `templates`, so
-  `nix flake init -t github:TraceMachina/nativelink#cmake` fails the same way;
+  `nix flake init -t github:toxicwind/forge#cmake` fails the same way;
   copy the directory by hand if you want it.
 </Callout>
 
 To customise: it's a flake, so fork and edit. The usual changes are pointing
 `user.bazelrc` at a real cluster, adding platform properties in
-`platforms/BUILD.bazel`, and pinning `inputs.nativelink.url` in `flake.nix`
+`platforms/BUILD.bazel`, and pinning `inputs.forge.url` in `flake.nix`
 to a specific commit, kept in sync with the `local-remote-execution`
 override in `MODULE.bazel`.
 
@@ -144,7 +144,7 @@ needed, which makes it the cheapest thing that helps.
 
 ```bash
 bazel build //... \
-  --remote_cache=grpc://nativelink.internal:50051 \
+  --remote_cache=grpc://forge.internal:50051 \
   --remote_instance_name=main
 ```
 
@@ -159,8 +159,8 @@ Actions ship to a worker fleet; the cache underneath stores everything.
 
 ```bash
 bazel build //... \
-  --remote_cache=grpc://nativelink.internal:50051 \
-  --remote_executor=grpc://nativelink.internal:50052 \
+  --remote_cache=grpc://forge.internal:50051 \
+  --remote_executor=grpc://forge.internal:50052 \
   --remote_instance_name=main \
   --jobs=200
 ```
@@ -178,8 +178,8 @@ Small actions local, everything else remote, decided by policy.
 
 ```bash
 bazel build //... \
-  --remote_cache=grpc://nativelink.internal:50051 \
-  --remote_executor=grpc://nativelink.internal:50052 \
+  --remote_cache=grpc://forge.internal:50051 \
+  --remote_executor=grpc://forge.internal:50052 \
   --remote_instance_name=main \
   --modify_execution_info=Javac=+no-remote-exec \
   --strategy=Javac=local
@@ -218,8 +218,8 @@ being readable in one screen, not for running a fleet.
 </Accordion>
 
 <Accordion title="Are these examples tested?" id="are-these-examples-tested">
-Partly. Every file in `nativelink-config/examples/` is parsed by a unit test
-(`nativelink-config/tests/json5_test.rs`), so they all load. The
+Partly. Every file in `forge-config/examples/` is parsed by a unit test
+(`forge-config/tests/json5_test.rs`), so they all load. The
 `docker-compose/` deployment is what `run_integration_tests.sh` brings up,
 so it is exercised end to end in CI. `local_rbe_self_test.json5` is only
 parse-tested, and the backend-specific configs are not validated against

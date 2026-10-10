@@ -1,6 +1,6 @@
 ---
 title: Contribution guidelines
-description: What NativeLink accepts, the git setup it requires, and the commit and review conventions a PR is held to.
+description: What Forge accepts, the git setup it requires, and the commit and review conventions a PR is held to.
 ---
 
 {/* archetype: how-to. See /web/apps/docs/templates/how-to.mdx */}
@@ -10,7 +10,7 @@ description: What NativeLink accepts, the git setup it requires, and the commit 
 requires, the commit conventions, and an accurate picture of how review
 works. **Time:** thirty minutes, most of it one-time setup.
 
-NativeLink accepts contributions from anyone. The process is more specific
+Forge accepts contributions from anyone. The process is more specific
 than most projects' (signed commits, a fork, one commit per pull request,
 review in Reviewable rather than in GitHub's own UI), and the specificity is
 deliberate: it keeps `main` a linear history of signed, reviewable commits.
@@ -47,13 +47,13 @@ That is the only mechanism preventing two people from writing the same patch.
     **Fork the repository** and clone your fork, not upstream:
 
     ```bash
-    git clone git@github.com:yourusername/nativelink
-    cd nativelink
-    git remote add upstream git@github.com:TraceMachina/nativelink
+    git clone git@github.com:yourusername/forge
+    cd forge
+    git remote add upstream git@github.com:toxicwind/forge
     ```
 
     `git remote -v` should show `origin` pointing at your fork and
-    `upstream` at `TraceMachina/nativelink`.
+    `upstream` at `toxicwind/forge`.
   </li>
   <li>
     **Configure git to sign every commit and tag.** In `~/.gitconfig`:
@@ -77,12 +77,12 @@ That is the only mechanism preventing two people from writing the same patch.
 </Steps>
 
 <Callout type="warn" title="Signing is not a DCO sign-off">
-  NativeLink requires cryptographically **signed** commits, SSH or GPG, via
+  Forge requires cryptographically **signed** commits, SSH or GPG, via
   `commit.gpgsign`. It does not use a Developer Certificate of Origin
   sign-off, so `git commit -s` alone will not satisfy the requirement.
 </Callout>
 
-Direct commits and human-created branches on `TraceMachina/nativelink` are
+Direct commits and human-created branches on `toxicwind/forge` are
 not allowed, including for members of the organization. Everything arrives
 as a pull request from a fork.
 
@@ -174,8 +174,8 @@ gets you past those in one read.
 Your contribution is licensed under the license that applies to the file or
 module you change. Most of the repository is `FSL-1.1-Apache-2.0`; a handful
 of files are Apache-2.0; and two areas,
-`nativelink-util/src/metrics.rs` and everything under
-`nativelink-worker/src/persistent_worker/`, are **Business Source
+`forge-util/src/metrics.rs` and everything under
+`forge-worker/src/persistent_worker/`, are **Business Source
 License**. Copy the header from the file next to the one you are creating
 rather than from memory.
 

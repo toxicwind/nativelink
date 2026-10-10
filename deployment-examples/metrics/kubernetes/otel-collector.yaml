@@ -1,9 +1,9 @@
-# OpenTelemetry Collector Deployment for NativeLink Metrics
+# OpenTelemetry Collector Deployment for Forge Metrics
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: otel-collector-config
-  namespace: nativelink
+  namespace: forge
 data:
   collector.yaml: |
     receivers:
@@ -18,7 +18,7 @@ data:
       resource:
         attributes:
           - key: service.namespace
-            value: nativelink
+            value: forge
             action: upsert
           - key: k8s.cluster.name
             from_attribute: K8S_CLUSTER_NAME
@@ -27,12 +27,12 @@ data:
             from_attribute: DEPLOYMENT_ENV
             action: insert
 
-      transform/nativelink:
+      transform/forge:
         metric_statements:
           - context: datapoint
             statements:
-              - set(attributes["instance_name"], resource.attributes["nativelink.instance_name"])
-                where resource.attributes["nativelink.instance_name"] != nil
+              - set(attributes["instance_name"], resource.attributes["forge.instance_name"])
+                where resource.attributes["forge.instance_name"] != nil
 
       batch:
         timeout: 10s
@@ -46,7 +46,7 @@ data:
     exporters:
       prometheus:
         endpoint: 0.0.0.0:9090
-        namespace: nativelink
+        namespace: forge
         resource_to_telemetry_conversion:
           enabled: true
         enable_open_metrics: true
@@ -68,11 +68,11 @@ data:
       pipelines:
         metrics:
           receivers: [otlp]
-          processors: [memory_limiter, resource, transform/nativelink, batch]
+          processors: [memory_limiter, resource, transform/forge, batch]
           exporters: [prometheus]
         metrics/prometheus_otlp:
           receivers: [otlp]
-          processors: [memory_limiter, resource, transform/nativelink, batch]
+          processors: [memory_limiter, resource, transform/forge, batch]
           exporters: [otlphttp/prometheus]
 
       telemetry:
@@ -87,7 +87,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: otel-collector
-  namespace: nativelink
+  namespace: forge
   labels:
     app: otel-collector
 spec:
@@ -121,7 +121,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: otel-collector
-  namespace: nativelink
+  namespace: forge
   labels:
     app: otel-collector
 spec:
@@ -153,7 +153,7 @@ spec:
               name: health
           env:
             - name: K8S_CLUSTER_NAME
-              value: "nativelink-cluster"
+              value: "forge-cluster"
             - name: DEPLOYMENT_ENV
               value: "production"
             - name: K8S_NODE_NAME
@@ -200,7 +200,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: otel-collector
-  namespace: nativelink
+  namespace: forge
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -230,7 +230,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: otel-collector
-    namespace: nativelink
+    namespace: forge
 
 ---
 # HorizontalPodAutoscaler for OTEL Collector
@@ -238,7 +238,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: otel-collector
-  namespace: nativelink
+  namespace: forge
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -266,7 +266,7 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: otel-collector
-  namespace: nativelink
+  namespace: forge
 spec:
   minAvailable: 1
   selector:

@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: 'NativeLink Dashboards'
+  - name: 'Forge Dashboards'
     orgId: 1
-    folder: 'NativeLink'
+    folder: 'Forge'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10

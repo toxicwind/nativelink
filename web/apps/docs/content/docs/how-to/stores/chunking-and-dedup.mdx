@@ -22,7 +22,7 @@ the chunks that actually changed. In our measurements a one-file change to a
 16.8 MB tar layer re-uploaded 2.1 MB (87.5% less), and a one-source-file change
 to a linked binary re-uploaded 80.8% less.
 
-NativeLink implements the server side of the
+Forge implements the server side of the
 [REAPI blob split/splice extension](https://github.com/bazelbuild/remote-apis/pull/282):
 `SpliceBlob` re-assembles chunked uploads (verifying the digest before
 committing anything), and `SplitBlob` serves chunk layouts for downloads,
@@ -37,7 +37,7 @@ workers.
   corrupts outputs when the chunking flag is combined with `--disk_cache`
   (fixed in 9.1.1).
 - Chunking is **optional and off by default**. Without the configuration below,
-  NativeLink behaves exactly as before and does not advertise chunking support,
+  Forge behaves exactly as before and does not advertise chunking support,
   so clients fall back to regular transfers.
 
 ## Enabling it [#enabling-it]
@@ -57,8 +57,8 @@ stores: [
     // Blob-to-chunks layouts: roughly 80-140 bytes per chunk.
     name: "CHUNK_INDEX_STORE",
     filesystem: {
-      content_path: "/tmp/nativelink/data/content_path-chunk-index",
-      temp_path: "/tmp/nativelink/data/tmp_path-chunk-index",
+      content_path: "/tmp/forge/data/content_path-chunk-index",
+      temp_path: "/tmp/forge/data/tmp_path-chunk-index",
       eviction_policy: { max_bytes: 100000000 },
     },
   },
@@ -91,10 +91,10 @@ servers: [
 ],
 ```
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CasChunkingConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CasChunkingConfig" />
 
 A complete runnable example lives at
-<SourceLink file="nativelink-config/examples/chunking_cas.json5" />.
+<SourceLink file="forge-config/examples/chunking_cas.json5" />.
 For instances whose `cas_store` is a grpc proxy store, omit `index_store`: the
 chunking RPCs are forwarded to the backend, which owns the layouts.
 
@@ -102,7 +102,7 @@ Then build with:
 
 ```sh
 bazel build //... \
-  --remote_cache=grpc://your-nativelink:50051 \
+  --remote_cache=grpc://your-forge:50051 \
   --experimental_remote_cache_chunking
 ```
 
@@ -121,7 +121,7 @@ The server verifies every spliced blob's digest before committing it and
 materializes the full blob, so non-chunking clients and every existing read
 path see ordinary blobs.
 
-<SourceLink file="nativelink-service/src/cas_server.rs" symbol="CasServer::inner_splice_blob" /> Storage grows by roughly the chunk bytes for
+<SourceLink file="forge-service/src/cas_server.rs" symbol="CasServer::inner_splice_blob" /> Storage grows by roughly the chunk bytes for
 chunk-eligible blobs; pairing the CAS with a `dedup` or `compression` store
 composes normally; see [Compose stores](/how-to/stores/compose-stores).
 

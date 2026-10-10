@@ -2,7 +2,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "NativeLink — Remote build execution & caching, engineered for scale";
+export const alt = "Forge — Remote build execution & caching, engineered for scale";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -80,7 +80,7 @@ export default async function OpenGraphImage() {
             color: "#F5F4F8",
           }}
         >
-          nativelink
+          forge
         </div>
       </div>
 

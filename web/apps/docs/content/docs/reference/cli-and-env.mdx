@@ -1,6 +1,6 @@
 ---
 title: CLI and environment
-description: "Every command-line argument the nativelink binary accepts and every environment variable it reads: the telemetry variables, the ones the configuration expands, and the ones it passes through to actions."
+description: "Every command-line argument the forge binary accepts and every environment variable it reads: the telemetry variables, the ones the configuration expands, and the ones it passes through to actions."
 ---
 
 {/* archetype: reference (lookup surface). See /web/apps/docs/templates/reference.mdx */}
@@ -10,7 +10,7 @@ Kubernetes `env:` block and need to know what the process actually reads.
 **What you'll have at the end:** the complete argument and variable surface,
 with the sharp edges marked.
 
-NativeLink's command line is deliberately tiny. Almost every decision lives in
+Forge's command line is deliberately tiny. Almost every decision lives in
 the JSON5 configuration file, not in flags, which means the interesting surface
 here is the *environment*, split across three unrelated jobs: configuring
 telemetry, filling in holes in the configuration file, and reaching the
@@ -18,10 +18,10 @@ processes that actions run in.
 
 ## The command line [#the-command-line]
 
-<SourceLink file="src/bin/nativelink.rs" symbol="Args" />
+<SourceLink file="src/bin/forge.rs" symbol="Args" />
 
 ```sh
-nativelink <config_file>
+forge <config_file>
 ```
 
 That is the whole thing. `config_file` is a required positional argument, the
@@ -37,14 +37,14 @@ binary is a [clap](https://docs.rs/clap) parser with `version`, `about` and
 
 No `--port`, no `--log-level`, no `--config-from-env` exist. If you are
 looking for a knob, it is in the configuration file; see the
-[configuration reference](/reference/nativelink-config).
+[configuration reference](/reference/forge-config).
 
 ## Telemetry variables [#telemetry-variables]
 
-These are read once, at startup, by `nativelink-util`'s tracing initialiser.
+These are read once, at startup, by `forge-util`'s tracing initialiser.
 They are the only variables that change the binary's own behaviour.
 
-<SourceLink file="nativelink-util/src/telemetry.rs" symbol="init_tracing" />
+<SourceLink file="forge-util/src/telemetry.rs" symbol="init_tracing" />
 
 | Variable | Default | Effect |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ They are the only variables that change the binary's own behaviour.
 | `RUST_LOG` | `info` | Log filter, parsed by `tracing_subscriber`'s `EnvFilter` in lossy mode; an unparseable directive is dropped rather than fatal. Applies to the stdout layer *and* to the OTLP log, trace and metric layers. `hyper`, `tonic`, `h2`, `reqwest` and `tower` are forced off afterwards and cannot be re-enabled from here. |
 | `NL_OTEL_ENDPOINT` | not set | When set, all three OTLP exporters share one client-side load-balanced gRPC channel pointed at this endpoint. When unset, each exporter is built with the SDK's own tonic defaults instead. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | Standard OpenTelemetry SDK variable. Applies only when `NL_OTEL_ENDPOINT` is unset; an explicit channel wins over the SDK's endpoint resolution. The signal-specific `OTEL_EXPORTER_OTLP_{LOGS,TRACES,METRICS}_ENDPOINT` variables behave the same way. |
-| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` (ms) | How often the periodic metric reader flushes to the collector. NativeLink sets no interval of its own, so the SDK default of one minute applies unless you override it here. This is the first hop in the [reaction-time budget](/operate/autoscaling-reference). |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` (ms) | How often the periodic metric reader flushes to the collector. Forge sets no interval of its own, so the SDK default of one minute applies unless you override it here. This is the first hop in the [reaction-time budget](/operate/autoscaling-reference). |
 
 <Callout type="warn" title="NL_OTEL_ENDPOINT requires a scheme and an explicit port">
 
@@ -66,7 +66,7 @@ They are the only variables that change the binary's own behaviour.
 
 </Callout>
 
-The service name is fixed. `Resource::builder().with_service_name("nativelink")`
+The service name is fixed. `Resource::builder().with_service_name("forge")`
 is called unconditionally, so `OTEL_SERVICE_NAME` does not change what appears
 on your spans. `service.instance.id` is a fresh UUIDv4 generated per process,
 which means it changes on every restart: useful for telling replicas apart,
@@ -78,7 +78,7 @@ Many configuration fields are deserialized through a shellexpand wrapper rather
 than directly, so their string values undergo environment substitution before
 the value is used.
 
-<SourceLink file="nativelink-config/src/serde_utils.rs" symbol="convert_string_with_shellexpand" />
+<SourceLink file="forge-config/src/serde_utils.rs" symbol="convert_string_with_shellexpand" />
 
 Two forms are available:
 
@@ -96,7 +96,7 @@ This is what makes one configuration file work across environments:
       name: "CAS_MAIN_STORE",
       memory: {
         eviction_policy: {
-          max_bytes: "${NATIVELINK_CAS_MEMORY_CONTENT_LIMIT:-100mb}",
+          max_bytes: "${FORGE_CAS_MEMORY_CONTENT_LIMIT:-100mb}",
         },
       },
     },
@@ -109,7 +109,7 @@ given key supports substitution depends on how its struct member is annotated.
 Numeric, boolean, duration and data-size fields have their own expanding
 deserializers, which is why `max_bytes` above accepts the *string* `"100mb"`
 rather than a number. When in doubt, the
-[configuration reference](/reference/nativelink-config) records the type each
+[configuration reference](/reference/forge-config) records the type each
 field actually deserializes from.
 
 <Callout type="info" title="Expansion happens at parse time, not at use time">
@@ -126,7 +126,7 @@ child is spawned with `env_clear()`. An action sees exactly two things: the
 worker's `additional_environment` map (on the `local` worker configuration)
 names explicitly.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="EnvironmentSource" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="EnvironmentSource" />
 
 | Source | What the action receives |
 | --- | --- |
@@ -146,7 +146,7 @@ names explicitly.
   and shell syntax (pipes, globs, `&&`) is not interpreted.
 </Callout>
 
-## What NativeLink does not read [#what-nativelink-does-not-read]
+## What Forge does not read [#what-forge-does-not-read]
 
 Stated explicitly, because each of these is a reasonable guess that is wrong:
 
@@ -154,11 +154,11 @@ Stated explicitly, because each of these is a reasonable guess that is wrong:
   equivalent. Ports, stores, schedulers and services come from the
   configuration file only. The escape hatch is `${VAR}` substitution *inside*
   that file.
-- **No `NATIVELINK_CONFIG` variable.** The configuration path is the positional
+- **No `FORGE_CONFIG` variable.** The configuration path is the positional
   argument and nothing else.
 - **No Prometheus scrape configuration.** The binary exports OTLP and only
   OTLP; the `namespace`, `const_labels` and scrape endpoint you may be looking
-  for belong to the OpenTelemetry collector's configuration, not NativeLink's.
+  for belong to the OpenTelemetry collector's configuration, not Forge's.
   See the [metrics reference](/reference/metrics).
 - **No `OTEL_SERVICE_NAME` honouring**, as above; the service name is a
   compile-time constant.
@@ -167,14 +167,14 @@ Stated explicitly, because each of these is a reasonable guess that is wrong:
 
 If anything here disagrees with the binary, the source wins:
 
-- <SourceLink file="src/bin/nativelink.rs" symbol="Args" />: the argument parser
-- <SourceLink file="nativelink-util/src/telemetry.rs" />: every telemetry variable
-- <SourceLink file="nativelink-config/src/serde_utils.rs" />: the shellexpanding deserializers
-- <SourceLink file="nativelink-config/src/cas_server.rs" symbol="EnvironmentSource" />: action environment sources
+- <SourceLink file="src/bin/forge.rs" symbol="Args" />: the argument parser
+- <SourceLink file="forge-util/src/telemetry.rs" />: every telemetry variable
+- <SourceLink file="forge-config/src/serde_utils.rs" />: the shellexpanding deserializers
+- <SourceLink file="forge-config/src/cas_server.rs" symbol="EnvironmentSource" />: action environment sources
 
 ## Where to go next [#where-to-go-next]
 
-<NextStep href="/reference/nativelink-config" title="Configuration reference">
+<NextStep href="/reference/forge-config" title="Configuration reference">
   Everything the command line does not do, which is nearly everything,
   generated from the config crate itself.
 </NextStep>

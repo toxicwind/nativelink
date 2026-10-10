@@ -18,10 +18,10 @@ one, which of the queued actions goes next, and what does "this failed" mean.
 
 ## No `ActionScheduler` trait exists [#there-is-no-actionscheduler-trait]
 
-If you go looking for one (and older material about NativeLink will send you
+If you go looking for one (and older material about Forge will send you
 looking) you will not find it. The abstraction is split by *who is asking*,
 into three traits in
-<SourceLink file="nativelink-util/src/operation_state_manager.rs" symbol="operation_state_manager.rs" />:
+<SourceLink file="forge-util/src/operation_state_manager.rs" symbol="operation_state_manager.rs" />:
 
 **`ClientStateManager`** is the client's view: submit an action, subscribe to
 its progress. **`WorkerStateManager`** is the worker's view: report that an
@@ -76,7 +76,7 @@ such field. If you need two textually identical actions to be distinct, the
 difference has to be in the action itself.
 
 **`do_not_cache` is never read.** The REAPI flag exists on the message and
-NativeLink parses it, but no code in the repository branches on it. Setting
+Forge parses it, but no code in the repository branches on it. Setting
 it does not stop a result being written.
 
 **The flag that actually matters is `skip_cache_lookup`,** and its effect is
@@ -130,12 +130,12 @@ A client waiting to observe `CacheCheck` will wait forever.
 The matching engine walks the queue in sort order, and for each action looks
 for the first worker that satisfies the action's platform properties. The
 source still carries an `O(n*m)` TODO in
-<SourceLink file="nativelink-scheduler/src/simple_scheduler.rs" symbol="SimpleScheduler" />,
+<SourceLink file="forge-scheduler/src/simple_scheduler.rs" symbol="SimpleScheduler" />,
 but the walk is narrowed first: a `WorkerCapabilityIndex` (an inverted index
 over `Exact` and `Priority` properties) produces the candidate set, and only
 that set is scanned in LRU order, checking availability and `Minimum`
 values per worker.
-<SourceLink file="nativelink-scheduler/src/worker_capability_index.rs" symbol="WorkerCapabilityIndex" />
+<SourceLink file="forge-scheduler/src/worker_capability_index.rs" symbol="WorkerCapabilityIndex" />
 
 For clusters of tens or low hundreds of workers this is not the bottleneck.
 It is worth knowing about before you plan for thousands.
@@ -236,12 +236,12 @@ produces an `Unknown platform property` error that is logged, and the action
 stays queued. That is the harder of the two to diagnose, so if an action
 sits in the queue with workers idle, check the scheduler log for that
 message before anything else.
-<SourceLink file="nativelink-scheduler/src/platform_property_manager.rs" symbol="make_prop_value" />
+<SourceLink file="forge-scheduler/src/platform_property_manager.rs" symbol="make_prop_value" />
 
 `Minimum` is the one that changes how you think about a worker. Its value is
 **decremented when an action is dispatched and restored when the action
 completes**; see
-<SourceLink file="nativelink-scheduler/src/worker.rs" symbol="Worker" />. A
+<SourceLink file="forge-scheduler/src/worker.rs" symbol="Worker" />. A
 worker advertising `cores: 16` is not saying "I am a 16-core machine, send me
 anything"; it is a pool of 16 units that actions draw down and return. That
 is the mechanism behind running several actions concurrently on one worker,
@@ -311,18 +311,18 @@ guarantees that a client which observes completion and then queries the cache
 finds the result there.
 
 What gets written depends on the exit code, via `should_cache_result` in
-<SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="RunningActionsManager" />.
+<SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="RunningActionsManager" />.
 With the defaults, a **successful** action's result goes to the action cache
 (`SuccessOnly`), and a **failed** action's result goes to the historical
 results store (`FailuresOnly`) instead. A non-zero exit code is not an error
 in the REAPI sense (it is a legitimate, cacheable outcome), but by default
-NativeLink keeps it out of the action cache so that a failing compile is
+Forge keeps it out of the action cache so that a failing compile is
 re-attempted rather than replayed.
 
 ## Where the exact truth lives [#where-the-exact-truth-lives]
 
 Every scheduler field and default is in the generated
-[scheduler configuration reference](/reference/nativelink-config#namedschedulerconfig).
+[scheduler configuration reference](/reference/forge-config#namedschedulerconfig).
 For the operational levers, see [tuning](/operate/tuning).
 
 ## Common questions [#common-questions]

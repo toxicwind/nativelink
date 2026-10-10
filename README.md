@@ -1,9 +1,9 @@
 <div id="logo" align="center">
-  <a href="https://www.nativelink.com">
+  <a href="https://www.forge.com">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg" />
       <source media="(prefers-color-scheme: light)" srcset="assets/logo-light.svg" />
-      <img alt="NativeLink" src="assets/logo-light.svg" width="376" height="100" />
+      <img alt="Forge" src="assets/logo-light.svg" width="376" height="100" />
     </picture>
   </a>
 
@@ -19,23 +19,23 @@
 
 <div id="badges" align="center">
 
-  [![Homepage](https://img.shields.io/badge/Homepage-8A2BE2)](https://nativelink.com)
-  [![GitHub stars](https://img.shields.io/github/stars/tracemachina/nativelink?style=social)](https://github.com/TraceMachina/nativelink)
-  [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/TraceMachina/nativelink/badge)](https://securityscorecards.dev/viewer/?uri=github.com/TraceMachina/nativelink)
+  [![Homepage](https://img.shields.io/badge/Homepage-8A2BE2)](https://forge.com)
+  [![GitHub stars](https://img.shields.io/github/stars/tracemachina/forge?style=social)](https://github.com/toxicwind/forge)
+  [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/toxicwind/forge/badge)](https://securityscorecards.dev/viewer/?uri=github.com/toxicwind/forge)
   [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/8050/badge)](https://www.bestpractices.dev/projects/8050)
   [![Slack](https://img.shields.io/badge/slack--channel-blue?logo=slack)](https://forms.gle/LtaWSixEC6bYi5xF7)
   [![License](https://img.shields.io/badge/License-FSL--1.1--Apache--2.0-blue.svg)](LICENSE)
 </div>
 
-<a href="https://trendshift.io/repositories/11202" target="_blank"><img src="https://trendshift.io/api/badge/repositories/11202" alt="TraceMachina%2Fnativelink | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/11202" target="_blank"><img src="https://trendshift.io/api/badge/repositories/11202" alt="TraceMachina%2Fforge | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-## What's NativeLink?
+## What's Forge?
 
-NativeLink is an efficient, high-performance build cache and remote execution system that accelerates software compilation and testing while reducing infrastructure costs. It optimizes build processes for projects of all sizes by intelligently caching build artifacts and distributing tasks across multiple machines. Use it when robotics/AV, semiconductor, biocomputing, or Chromium-scale / mobile monorepos need shared cache and distributed execution so unchanged targets never recompile across laptops and CI.
+Forge is an efficient, high-performance build cache and remote execution system that accelerates software compilation and testing while reducing infrastructure costs. It optimizes build processes for projects of all sizes by intelligently caching build artifacts and distributing tasks across multiple machines. Use it when robotics/AV, semiconductor, biocomputing, or Chromium-scale / mobile monorepos need shared cache and distributed execution so unchanged targets never recompile across laptops and CI.
 
-NativeLink is trusted in production environments to reduce costs and developer iteration times--handling over **billions of requests** per month for its customers, including large corporations such as **Samsung**.
+Forge is trusted in production environments to reduce costs and developer iteration times--handling over **billions of requests** per month for its customers, including large corporations such as **Samsung**.
 
-NativeLink is especially strong on:
+Forge is especially strong on:
 
 - Chromium-scale and mobile monorepos (C++/ObjC/Swift/Kotlin/Java) with heavy CI build graphs
 - Robotics and AV stacks in C++/CUDA on Bazel/Buck (perception, planning, simulation, hardware-in-the-loop)
@@ -44,30 +44,30 @@ NativeLink is especially strong on:
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=WLpqFuyLMUQ">
-      <img src="https://trace-github-resources.s3.us-east-2.amazonaws.com/harper-90-thumbnail.webp" alt="NativeLink Explained in 90 seconds" loading="lazy" width="480" />
+      <img src="https://trace-github-resources.s3.us-east-2.amazonaws.com/harper-90-thumbnail.webp" alt="Forge Explained in 90 seconds" loading="lazy" width="480" />
   </a>
 </p>
 
 ## 🤖 For AI agents and intelligent collaborators
 
-NativeLink is built to be read by agents as well as people:
+Forge is built to be read by agents as well as people:
 
 - [`llms.txt`](llms.txt), [`llms-small.txt`](llms-small.txt) and
   [`llms-full.txt`](llms-full.txt) at the repository root are the website, the
   blog and the documentation at three sizes; they are the files served at
-  [nativelink.com/llms.txt](https://nativelink.com/llms.txt). The docs serve
-  their own three at [docs.nativelink.com/llms.txt](https://docs.nativelink.com/llms.txt),
+  [forge.com/llms.txt](https://forge.com/llms.txt). The docs serve
+  their own three at [docs.forge.com/llms.txt](https://docs.forge.com/llms.txt),
   which the root copies fold in.
 - [`AGENTS.md`](AGENTS.md) is the map of the code for an agent changing it.
 - [`.claude/skills/`](.claude/skills) carries installable skills, including
   [`migrate-to-bazelmod`](.claude/skills/migrate-to-bazelmod).
-- Every page of [nativelink.com](https://nativelink.com) and the docs carries
+- Every page of [forge.com](https://forge.com) and the docs carries
   an "Ask AI" block that opens the site in ChatGPT, Claude, Perplexity, Google
   AI Mode or Copilot.
 - Contributing with an agent is welcome when a person stands behind the
   change; see [`CONTRIBUTING.md`](CONTRIBUTING.md#ai-assisted-contributions).
 
-The full list is at [nativelink.com/agents](https://nativelink.com/agents).
+The full list is at [forge.com/agents](https://forge.com/agents).
 
 ## 🔑 Key Features
 
@@ -81,33 +81,33 @@ The full list is at [nativelink.com/agents](https://nativelink.com/agents).
    - Utilizes remote resources to offload computational burden from local machines
    - Ensures consistency with a uniform, controlled build environment
 
-NativeLink seamlessly integrates with build tools that use the Remote Execution protocol, such as [Bazel](https://bazel.build), [Buck2](https://buck2.build), [Goma](https://chromium.googlesource.com/infra/goma/client/), and [Siso](https://chromium.googlesource.com/build/+/refs/heads/main/siso/README.md). CMake projects work too via [`recc`](https://buildgrid.gitlab.io/recc). See [Build CMake projects with NativeLink](https://docs.nativelink.com/getting-started/connect-your-build/cmake-recc). It supports Unix-based operating systems and Windows, ensuring broad compatibility across different development environments.
+Forge seamlessly integrates with build tools that use the Remote Execution protocol, such as [Bazel](https://bazel.build), [Buck2](https://buck2.build), [Goma](https://chromium.googlesource.com/infra/goma/client/), and [Siso](https://chromium.googlesource.com/build/+/refs/heads/main/siso/README.md). CMake projects work too via [`recc`](https://buildgrid.gitlab.io/recc). See [Build CMake projects with Forge](https://docs.forge.com/getting-started/connect-your-build/cmake-recc). It supports Unix-based operating systems and Windows, ensuring broad compatibility across different development environments.
 
 ## 🚀 Quickstart
 
-To start, you can deploy NativeLink as a Docker image (as shown below). The setups below are **production-grade** installations. See the [contribution docs](https://nativelink.com/docs/contribute/nix/) for instructions on how to build from source with [Bazel](https://nativelink.com/docs/contribute/bazel/), [Cargo](https://nativelink.com/docs/contribute/cargo/), and [Nix](https://nativelink.com/docs/contribute/nix/).
+To start, you can deploy Forge as a Docker image (as shown below). The setups below are **production-grade** installations. See the [contribution docs](https://forge.com/docs/contribute/nix/) for instructions on how to build from source with [Bazel](https://forge.com/docs/contribute/bazel/), [Cargo](https://forge.com/docs/contribute/cargo/), and [Nix](https://forge.com/docs/contribute/nix/).
 
-You can find a few example deployments in the [Docs](https://nativelink.com/docs/deployment-examples/kubernetes).
+You can find a few example deployments in the [Docs](https://forge.com/docs/deployment-examples/kubernetes).
 
 ### 📦 Prebuilt images
 
 Fast to spin up, but currently limited to `x86_64` systems. See the [container
-registry](https://github.com/TraceMachina/nativelink/pkgs/container/nativelink)
-for all image tags and the [contribution docs](https://nativelink.com/docs/contribute/nix)
+registry](https://github.com/toxicwind/forge/pkgs/container/forge)
+for all image tags and the [contribution docs](https://forge.com/docs/contribute/nix)
 for how to build the images yourself.
 
 **Linux x86_64**
 
 ```bash
 curl -O \
-    https://raw.githubusercontent.com/TraceMachina/nativelink/v1.4.0/nativelink-config/examples/basic_cas.json5
+    https://raw.githubusercontent.com/toxicwind/forge/v1.4.0/forge-config/examples/basic_cas.json5
 
-# See https://github.com/TraceMachina/nativelink/pkgs/container/nativelink
+# See https://github.com/toxicwind/forge/pkgs/container/forge
 # to find the latest tag
 docker run \
     -v $(pwd)/basic_cas.json5:/config \
     -p 50051:50051 \
-    ghcr.io/tracemachina/nativelink:v1.4.0 \
+    ghcr.io/tracemachina/forge:v1.4.0 \
     config
 ```
 
@@ -116,7 +116,7 @@ docker run \
 ```powershell
 # Download the configuration file
 Invoke-WebRequest `
-    -Uri "https://raw.githubusercontent.com/TraceMachina/nativelink/v1.4.0/nativelink-config/examples/basic_cas.json5" `
+    -Uri "https://raw.githubusercontent.com/toxicwind/forge/v1.4.0/forge-config/examples/basic_cas.json5" `
     -OutFile "basic_cas.json5"
 
 # Run the Docker container
@@ -124,7 +124,7 @@ Invoke-WebRequest `
 docker run `
     -v ${PWD}/basic_cas.json5:/config `
     -p 50051:50051 `
-    ghcr.io/tracemachina/nativelink:v1.4.0 `
+    ghcr.io/tracemachina/forge:v1.4.0 `
     config
 ```
 
@@ -156,16 +156,16 @@ it via the [next-gen nix installer](https://github.com/NixOS/experimental-nix-in
 
 ```bash
 curl -O \
-    https://raw.githubusercontent.com/TraceMachina/nativelink/main/nativelink-config/examples/basic_cas.json5
+    https://raw.githubusercontent.com/toxicwind/forge/main/forge-config/examples/basic_cas.json5
 
-nix run github:TraceMachina/nativelink ./basic_cas.json5
+nix run github:toxicwind/forge ./basic_cas.json5
 ```
 
-See the [contribution docs](https://nativelink.com/docs/contribute/nix) for further information.
+See the [contribution docs](https://forge.com/docs/contribute/nix) for further information.
 
 ## 🤝 Contributing
 
-Visit our [Contributing](https://github.com/tracemachina/nativelink/blob/main/CONTRIBUTING.md) guide to learn how to contribute to NativeLink. We welcome contributions from developers of all skill levels and backgrounds!
+Visit our [Contributing](https://github.com/tracemachina/forge/blob/main/CONTRIBUTING.md) guide to learn how to contribute to Forge. We welcome contributions from developers of all skill levels and backgrounds!
 
 ## 📊 Stats
 

@@ -1,7 +1,7 @@
 bazel-*
 !tools/bazel-retry.sh
 target/
-nativelink-test/fuzz/target/
+forge-test/fuzz/target/
 .turbo/
 .vscode/
 .idea/
@@ -23,10 +23,10 @@ rust-project.json
 lre.bazelrc
 nixos.bazelrc
 darwin.bazelrc
-nativelink.bazelrc
+forge.bazelrc
 user.bazelrc
 *.log
 buck-out/
-nativelink_config.schema.json
+forge_config.schema.json
 .gstack/
 .worktrees/

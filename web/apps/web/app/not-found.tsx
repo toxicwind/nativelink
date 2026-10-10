@@ -1,4 +1,4 @@
-import { Button, Eyebrow, Section } from "@nativelink/ui";
+import { Button, Eyebrow, Section } from "@forge/ui";
 
 export const metadata = {
   title: "Page not found",
@@ -7,7 +7,7 @@ export const metadata = {
 
 const links = [
   { label: "Home", href: "/", description: "Start at the top." },
-  { label: "Product", href: "/product", description: "What NativeLink does." },
+  { label: "Product", href: "/product", description: "What Forge does." },
   { label: "Docs", href: "/docs", description: "Setup and reference." },
   { label: "Contact", href: "/contact", description: "Talk to the team." },
 ];

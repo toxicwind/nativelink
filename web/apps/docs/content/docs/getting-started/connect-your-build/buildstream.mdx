@@ -1,23 +1,23 @@
 ---
 title: BuildStream
-description: Configure BuildStream to use NativeLink for artifact storage and remote execution.
+description: Configure BuildStream to use Forge for artifact storage and remote execution.
 ---
 
 <Prerequisites>
-  A running NativeLink instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
+  A running Forge instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
 </Prerequisites>
 
 BuildStream can use a Remote Execution API backend for artifact storage,
-Action Cache, CAS, and remote execution. NativeLink can serve those
+Action Cache, CAS, and remote execution. Forge can serve those
 endpoints from the same `localhost:50051` listener used by the other local
 examples.
 
 The repo includes a runnable BuildStream integration test at
 <SourceLink file="integration_tests/buildstream" dir symbol="integration_tests/buildstream/" />.
-It starts NativeLink with a local worker, runs `bst build hello.bst`, and
+It starts Forge with a local worker, runs `bst build hello.bst`, and
 checks for `SUCCESS Build`.
 
-## Start NativeLink [#start-nativelink]
+## Start Forge [#start-forge]
 
 Use a config that exposes CAS, Action Cache, execution, capabilities,
 ByteStream, fetch, and push services on `localhost:50051`.
@@ -28,13 +28,13 @@ It also starts a private worker API on `localhost:50061` for the local
 worker.
 
 ```bash
-nativelink -- integration_tests/buildstream/buildstream_cas.json5
+forge -- integration_tests/buildstream/buildstream_cas.json5
 ```
 
 ## Configure BuildStream [#configure-buildstream]
 
 Add a BuildStream config file that points artifact storage and remote
-execution services at NativeLink:
+execution services at Forge:
 
 ```yaml
 cachedir: /tmp/buildstream
@@ -107,17 +107,17 @@ bst -c buildstream.conf build hello.bst
 ```
 
 The integration test checks for `SUCCESS Build` in the BuildStream output
-and checks that NativeLink did not log an error.
+and checks that Forge did not log an error.
 
 ## Troubleshooting [#troubleshooting]
 
 - **BuildStream cannot connect.** Match the `http://localhost:50051`
-  endpoint in `buildstream.conf` to the NativeLink listener. The local test
+  endpoint in `buildstream.conf` to the Forge listener. The local test
   uses an insecure HTTP URL.
 - **Uploads are missing.** Set `push: true` under `artifacts.servers` so
-  BuildStream can write artifacts back to NativeLink.
+  BuildStream can write artifacts back to Forge.
 - **Remote actions do not match a worker.** Compare the platform properties
-  BuildStream requests with the properties your NativeLink worker advertises.
+  BuildStream requests with the properties your Forge worker advertises.
   The integration test worker advertises `ISA: x86-64`.
 
 ## FAQ [#faq]
@@ -126,7 +126,7 @@ and checks that NativeLink did not log an error.
   <Accordion title="Why does the config have both artifacts and remote-execution blocks?" id="why-does-the-config-have-both-artifacts-and-remote-execution-blocks">
     They configure different BuildStream subsystems: artifact push/pull
     storage versus the execution, action-cache, and storage services used
-    for remote builds. Pointing every URL at the same NativeLink listener
+    for remote builds. Pointing every URL at the same Forge listener
     is fine; it exposes all of those services on one port.
   </Accordion>
   <Accordion title="Why http:// URLs instead of grpc://?" id="why-http-urls-instead-of-grpc">

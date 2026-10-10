@@ -1,6 +1,6 @@
 ---
 title: Persistent workers
-description: Keep a JVM or Node compiler process warm across actions instead of paying its startup cost every time, and understand exactly what NativeLink gives up to do it.
+description: Keep a JVM or Node compiler process warm across actions instead of paying its startup cost every time, and understand exactly what Forge gives up to do it.
 ---
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
@@ -8,7 +8,7 @@ description: Keep a JVM or Node compiler process warm across actions instead of 
 **Who this is for:** anyone whose remote builds are dominated by JVM or
 TypeScript compile actions. **What you'll have at the end:** compile actions
 reusing a warm process, and a clear-eyed view of the isolation you trade for it.
-**Time:** an hour, most of it in your build rules rather than in NativeLink.
+**Time:** an hour, most of it in your build rules rather than in Forge.
 
 <Prerequisites>
   Remote execution working end to end. See [Your first remote action](/remote-execution/first-remote-action).
@@ -40,29 +40,29 @@ alive between them.
   end`}
 </Mermaid>
 
-<SourceLink file="nativelink-worker/src/persistent_worker/pool.rs" symbol="PersistentWorkerPool" />
+<SourceLink file="forge-worker/src/persistent_worker/pool.rs" symbol="PersistentWorkerPool" />
 
 ## Two things to know before you start [#two-things-to-know-before-you-start]
 
-**Little needs configuring in NativeLink.** The pool is on by default and
+**Little needs configuring in Forge.** The pool is on by default and
 the protocol is chosen by two platform properties on each action. The
 worker's `persistent_workers` block (v1.7.3 and later) sizes it: how many
 processes per key, how long an idle one lives, how many requests one serves,
 how long an action at the cap waits for a process to come back, and
 `enabled: false` to run every such action one-shot.
-The one thing NativeLink does need from you is on the scheduler: those two
+The one thing Forge does need from you is on the scheduler: those two
 keys must be listed in `supported_platform_properties`, because a scheduler
 older than v1.6.6 rejects an action that carries a key it does not know.
 
 **The module is licensed separately.** Most of the repository is
-`FSL-1.1-Apache-2.0`. Every file under `nativelink-worker/src/persistent_worker/`
+`FSL-1.1-Apache-2.0`. Every file under `forge-worker/src/persistent_worker/`
 instead carries a Business Source License 1.1 header stating that use of the
 module requires an enterprise license agreement. That is a different obligation
 from the rest of the binary, and nothing in the binary enforces it; the module
 is compiled in and activates from the action, not from a flag you set. Read
 [Open source and Enterprise](/reference/oss-and-enterprise#persistent-workers-activate-from-the-action-not-from-your-config)
 for what that means in practice, and
-[the license](https://nativelink.com/license) against your intended use, before
+[the license](https://forge.com/license) against your intended use, before
 you build on this.
 
 ## Opt an action in [#opt-an-action-in]
@@ -72,7 +72,7 @@ The worker looks at two of the action's platform properties (the REAPI
 `requires-worker-protocol` picks the wire format. Nothing on the worker's own
 `platform_properties` is involved.
 
-<SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="action_supports_persistent_workers" />
+<SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="action_supports_persistent_workers" />
 
 Because the scheduler fails to match any action carrying a platform property
 key it has not been told about (`Unknown platform property`), declare both keys
@@ -215,7 +215,7 @@ cached as if they were right, which is the worst failure mode a build system
 has. Only enable this for tools written for the worker protocol and tested under
 it.
 
-<SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="inner_execute" />
+<SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="inner_execute" />
 
 ## The pool's actual behaviour [#the-pools-actual-behaviour]
 
@@ -314,7 +314,7 @@ rest should drop sharply.
   once per action.
 - Building the same targets twice in a row, cache disabled, is faster the second
   time within a single build: the pool is warm.
-- Nothing in the NativeLink worker log says it fell back to one-shot execution.
+- Nothing in the Forge worker log says it fell back to one-shot execution.
 - Outputs are byte-identical to the same build without persistent workers. This
   is the one that matters.
 

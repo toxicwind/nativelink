@@ -25,9 +25,9 @@ contract before spending scarce hardware. Never pay twice for identical work.
 `rules_omniverse` brings those habits to robotics, the physical world, and the
 broader NVIDIA Omniverse ecosystem.
 
-NativeLink makes this model especially powerful at remote GPU scale, but it is
+Forge makes this model especially powerful at remote GPU scale, but it is
 not required. The rules use Bazel's execution model. Teams can start locally,
-use another compatible remote execution service, or introduce NativeLink as
+use another compatible remote execution service, or introduce Forge as
 their scheduling and caching needs grow.
 
 In our work with leading autonomy teams, we see the same transition again and
@@ -130,7 +130,7 @@ The release also separates two questions that teams often mix together.
 1. **Is the rule correct?** Hermetic fixtures test platform constraints,
    arguments, inputs, outputs, providers, container behavior, and Bzlmod
    consumption. They do not reserve a GPU or require a proprietary SDK.
-2. **Does the real hardware and SDK stack work?** A separate NativeLink
+2. **Does the real hardware and SDK stack work?** A separate Forge
    reference bench covers H200 worker matching, NVIDIA runtime initialization,
    remote output retrieval, and action cache replay.
 
@@ -148,11 +148,11 @@ of code. Both create enormous graphs of expensive, parallel work. Factories add
 a new version of the same systems problem. The graph must stay connected to a
 changing physical environment.
 
-In Europe, our recent work with `rules_omniverse` and NativeLink includes
+In Europe, our recent work with `rules_omniverse` and Forge includes
 simulated factories updated through continuous neural reconstruction. New
 observations of a facility become a new version of its digital state. The graph
 then has a direct job. It marks affected reconstruction, OpenUSD processing,
-validation, packaging, and simulation work as stale. NativeLink dispatches
+validation, packaging, and simulation work as stale. Forge dispatches
 those actions to compatible workers. Unaffected content and completed actions
 remain reusable.
 
@@ -167,13 +167,13 @@ manufacturing cells, autonomous fleets, synthetic data pipelines, and
 hardware-in-the-loop systems all need a controlled way to turn physical change
 into new computation.
 
-## Why NativeLink is the reference backend
+## Why Forge is the reference backend
 
-NativeLink is optional by design. `rules_omniverse` uses standard Bazel
+Forge is optional by design. `rules_omniverse` uses standard Bazel
 concepts, so teams get declared DAGs, reproducible actions, OpenUSD validation,
 packaging, and portable tests before introducing remote execution.
 
-NativeLink becomes valuable when the graph must run across specialized
+Forge becomes valuable when the graph must run across specialized
 infrastructure. Its Remote Execution API scheduler can match actions to worker
 properties such as GPU model, GPU count, container capability, and a truthful
 runtime fingerprint. Its content-addressable store and action cache share
@@ -210,7 +210,7 @@ In practical terms, `rules_omniverse` lets a team:
 `rules_omniverse` brings proven lessons from software into robotics and the
 industries that build the physical world. DAGs make dependencies explicit.
 Reproducibility turns a promising result into evidence. Bazel gives the work a
-portable execution contract. NativeLink adds specialized scheduling,
+portable execution contract. Forge adds specialized scheduling,
 content-addressable storage, and shared caching when teams need them.
 
 Our work with autonomy teams has made the wider need clear. Transportation,

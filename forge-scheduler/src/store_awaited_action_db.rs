@@ -1,0 +1,1357 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::mem::Discriminant;
+use core::ops::Bound;
+use core::sync::atomic::{AtomicU64, Ordering};
+use core::time::Duration;
+use std::borrow::Cow;
+use std::sync::{Arc, Weak};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use bytes::Bytes;
+use futures::{Stream, TryStreamExt};
+use forge_error::{Code, Error, ResultExt, make_err};
+use forge_metric::MetricsComponent;
+use forge_util::action_messages::{
+    ActionInfo, ActionStage, ActionUniqueQualifier, OperationId,
+};
+use forge_util::instant_wrapper::InstantWrapper;
+use forge_util::metrics::{EXECUTION_METRICS, EXECUTION_STAGE, ExecutionStage};
+use forge_util::platform_properties::PlatformProperties;
+use forge_util::spawn;
+use forge_util::store_trait::{
+    FalseValue, SchedulerCurrentVersionProvider, SchedulerIndexProvider, SchedulerStore,
+    SchedulerStoreDataProvider, SchedulerStoreDecodeTo, SchedulerStoreKeyProvider,
+    SchedulerSubscription, SchedulerSubscriptionManager, StoreKey, TrueValue,
+};
+use forge_util::task::JoinHandleDropGuard;
+use opentelemetry::KeyValue;
+use serde::{Deserialize, Serialize};
+use tokio::sync::{Notify, OnceCell};
+use tracing::{error, warn};
+
+use crate::awaited_action_db::{
+    AwaitedAction, AwaitedActionDb, AwaitedActionSubscriber, CLIENT_KEEPALIVE_DURATION,
+    SortedAwaitedAction, SortedAwaitedActionState,
+};
+use crate::worker_registry::{ORPHANED_ACTION_TIMEOUT, SharedWorkerRegistry, WorkerLiveness};
+
+type ClientOperationId = OperationId;
+
+/// Maximum number of retries to update client keep alive.
+const MAX_RETRIES_FOR_CLIENT_KEEPALIVE: u32 = 8;
+
+/// Use separate non-versioned Redis key for client keepalives.
+const USE_SEPARATE_CLIENT_KEEPALIVE_KEY: bool = true;
+
+/// How often the actions in each stage are recounted for
+/// `execution.active.count`.
+const ACTIVE_COUNT_REFRESH_INTERVAL: Duration = Duration::from_secs(15);
+
+/// Every stage the store indexes, with the label it is reported under.
+const COUNTED_STATES: [(SortedAwaitedActionState, ExecutionStage); 4] = [
+    (
+        SortedAwaitedActionState::CacheCheck,
+        ExecutionStage::CacheCheck,
+    ),
+    (SortedAwaitedActionState::Queued, ExecutionStage::Queued),
+    (
+        SortedAwaitedActionState::Executing,
+        ExecutionStage::Executing,
+    ),
+    (
+        SortedAwaitedActionState::Completed,
+        ExecutionStage::Completed,
+    ),
+];
+
+enum OperationSubscriberState<Sub> {
+    Unsubscribed,
+    Subscribed(Sub),
+}
+
+pub struct OperationSubscriber<S: SchedulerStore, I: InstantWrapper, NowFn: Fn() -> I> {
+    maybe_client_operation_id: Option<ClientOperationId>,
+    subscription_key: OperationIdToAwaitedAction<'static>,
+    weak_store: Weak<S>,
+    state: OperationSubscriberState<
+        <S::SubscriptionManager as SchedulerSubscriptionManager>::Subscription,
+    >,
+    last_known_keepalive_ts: AtomicU64,
+    now_fn: NowFn,
+    /// The record as a listing read it, when this subscriber came from one.
+    /// A listing already loads every record it returns, so `borrow` serves
+    /// this instead of reading the record again; only the client keepalive,
+    /// kept under its own key, is read, once. The matching pass borrows each
+    /// queued action two or three times per pass, so without this a pass
+    /// cost several store round trips per queued action.
+    listed: Option<AwaitedAction>,
+    /// `listed` with the client keepalive merged in, filled on first borrow.
+    listed_with_keepalive: OnceCell<AwaitedAction>,
+    // If the SchedulerSubscriptionManager is not reliable, then this is populated
+    // when the state is set to subscribed.  When set it causes the state to be polled
+    // as well as listening for the publishing.
+    maybe_last_stage: Option<Discriminant<ActionStage>>,
+    retain_completed_for: Duration,
+    /// How long a written client keepalive stays meaningful. Past it, an
+    /// absent key and a stale one say the same thing, so the key may as
+    /// well be gone.
+    client_keepalive_ttl: Duration,
+}
+
+impl<S: SchedulerStore, I: InstantWrapper, NowFn: Fn() -> I + core::fmt::Debug> core::fmt::Debug
+    for OperationSubscriber<S, I, NowFn>
+where
+    OperationSubscriberState<
+        <S::SubscriptionManager as SchedulerSubscriptionManager>::Subscription,
+    >: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("OperationSubscriber")
+            .field("maybe_client_operation_id", &self.maybe_client_operation_id)
+            .field("subscription_key", &self.subscription_key)
+            .field("weak_store", &self.weak_store)
+            .field("state", &self.state)
+            .field("last_known_keepalive_ts", &self.last_known_keepalive_ts)
+            .field("now_fn", &self.now_fn)
+            .finish()
+    }
+}
+impl<S, I, NowFn> OperationSubscriber<S, I, NowFn>
+where
+    S: SchedulerStore,
+    I: InstantWrapper,
+    NowFn: Fn() -> I,
+{
+    const fn new(
+        maybe_client_operation_id: Option<ClientOperationId>,
+        subscription_key: OperationIdToAwaitedAction<'static>,
+        weak_store: Weak<S>,
+        now_fn: NowFn,
+        retain_completed_for: Duration,
+        client_keepalive_ttl: Duration,
+    ) -> Self {
+        Self {
+            maybe_client_operation_id,
+            subscription_key,
+            weak_store,
+            last_known_keepalive_ts: AtomicU64::new(0),
+            state: OperationSubscriberState::Unsubscribed,
+            now_fn,
+            listed: None,
+            listed_with_keepalive: OnceCell::const_new(),
+            maybe_last_stage: None,
+            retain_completed_for,
+            client_keepalive_ttl,
+        }
+    }
+
+    /// Serves `borrow` from the record a listing already read.
+    fn listed(mut self, awaited_action: AwaitedAction) -> Self {
+        self.listed = Some(awaited_action);
+        self
+    }
+
+    async fn inner_get_awaited_action(
+        store: &S,
+        key: OperationIdToAwaitedAction<'_>,
+        maybe_client_operation_id: Option<ClientOperationId>,
+        last_known_keepalive_ts: &AtomicU64,
+    ) -> Result<AwaitedAction, Error> {
+        let mut awaited_action = store
+            .get_and_decode(key.borrow())
+            .await
+            .err_tip(|| format!("In OperationSubscriber::get_awaited_action {key:?}"))?
+            .ok_or_else(|| {
+                make_err!(
+                    Code::NotFound,
+                    "Could not find AwaitedAction for the given operation id {key:?}",
+                )
+            })?;
+        if let Some(client_operation_id) = maybe_client_operation_id {
+            awaited_action.set_client_operation_id(client_operation_id);
+        }
+        Self::merge_client_keepalive(
+            store,
+            key.0.as_ref(),
+            &mut awaited_action,
+            last_known_keepalive_ts,
+        )
+        .await;
+        Ok(awaited_action)
+    }
+
+    /// Folds the client keepalive kept under its own key into the action's
+    /// timestamp and remembers it.
+    async fn merge_client_keepalive(
+        store: &S,
+        operation_id: &OperationId,
+        awaited_action: &mut AwaitedAction,
+        last_known_keepalive_ts: &AtomicU64,
+    ) {
+        // Helper to convert SystemTime to unix timestamp
+        let to_unix_ts =
+            |t: SystemTime| -> u64 { t.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs()) };
+
+        // Check the separate keepalive key for the most recent timestamp.
+        let keepalive_ts = if USE_SEPARATE_CLIENT_KEEPALIVE_KEY {
+            match store.get_and_decode(ClientKeepaliveKey(operation_id)).await {
+                Ok(Some(ts)) => {
+                    let awaited_ts = to_unix_ts(awaited_action.last_client_keepalive_timestamp());
+                    if ts > awaited_ts {
+                        let timestamp = UNIX_EPOCH + Duration::from_secs(ts);
+                        awaited_action.update_client_keep_alive(timestamp);
+                        ts
+                    } else {
+                        awaited_ts
+                    }
+                }
+                Ok(None) | Err(_) => to_unix_ts(awaited_action.last_client_keepalive_timestamp()),
+            }
+        } else {
+            to_unix_ts(awaited_action.last_client_keepalive_timestamp())
+        };
+
+        last_known_keepalive_ts.store(keepalive_ts, Ordering::Release);
+    }
+
+    #[expect(clippy::future_not_send)] // TODO(jhpratt) remove this
+    async fn get_awaited_action(&self) -> Result<AwaitedAction, Error> {
+        let store = self
+            .weak_store
+            .upgrade()
+            .err_tip(|| "Store gone in OperationSubscriber::get_awaited_action")?;
+        if let Some(listed) = &self.listed {
+            let merged = self
+                .listed_with_keepalive
+                .get_or_init(|| async {
+                    let mut awaited_action = listed.clone();
+                    Self::merge_client_keepalive(
+                        store.as_ref(),
+                        self.subscription_key.0.as_ref(),
+                        &mut awaited_action,
+                        &self.last_known_keepalive_ts,
+                    )
+                    .await;
+                    awaited_action
+                })
+                .await;
+            return Ok(merged.clone());
+        }
+        Self::inner_get_awaited_action(
+            store.as_ref(),
+            self.subscription_key.borrow(),
+            self.maybe_client_operation_id.clone(),
+            &self.last_known_keepalive_ts,
+        )
+        .await
+    }
+}
+
+impl<S, I, NowFn> AwaitedActionSubscriber for OperationSubscriber<S, I, NowFn>
+where
+    S: SchedulerStore,
+    I: InstantWrapper,
+    NowFn: Fn() -> I + Send + Sync + 'static,
+{
+    async fn changed(&mut self) -> Result<AwaitedAction, Error> {
+        let store = self
+            .weak_store
+            .upgrade()
+            .err_tip(|| "Store gone in OperationSubscriber::get_awaited_action")?;
+        let subscription = match &mut self.state {
+            OperationSubscriberState::Subscribed(subscription) => subscription,
+            OperationSubscriberState::Unsubscribed => {
+                let subscription = store
+                    .subscription_manager()
+                    .await
+                    .err_tip(|| "In OperationSubscriber::changed::subscription_manager")?
+                    .subscribe(self.subscription_key.borrow())
+                    .err_tip(|| "In OperationSubscriber::changed::subscribe")?;
+                self.state = OperationSubscriberState::Subscribed(subscription);
+                // When we've just subscribed, there may have been changes before now.
+                let action = Self::inner_get_awaited_action(
+                    store.as_ref(),
+                    self.subscription_key.borrow(),
+                    self.maybe_client_operation_id.clone(),
+                    &self.last_known_keepalive_ts,
+                )
+                .await
+                .err_tip(|| "In OperationSubscriber::changed")?;
+                if !<S as SchedulerStore>::SubscriptionManager::is_reliable() {
+                    self.maybe_last_stage = Some(core::mem::discriminant(&action.state().stage));
+                }
+                // Existing changes are only interesting if the state is past queued.
+                if !matches!(action.state().stage, ActionStage::Queued) {
+                    return Ok(action);
+                }
+                let OperationSubscriberState::Subscribed(subscription) = &mut self.state else {
+                    unreachable!("Subscription should be in Subscribed state");
+                };
+                subscription
+            }
+        };
+
+        let changed_fut = subscription.changed();
+        tokio::pin!(changed_fut);
+        loop {
+            // This is set if the maybe_last_state doesn't match the state in the store.
+            let mut maybe_changed_action = None;
+
+            let last_known_keepalive_ts = self.last_known_keepalive_ts.load(Ordering::Acquire);
+            // Only a subscriber that stands for a client may say a client is
+            // still there. The matching engine subscribes to every queued
+            // action it considers, and `get_range_of_actions` builds those
+            // subscribers with no client operation id precisely because there
+            // is no client behind them. Letting them write the keepalive
+            // makes the scheduler hold open the actions it is supposed to be
+            // retiring: the keepalive is refreshed, the client timeout in
+            // `apply_filter_predicate` never comes due, and the action is
+            // offered to the matcher again, which refreshes it again.
+            //
+            // The effect is that every queued action carries a keepalive
+            // only seconds old however long its client has been gone, and
+            // none of them are ever retired.
+            if self.maybe_client_operation_id.is_some()
+                && I::from_secs(last_known_keepalive_ts).elapsed() > CLIENT_KEEPALIVE_DURATION
+            {
+                let now = (self.now_fn)().now();
+                let now_ts = now.duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
+
+                if USE_SEPARATE_CLIENT_KEEPALIVE_KEY {
+                    let operation_id = self.subscription_key.0.as_ref();
+                    let update_result = store
+                        .update_data(
+                            UpdateClientKeepalive {
+                                operation_id,
+                                timestamp: now_ts,
+                            },
+                            // Written with no expiry these outlive every
+                            // action that produced them and accumulate
+                            // without bound. A keepalive older than the
+                            // client timeout cannot change any decision,
+                            // because the timeout has already come due and
+                            // the stored timestamp is consulted either way.
+                            Some(self.client_keepalive_ttl),
+                        )
+                        .await;
+
+                    if let Err(e) = update_result {
+                        warn!(
+                            ?self.subscription_key,
+                            ?e,
+                            "Failed to update client keepalive (non-versioned)"
+                        );
+                    }
+
+                    // Update local timestamp
+                    self.last_known_keepalive_ts
+                        .store(now_ts, Ordering::Release);
+
+                    // Check if state changed (for unreliable subscription managers)
+                    if self.maybe_last_stage.is_some() {
+                        let awaited_action = Self::inner_get_awaited_action(
+                            store.as_ref(),
+                            self.subscription_key.borrow(),
+                            self.maybe_client_operation_id.clone(),
+                            &self.last_known_keepalive_ts,
+                        )
+                        .await
+                        .err_tip(|| "In OperationSubscriber::changed")?;
+
+                        if self.maybe_last_stage.as_ref().is_some_and(|last_stage| {
+                            *last_stage != core::mem::discriminant(&awaited_action.state().stage)
+                        }) {
+                            maybe_changed_action = Some(awaited_action);
+                        }
+                    }
+                } else {
+                    for attempt in 1..=MAX_RETRIES_FOR_CLIENT_KEEPALIVE {
+                        if attempt > 1 {
+                            (self.now_fn)().sleep(Duration::from_millis(100)).await;
+                            warn!(
+                                ?self.subscription_key,
+                                attempt,
+                                "Client keepalive retry due to version conflict"
+                            );
+                        }
+                        let mut awaited_action = Self::inner_get_awaited_action(
+                            store.as_ref(),
+                            self.subscription_key.borrow(),
+                            self.maybe_client_operation_id.clone(),
+                            &self.last_known_keepalive_ts,
+                        )
+                        .await
+                        .err_tip(|| "In OperationSubscriber::changed")?;
+                        awaited_action.update_client_keep_alive(now);
+                        maybe_changed_action = self
+                            .maybe_last_stage
+                            .as_ref()
+                            .is_some_and(|last_stage| {
+                                *last_stage
+                                    != core::mem::discriminant(&awaited_action.state().stage)
+                            })
+                            .then(|| awaited_action.clone());
+                        let expiry = if awaited_action.is_complete() {
+                            Some(self.retain_completed_for)
+                        } else {
+                            None
+                        };
+                        match inner_update_awaited_action(store.as_ref(), awaited_action, expiry)
+                            .await
+                        {
+                            Ok(()) => break,
+                            err if attempt == MAX_RETRIES_FOR_CLIENT_KEEPALIVE => {
+                                err.err_tip_with_code(|_| {
+                                    (Code::Aborted, "Could not update client keep alive")
+                                })?;
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+            }
+
+            // If the polling shows that it's changed state then publish now.
+            if let Some(changed_action) = maybe_changed_action {
+                self.maybe_last_stage =
+                    Some(core::mem::discriminant(&changed_action.state().stage));
+                return Ok(changed_action);
+            }
+            // Determine the sleep time based on the last client keep alive.
+            let sleep_time = CLIENT_KEEPALIVE_DURATION
+                .checked_sub(
+                    I::from_secs(self.last_known_keepalive_ts.load(Ordering::Acquire)).elapsed(),
+                )
+                .unwrap_or(Duration::from_millis(100));
+            tokio::select! {
+                result = &mut changed_fut => {
+                    result?;
+                    break;
+                }
+                () = (self.now_fn)().sleep(sleep_time) => {
+                    // If we haven't received any updates for a while, we should
+                    // let the database know that we are still listening to prevent
+                    // the action from being dropped.  Also poll for updates if the
+                    // subscription manager is unreliable.
+                }
+            }
+        }
+
+        let awaited_action = Self::inner_get_awaited_action(
+            store.as_ref(),
+            self.subscription_key.borrow(),
+            self.maybe_client_operation_id.clone(),
+            &self.last_known_keepalive_ts,
+        )
+        .await
+        .err_tip(|| "In OperationSubscriber::changed")?;
+        if self.maybe_last_stage.is_some() {
+            self.maybe_last_stage = Some(core::mem::discriminant(&awaited_action.state().stage));
+        }
+        Ok(awaited_action)
+    }
+
+    async fn borrow(&self) -> Result<AwaitedAction, Error> {
+        self.get_awaited_action()
+            .await
+            .err_tip(|| "In OperationSubscriber::borrow")
+    }
+}
+
+fn awaited_action_decode(version: i64, data: &Bytes) -> Result<AwaitedAction, Error> {
+    let mut awaited_action: AwaitedAction = serde_json::from_slice(data).map_err(|e| {
+        Error::from_std_err(Code::InvalidArgument, &e).append("In AwaitedAction::decode")
+    })?;
+    awaited_action.set_version(version);
+    Ok(awaited_action)
+}
+
+const OPERATION_ID_TO_AWAITED_ACTION_KEY_PREFIX: &str = "aa_";
+const CLIENT_ID_TO_OPERATION_ID_KEY_PREFIX: &str = "cid_";
+/// TTL bounding the cid_* mapping's lifetime so it cannot outlive its
+/// aa_* key and accumulate as a permanent orphan (24h safely exceeds
+/// any real action lifetime).
+const CLIENT_ID_MAPPING_TTL: Duration = Duration::from_hours(24);
+/// Phase 2: Separate key prefix for client keepalives (non-versioned).
+const CLIENT_KEEPALIVE_KEY_PREFIX: &str = "ck_";
+/// One record per scheduler holding what its connected workers can run
+/// (non-versioned, expires on its own).
+const FLEET_CAPABILITIES_KEY_PREFIX: &str = "fc_";
+/// Index over every fleet capabilities record. The value is the same for
+/// all of them; the index exists so peers can be listed.
+const FLEET_CAPABILITIES_INDEX_NAME: &str = "fleet";
+
+#[derive(Debug)]
+struct OperationIdToAwaitedAction<'a>(Cow<'a, OperationId>);
+impl OperationIdToAwaitedAction<'_> {
+    fn borrow(&self) -> OperationIdToAwaitedAction<'_> {
+        OperationIdToAwaitedAction(Cow::Borrowed(self.0.as_ref()))
+    }
+}
+impl SchedulerStoreKeyProvider for OperationIdToAwaitedAction<'_> {
+    type Versioned = TrueValue;
+    fn get_key(&self) -> StoreKey<'static> {
+        StoreKey::Str(Cow::Owned(format!(
+            "{OPERATION_ID_TO_AWAITED_ACTION_KEY_PREFIX}{}",
+            self.0
+        )))
+    }
+}
+impl SchedulerStoreDecodeTo for OperationIdToAwaitedAction<'_> {
+    type DecodeOutput = AwaitedAction;
+    fn decode(version: i64, data: Bytes) -> Result<Self::DecodeOutput, Error> {
+        awaited_action_decode(version, &data)
+    }
+}
+
+struct ClientIdToOperationId<'a>(&'a OperationId);
+impl SchedulerStoreKeyProvider for ClientIdToOperationId<'_> {
+    type Versioned = FalseValue;
+    fn get_key(&self) -> StoreKey<'static> {
+        StoreKey::Str(Cow::Owned(format!(
+            "{CLIENT_ID_TO_OPERATION_ID_KEY_PREFIX}{}",
+            self.0
+        )))
+    }
+}
+impl SchedulerStoreDecodeTo for ClientIdToOperationId<'_> {
+    type DecodeOutput = OperationId;
+    fn decode(_version: i64, data: Bytes) -> Result<Self::DecodeOutput, Error> {
+        serde_json::from_slice(&data).map_err(|e| {
+            Error::from_std_err(Code::InvalidArgument, &e).append(format!(
+                "In ClientIdToOperationId::decode (data: {data:02x?})",
+            ))
+        })
+    }
+}
+
+struct ClientKeepaliveKey<'a>(&'a OperationId);
+impl SchedulerStoreKeyProvider for ClientKeepaliveKey<'_> {
+    type Versioned = FalseValue;
+    fn get_key(&self) -> StoreKey<'static> {
+        StoreKey::Str(Cow::Owned(format!(
+            "{CLIENT_KEEPALIVE_KEY_PREFIX}{}",
+            self.0
+        )))
+    }
+}
+impl SchedulerStoreDecodeTo for ClientKeepaliveKey<'_> {
+    type DecodeOutput = u64;
+    fn decode(_version: i64, data: Bytes) -> Result<Self::DecodeOutput, Error> {
+        let s = core::str::from_utf8(&data).map_err(|e| {
+            Error::from_std_err(Code::InvalidArgument, &e)
+                .append("In ClientKeepaliveKey::decode utf8")
+        })?;
+        s.parse::<u64>().map_err(|e| {
+            Error::from_std_err(Code::InvalidArgument, &e)
+                .append("In ClientKeepaliveKey::decode parse")
+        })
+    }
+}
+
+struct UpdateClientKeepalive<'a> {
+    operation_id: &'a OperationId,
+    timestamp: u64,
+}
+impl SchedulerStoreKeyProvider for UpdateClientKeepalive<'_> {
+    type Versioned = FalseValue;
+    fn get_key(&self) -> StoreKey<'static> {
+        ClientKeepaliveKey(self.operation_id).get_key()
+    }
+}
+impl SchedulerStoreDataProvider for UpdateClientKeepalive<'_> {
+    fn try_into_bytes(self) -> Result<Bytes, Error> {
+        Ok(Bytes::from(self.timestamp.to_string()))
+    }
+}
+
+/// What one scheduler's workers can run, as published to its peers.
+#[derive(Serialize, Deserialize)]
+struct FleetCapabilities {
+    scheduler_id: String,
+    workers: Vec<PlatformProperties>,
+}
+
+struct UpdateFleetCapabilities(FleetCapabilities);
+impl SchedulerStoreKeyProvider for UpdateFleetCapabilities {
+    type Versioned = FalseValue;
+    fn get_key(&self) -> StoreKey<'static> {
+        StoreKey::Str(Cow::Owned(format!(
+            "{FLEET_CAPABILITIES_KEY_PREFIX}{}",
+            self.0.scheduler_id
+        )))
+    }
+}
+impl SchedulerStoreDataProvider for UpdateFleetCapabilities {
+    fn try_into_bytes(self) -> Result<Bytes, Error> {
+        serde_json::to_string(&self.0)
+            .map(Bytes::from)
+            .map_err(|e| {
+                Error::from_std_err(Code::InvalidArgument, &e)
+                    .append("Could not convert FleetCapabilities to json")
+            })
+    }
+    fn get_indexes(&self) -> Result<Vec<(&'static str, Bytes)>, Error> {
+        Ok(vec![(
+            FLEET_CAPABILITIES_INDEX_NAME,
+            Bytes::from_static(b"1"),
+        )])
+    }
+}
+
+struct SearchFleetCapabilities;
+impl SchedulerIndexProvider for SearchFleetCapabilities {
+    const KEY_PREFIX: &'static str = FLEET_CAPABILITIES_KEY_PREFIX;
+    const INDEX_NAME: &'static str = FLEET_CAPABILITIES_INDEX_NAME;
+    type Versioned = FalseValue;
+    fn index_value(&self) -> Cow<'_, str> {
+        Cow::Borrowed("1")
+    }
+}
+impl SchedulerStoreDecodeTo for SearchFleetCapabilities {
+    type DecodeOutput = FleetCapabilities;
+    fn decode(_version: i64, data: Bytes) -> Result<Self::DecodeOutput, Error> {
+        serde_json::from_slice(&data).map_err(|e| {
+            Error::from_std_err(Code::Internal, &e).append("In SearchFleetCapabilities::decode")
+        })
+    }
+}
+
+// TODO(palfrey) We only need operation_id here, it would be nice if we had a way
+// to tell the decoder we only care about specific fields.
+struct SearchUniqueQualifierToAwaitedAction<'a>(&'a ActionUniqueQualifier);
+impl SchedulerIndexProvider for SearchUniqueQualifierToAwaitedAction<'_> {
+    const KEY_PREFIX: &'static str = OPERATION_ID_TO_AWAITED_ACTION_KEY_PREFIX;
+    const INDEX_NAME: &'static str = "unique_qualifier";
+    type Versioned = TrueValue;
+    fn index_value(&self) -> Cow<'_, str> {
+        Cow::Owned(format!("{}", self.0))
+    }
+}
+impl SchedulerStoreDecodeTo for SearchUniqueQualifierToAwaitedAction<'_> {
+    type DecodeOutput = AwaitedAction;
+    fn decode(version: i64, data: Bytes) -> Result<Self::DecodeOutput, Error> {
+        awaited_action_decode(version, &data)
+    }
+}
+
+struct SearchStateToAwaitedAction(&'static str);
+impl SchedulerIndexProvider for SearchStateToAwaitedAction {
+    const KEY_PREFIX: &'static str = OPERATION_ID_TO_AWAITED_ACTION_KEY_PREFIX;
+    const INDEX_NAME: &'static str = "state";
+    const MAYBE_SORT_KEY: Option<&'static str> = Some("sort_key");
+    // The matcher walks the queue highest priority first, oldest first,
+    // which is descending over the packed sort key (see
+    // `AwaitedActionSortKey`). The memory backend does the same with
+    // `.rev()` over its `BTreeSet`.
+    const SORT_DESCENDING: bool = true;
+    type Versioned = TrueValue;
+    fn index_value(&self) -> Cow<'_, str> {
+        Cow::Borrowed(self.0)
+    }
+}
+impl SchedulerStoreDecodeTo for SearchStateToAwaitedAction {
+    type DecodeOutput = AwaitedAction;
+    fn decode(version: i64, data: Bytes) -> Result<Self::DecodeOutput, Error> {
+        awaited_action_decode(version, &data)
+    }
+}
+
+/// Counts the actions in a state. Uses the same index as
+/// [`SearchStateToAwaitedAction`], but only ever as a `count_by_index_prefix`
+/// argument, so the store returns a total and never reads the actions.
+struct CountActionsInState(&'static str);
+impl SchedulerIndexProvider for CountActionsInState {
+    const KEY_PREFIX: &'static str = OPERATION_ID_TO_AWAITED_ACTION_KEY_PREFIX;
+    const INDEX_NAME: &'static str = "state";
+    const MAYBE_SORT_KEY: Option<&'static str> = Some("sort_key");
+    type Versioned = TrueValue;
+    fn index_value(&self) -> Cow<'_, str> {
+        Cow::Borrowed(self.0)
+    }
+}
+
+const fn get_state_prefix(state: SortedAwaitedActionState) -> &'static str {
+    match state {
+        SortedAwaitedActionState::CacheCheck => "cache_check",
+        SortedAwaitedActionState::Queued => "queued",
+        SortedAwaitedActionState::Executing => "executing",
+        SortedAwaitedActionState::Completed => "completed",
+    }
+}
+
+/// Reports how many actions the store holds in each stage as
+/// `execution.active.count`.
+///
+/// The store is shared, so every scheduler replica reports the same totals:
+/// aggregate across replicas with `max`, not `sum`. Recording the change since
+/// the last pass, rather than adding and subtracting per transition, keeps the
+/// count right across restarts and for transitions another replica made.
+async fn report_active_counts<S: SchedulerStore>(
+    store: &S,
+    reported: &mut [Option<i64>; COUNTED_STATES.len()],
+) {
+    for ((state, stage), last) in COUNTED_STATES.iter().zip(reported.iter_mut()) {
+        let count = store
+            .count_by_index_prefix(CountActionsInState(get_state_prefix(*state)))
+            .await
+            .map(|count| i64::try_from(count).unwrap_or(i64::MAX));
+        match count {
+            // The first pass records even a zero, so every stage has a series
+            // and an empty queue reads as 0 rather than no data.
+            Ok(count) if *last != Some(count) => {
+                EXECUTION_METRICS.execution_active_count.add(
+                    count - last.unwrap_or(0),
+                    &[KeyValue::new(EXECUTION_STAGE, *stage)],
+                );
+                *last = Some(count);
+            }
+            Ok(_) => {}
+            Err(err) => warn!(
+                ?err,
+                ?stage,
+                "Failed to count actions for execution.active.count"
+            ),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct UpdateOperationIdToAwaitedAction(AwaitedAction);
+impl SchedulerCurrentVersionProvider for UpdateOperationIdToAwaitedAction {
+    fn current_version(&self) -> i64 {
+        self.0.version()
+    }
+}
+impl SchedulerStoreKeyProvider for UpdateOperationIdToAwaitedAction {
+    type Versioned = TrueValue;
+    fn get_key(&self) -> StoreKey<'static> {
+        OperationIdToAwaitedAction(Cow::Borrowed(self.0.operation_id())).get_key()
+    }
+}
+impl SchedulerStoreDataProvider for UpdateOperationIdToAwaitedAction {
+    fn try_into_bytes(self) -> Result<Bytes, Error> {
+        serde_json::to_string(&self.0)
+            .map(Bytes::from)
+            .map_err(|e| {
+                Error::from_std_err(Code::InvalidArgument, &e)
+                    .append("Could not convert AwaitedAction to json")
+            })
+    }
+    fn get_indexes(&self) -> Result<Vec<(&'static str, Bytes)>, Error> {
+        let unique_qualifier = &self.0.action_info().unique_qualifier;
+        let maybe_unique_qualifier = match &unique_qualifier {
+            ActionUniqueQualifier::Cacheable(_) => Some(unique_qualifier),
+            ActionUniqueQualifier::Uncacheable(_) => None,
+        };
+        let mut output = Vec::with_capacity(2 + maybe_unique_qualifier.map_or(0, |_| 1));
+        if maybe_unique_qualifier.is_some() {
+            output.push((
+                "unique_qualifier",
+                Bytes::from(unique_qualifier.to_string()),
+            ));
+        }
+        {
+            let state = SortedAwaitedActionState::try_from(&self.0.state().stage)
+                .err_tip(|| "In UpdateOperationIdToAwaitedAction::get_index")?;
+            output.push(("state", Bytes::from(get_state_prefix(state))));
+            let sorted_awaited_action = SortedAwaitedAction::from(&self.0);
+            output.push((
+                "sort_key",
+                // We encode to fixed-width hex to ensure that the sort key is
+                // lexicographically sorted.
+                Bytes::from(sorted_awaited_action.sort_key.index_field()),
+            ));
+        }
+        Ok(output)
+    }
+}
+
+struct UpdateClientIdToOperationId {
+    client_operation_id: ClientOperationId,
+    operation_id: OperationId,
+}
+impl SchedulerStoreKeyProvider for UpdateClientIdToOperationId {
+    type Versioned = FalseValue;
+    fn get_key(&self) -> StoreKey<'static> {
+        ClientIdToOperationId(&self.client_operation_id).get_key()
+    }
+}
+impl SchedulerStoreDataProvider for UpdateClientIdToOperationId {
+    fn try_into_bytes(self) -> Result<Bytes, Error> {
+        serde_json::to_string(&self.operation_id)
+            .map(Bytes::from)
+            .map_err(|e| {
+                Error::from_std_err(Code::InvalidArgument, &e)
+                    .append("Could not convert OperationId to json")
+            })
+    }
+}
+
+pub async fn inner_update_awaited_action(
+    store: &impl SchedulerStore,
+    mut new_awaited_action: AwaitedAction,
+    expiry: Option<Duration>,
+) -> Result<(), Error> {
+    let operation_id = new_awaited_action.operation_id().clone();
+    if new_awaited_action.state().client_operation_id != operation_id {
+        new_awaited_action.set_client_operation_id(operation_id.clone());
+    }
+
+    let _is_finished = new_awaited_action.state().stage.is_finished();
+
+    let maybe_version = store
+        .update_data(UpdateOperationIdToAwaitedAction(new_awaited_action), expiry)
+        .await
+        .err_tip(|| "In RedisAwaitedActionDb::update_awaited_action")?;
+
+    if maybe_version.is_none() {
+        warn!(
+            %operation_id,
+            "Could not update AwaitedAction because the version did not match"
+        );
+        return Err(make_err!(
+            Code::Aborted,
+            "Could not update AwaitedAction because the version did not match for {operation_id}",
+        ));
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, MetricsComponent)]
+pub struct StoreAwaitedActionDb<S, F, I, NowFn>
+where
+    S: SchedulerStore,
+    F: Fn() -> OperationId,
+    I: InstantWrapper,
+    NowFn: Fn() -> I,
+{
+    store: Arc<S>,
+    now_fn: NowFn,
+    operation_id_creator: F,
+    _pull_task_change_subscriber_spawn: JoinHandleDropGuard<()>,
+    _active_count_spawn: Option<JoinHandleDropGuard<()>>,
+    retain_completed_for: Duration,
+    client_keepalive_ttl: Duration,
+    worker_registry: Option<SharedWorkerRegistry>,
+}
+
+impl<S, F, I, NowFn> StoreAwaitedActionDb<S, F, I, NowFn>
+where
+    S: SchedulerStore,
+    F: Fn() -> OperationId,
+    I: InstantWrapper,
+    NowFn: Fn() -> I + Send + Sync + Clone + 'static,
+{
+    pub async fn new(
+        store: Arc<S>,
+        task_change_publisher: Arc<Notify>,
+        now_fn: NowFn,
+        operation_id_creator: F,
+        retain_completed_for_s: u32,
+        client_action_timeout_s: u64,
+        enable_active_action_count_metric: bool,
+    ) -> Result<Self, Error> {
+        let mut subscription = store
+            .subscription_manager()
+            .await
+            .err_tip(|| "In RedisAwaitedActionDb::new")?
+            .subscribe(OperationIdToAwaitedAction(Cow::Owned(OperationId::String(
+                String::new(),
+            ))))
+            .err_tip(|| "In RedisAwaitedActionDb::new")?;
+        let pull_task_change_subscriber = spawn!(
+            "redis_awaited_action_db_pull_task_change_subscriber",
+            async move {
+                loop {
+                    let changed_res = subscription
+                        .changed()
+                        .await
+                        .err_tip(|| "In RedisAwaitedActionDb::new");
+                    if let Err(err) = changed_res {
+                        error!(
+                            "Error waiting for pull task change subscriber in RedisAwaitedActionDb::new  - {err:?}"
+                        );
+                        // Sleep for a second to avoid a busy loop, then trigger the notify
+                        // so if a reconnect happens we let local resources know that things
+                        // might have changed.
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    task_change_publisher.as_ref().notify_one();
+                }
+            }
+        );
+        // Off by default: counting queries the same store that serves action
+        // scheduling, once per interval per replica, so it is opt-in rather
+        // than a cost every deployment pays for a metric it may not read.
+        let active_count_spawn = enable_active_action_count_metric.then(|| {
+            let weak_store = Arc::downgrade(&store);
+            spawn!("store_awaited_action_db_active_count", async move {
+                let mut reported = [None; COUNTED_STATES.len()];
+                loop {
+                    // Wait first, so constructing the db never queries the store.
+                    tokio::time::sleep(ACTIVE_COUNT_REFRESH_INTERVAL).await;
+                    let Some(store) = weak_store.upgrade() else {
+                        return;
+                    };
+                    report_active_counts(store.as_ref(), &mut reported).await;
+                }
+            })
+        });
+        Ok(Self {
+            store,
+            now_fn,
+            operation_id_creator,
+            _pull_task_change_subscriber_spawn: pull_task_change_subscriber,
+            _active_count_spawn: active_count_spawn,
+            retain_completed_for: Duration::from_secs(retain_completed_for_s.into()),
+            client_keepalive_ttl: Duration::from_secs(client_action_timeout_s),
+            worker_registry: None,
+        })
+    }
+
+    /// Whether an executing action looks abandoned and should be recreated
+    /// rather than joined.
+    ///
+    /// `last_worker_updated_timestamp` lives in the shared store and
+    /// heartbeats never refresh it, so on its own it goes stale on any action
+    /// outliving `worker_timeout_s` and a healthy worker looks abandoned.
+    /// Consult the registry first and only fall back to the timestamp for
+    /// workers this instance owns.
+    #[expect(clippy::future_not_send)] // TODO(jhpratt) remove this
+    async fn executing_action_is_abandoned(
+        &self,
+        awaited_action: &AwaitedAction,
+        no_event_action_timeout: Duration,
+        now: SystemTime,
+    ) -> bool {
+        if awaited_action.state().stage != ActionStage::Executing {
+            return false;
+        }
+
+        let liveness = match (&self.worker_registry, awaited_action.worker_id()) {
+            (Some(worker_registry), Some(worker_id)) => {
+                worker_registry
+                    .check_liveness(worker_id, no_event_action_timeout, now)
+                    .await
+            }
+            // No registry, or not assigned yet: timestamp only, as before.
+            _ => WorkerLiveness::Stale,
+        };
+
+        let ceiling = match liveness {
+            // Ours and heartbeating. Never recreate: that forks a second
+            // execution of work already running.
+            WorkerLiveness::Alive => return false,
+            // Ours and gone quiet.
+            WorkerLiveness::Stale => no_event_action_timeout,
+            // A peer's worker, or an orphan nobody owns.
+            WorkerLiveness::Unknown => ORPHANED_ACTION_TIMEOUT,
+        };
+
+        awaited_action
+            .last_worker_updated_timestamp()
+            .checked_add(ceiling)
+            .is_some_and(|deadline| deadline < now)
+    }
+
+    // `pub` so integration tests in `tests/` can drive this directly;
+    // matches the precedent of `inner_update_awaited_action` below.
+    #[expect(clippy::future_not_send)] // TODO(jhpratt) remove this
+    pub async fn try_subscribe(
+        &self,
+        client_operation_id: &ClientOperationId,
+        unique_qualifier: &ActionUniqueQualifier,
+        no_event_action_timeout: Duration,
+        // TODO(palfrey) To simplify the scheduler 2024 refactor, we
+        // removed the ability to upgrade priorities of actions.
+        // we should add priority upgrades back in.
+        _priority: i32,
+    ) -> Result<Option<AwaitedAction>, Error> {
+        // Retry once on miss: closes the RediSearch index-visibility
+        // window where two concurrent `add_action` calls can both see
+        // empty and create duplicate scheduler operations.
+        const SUBSCRIBE_RACE_RETRY_DELAY: Duration = Duration::from_millis(20);
+        match unique_qualifier {
+            ActionUniqueQualifier::Cacheable(_) => {}
+            ActionUniqueQualifier::Uncacheable(_) => return Ok(None),
+        }
+        let mut maybe_awaited_action: Option<AwaitedAction> = None;
+        for attempt in 0..2_u32 {
+            if attempt > 0 {
+                tokio::time::sleep(SUBSCRIBE_RACE_RETRY_DELAY).await;
+            }
+            let stream = self
+                .store
+                .search_by_index_prefix(SearchUniqueQualifierToAwaitedAction(unique_qualifier))
+                .await
+                .err_tip(|| "In RedisAwaitedActionDb::try_subscribe")?;
+            tokio::pin!(stream);
+            // This index search is by prefix. In particular, an unscoped key
+            // is a prefix of its scoped variants and must not join those jobs.
+            while let Some(candidate) = stream
+                .try_next()
+                .await
+                .err_tip(|| "In RedisAwaitedActionDb::try_subscribe")?
+            {
+                if &candidate.action_info().unique_qualifier == unique_qualifier {
+                    maybe_awaited_action = Some(candidate);
+                    break;
+                }
+            }
+            if maybe_awaited_action.is_some() {
+                break;
+            }
+        }
+        match maybe_awaited_action {
+            Some(awaited_action) => {
+                // TODO(palfrey) We don't support joining completed jobs because we
+                // need to also check that all the data is still in the cache.
+                // If the existing job failed then we need to set back to queued or we get
+                // a version mismatch.  Equally we need to check the timeout as the job
+                // may be abandoned in the store.
+                let abandoned = self
+                    .executing_action_is_abandoned(
+                        &awaited_action,
+                        no_event_action_timeout,
+                        (self.now_fn)().now(),
+                    )
+                    .await;
+                let awaited_action = if awaited_action.state().stage.is_finished() || abandoned {
+                    tracing::debug!(
+                        "Recreating action {:?} for operation {client_operation_id}",
+                        awaited_action.action_info().digest()
+                    );
+                    // The version is reset because we have a new operation ID.
+                    AwaitedAction::new(
+                        (self.operation_id_creator)(),
+                        awaited_action.action_info().clone(),
+                        (self.now_fn)().now(),
+                    )
+                } else {
+                    tracing::debug!(
+                        "Subscribing to existing action {:?} for operation {client_operation_id}",
+                        awaited_action.action_info().digest()
+                    );
+                    awaited_action
+                };
+                Ok(Some(awaited_action))
+            }
+            None => Ok(None),
+        }
+    }
+
+    #[expect(clippy::future_not_send)] // TODO(jhpratt) remove this
+    async fn inner_get_awaited_action_by_id(
+        &self,
+        client_operation_id: &ClientOperationId,
+    ) -> Result<Option<OperationSubscriber<S, I, NowFn>>, Error> {
+        let maybe_operation_id = self
+            .store
+            .get_and_decode(ClientIdToOperationId(client_operation_id))
+            .await
+            .err_tip(|| "In RedisAwaitedActionDb::get_awaited_action_by_id")?;
+        let Some(operation_id) = maybe_operation_id else {
+            return Ok(None);
+        };
+
+        // Validate that the internal operation actually exists.
+        // If it doesn't, this is an orphaned client operation mapping that should be cleaned up.
+        // This can happen when an operation is deleted (completed/timed out) but the
+        // client_id -> operation_id mapping persists in the store.
+        let maybe_awaited_action = match self
+            .store
+            .get_and_decode(OperationIdToAwaitedAction(Cow::Borrowed(&operation_id)))
+            .await
+        {
+            Ok(maybe_action) => maybe_action,
+            Err(err) if err.code == Code::NotFound => {
+                tracing::warn!(
+                    "Orphaned client operation mapping detected: client_id={} maps to operation_id={}, \
+                    but the operation does not exist in the store (NotFound). This typically happens when \
+                    an operation completes or times out but the client mapping persists.",
+                    client_operation_id,
+                    operation_id
+                );
+                None
+            }
+            Err(err) => {
+                // Some other error occurred
+                return Err(err).err_tip(
+                    || "In RedisAwaitedActionDb::get_awaited_action_by_id::validate_operation",
+                );
+            }
+        };
+
+        if maybe_awaited_action.is_none() {
+            tracing::warn!(
+                "Found orphaned client operation mapping: client_id={} -> operation_id={}, \
+                but operation no longer exists. Returning None to prevent client from polling \
+                a non-existent operation.",
+                client_operation_id,
+                operation_id
+            );
+            return Ok(None);
+        }
+
+        Ok(Some(OperationSubscriber::new(
+            Some(client_operation_id.clone()),
+            OperationIdToAwaitedAction(Cow::Owned(operation_id)),
+            Arc::downgrade(&self.store),
+            self.now_fn.clone(),
+            self.retain_completed_for,
+            self.client_keepalive_ttl,
+        )))
+    }
+}
+
+impl<S, F, I, NowFn> AwaitedActionDb for StoreAwaitedActionDb<S, F, I, NowFn>
+where
+    S: SchedulerStore,
+    F: Fn() -> OperationId + Send + Sync + Unpin + 'static,
+    I: InstantWrapper,
+    NowFn: Fn() -> I + Send + Sync + Unpin + Clone + 'static,
+{
+    type Subscriber = OperationSubscriber<S, I, NowFn>;
+
+    async fn get_awaited_action_by_id(
+        &self,
+        client_operation_id: &ClientOperationId,
+    ) -> Result<Option<Self::Subscriber>, Error> {
+        self.inner_get_awaited_action_by_id(client_operation_id)
+            .await
+    }
+
+    fn get_by_operation_id(
+        &self,
+        operation_id: &OperationId,
+    ) -> impl Future<Output = Result<Option<Self::Subscriber>, Error>> {
+        std::future::ready(Ok(Some(OperationSubscriber::new(
+            None,
+            OperationIdToAwaitedAction(Cow::Owned(operation_id.clone())),
+            Arc::downgrade(&self.store),
+            self.now_fn.clone(),
+            self.retain_completed_for,
+            self.client_keepalive_ttl,
+        ))))
+    }
+
+    async fn update_awaited_action(&self, new_awaited_action: AwaitedAction) -> Result<(), Error> {
+        let expiry = if new_awaited_action.is_complete() {
+            Some(self.retain_completed_for)
+        } else {
+            None
+        };
+        inner_update_awaited_action(self.store.as_ref(), new_awaited_action, expiry).await
+    }
+
+    async fn add_action(
+        &self,
+        client_operation_id: ClientOperationId,
+        action_info: Arc<ActionInfo>,
+        no_event_action_timeout: Duration,
+    ) -> Result<Self::Subscriber, Error> {
+        loop {
+            // Check to see if the action is already known and subscribe if it is.
+            let mut awaited_action = self
+                .try_subscribe(
+                    &client_operation_id,
+                    &action_info.unique_qualifier,
+                    no_event_action_timeout,
+                    action_info.priority,
+                )
+                .await
+                .err_tip(|| "In RedisAwaitedActionDb::add_action")?
+                .unwrap_or_else(|| {
+                    tracing::debug!(
+                        "Creating new action {:?} for operation {client_operation_id}",
+                        action_info.digest()
+                    );
+                    AwaitedAction::new(
+                        (self.operation_id_creator)(),
+                        action_info.clone(),
+                        (self.now_fn)().now(),
+                    )
+                });
+
+            debug_assert!(
+                !awaited_action.state().stage.is_finished(),
+                "Expected a queued or executing action; completed actions must be recreated"
+            );
+
+            let operation_id = awaited_action.operation_id().clone();
+            if awaited_action.state().client_operation_id != operation_id {
+                // Just in case the client_operation_id was set to something else
+                // we put it back to the underlying operation_id.
+                awaited_action.set_client_operation_id(operation_id.clone());
+            }
+            awaited_action.update_client_keep_alive((self.now_fn)().now());
+
+            let version = awaited_action.version();
+            let expiry = if awaited_action.is_complete() {
+                Some(self.retain_completed_for)
+            } else {
+                None
+            };
+            if self
+                .store
+                .update_data(UpdateOperationIdToAwaitedAction(awaited_action), expiry)
+                .await
+                .err_tip(|| "In RedisAwaitedActionDb::add_action")?
+                .is_none()
+            {
+                // The version was out of date, try again.
+                tracing::info!(
+                    "Version out of date for {:?} {operation_id} {version}, retrying.",
+                    action_info.digest()
+                );
+                continue;
+            }
+
+            // Bound the cid_* mapping's lifetime (see CLIENT_ID_MAPPING_TTL).
+            self.store
+                .update_data(
+                    UpdateClientIdToOperationId {
+                        client_operation_id: client_operation_id.clone(),
+                        operation_id: operation_id.clone(),
+                    },
+                    Some(CLIENT_ID_MAPPING_TTL),
+                )
+                .await
+                .err_tip(|| "In RedisAwaitedActionDb::add_action while adding client mapping")?;
+
+            return Ok(OperationSubscriber::new(
+                Some(client_operation_id),
+                OperationIdToAwaitedAction(Cow::Owned(operation_id)),
+                Arc::downgrade(&self.store),
+                self.now_fn.clone(),
+                self.retain_completed_for,
+                self.client_keepalive_ttl,
+            ));
+        }
+    }
+
+    fn set_worker_registry(&mut self, worker_registry: SharedWorkerRegistry) {
+        self.worker_registry = Some(worker_registry);
+    }
+
+    async fn exchange_fleet_capabilities(
+        &self,
+        scheduler_id: &str,
+        local: Vec<PlatformProperties>,
+        ttl: Duration,
+    ) -> Result<Vec<PlatformProperties>, Error> {
+        self.store
+            .update_data(
+                UpdateFleetCapabilities(FleetCapabilities {
+                    scheduler_id: scheduler_id.to_string(),
+                    workers: local,
+                }),
+                Some(ttl),
+            )
+            .await
+            .err_tip(|| "In StoreAwaitedActionDb::exchange_fleet_capabilities publish")?;
+
+        let stream = self
+            .store
+            .search_by_index_prefix(SearchFleetCapabilities)
+            .await
+            .err_tip(|| "In StoreAwaitedActionDb::exchange_fleet_capabilities search")?;
+        // Records that have expired on peers that stopped publishing are
+        // gone from the search already, so everything found here is live.
+        stream
+            .try_filter(|record| futures::future::ready(record.scheduler_id != scheduler_id))
+            .try_fold(Vec::new(), |mut peers, record| async move {
+                peers.extend(record.workers);
+                Ok(peers)
+            })
+            .await
+            .err_tip(|| "In StoreAwaitedActionDb::exchange_fleet_capabilities collect")
+    }
+
+    fn shares_state(&self) -> bool {
+        true
+    }
+
+    async fn get_range_of_actions(
+        &self,
+        state: SortedAwaitedActionState,
+        start: Bound<SortedAwaitedAction>,
+        end: Bound<SortedAwaitedAction>,
+        desc: bool,
+    ) -> Result<impl Stream<Item = Result<Self::Subscriber, Error>> + Send, Error> {
+        if !matches!(start, Bound::Unbounded) {
+            return Err(make_err!(
+                Code::Unimplemented,
+                "Start bound is not supported in RedisAwaitedActionDb::get_range_of_actions",
+            ));
+        }
+        if !matches!(end, Bound::Unbounded) {
+            return Err(make_err!(
+                Code::Unimplemented,
+                "End bound is not supported in RedisAwaitedActionDb::get_range_of_actions",
+            ));
+        }
+        // The index is read in one direction, fixed by
+        // `SearchStateToAwaitedAction::SORT_DESCENDING`, and every caller
+        // asks for that direction. Ascending has no caller, so it is not
+        // implemented rather than silently served backwards.
+        if !desc {
+            return Err(make_err!(
+                Code::Unimplemented,
+                "Ascending order is not supported in RedisAwaitedActionDb::get_range_of_actions",
+            ));
+        }
+        Ok(self
+            .store
+            .search_by_index_prefix(SearchStateToAwaitedAction(get_state_prefix(state)))
+            .await
+            .err_tip(|| "In RedisAwaitedActionDb::get_range_of_actions")?
+            .map_ok(move |awaited_action| {
+                OperationSubscriber::new(
+                    None,
+                    OperationIdToAwaitedAction(Cow::Owned(awaited_action.operation_id().clone())),
+                    Arc::downgrade(&self.store),
+                    self.now_fn.clone(),
+                    self.retain_completed_for,
+                    self.client_keepalive_ttl,
+                )
+                .listed(awaited_action)
+            }))
+    }
+
+    async fn get_all_awaited_actions(
+        &self,
+    ) -> Result<impl Stream<Item = Result<Self::Subscriber, Error>>, Error> {
+        Ok(self
+            .store
+            .search_by_index_prefix(SearchStateToAwaitedAction(""))
+            .await
+            .err_tip(|| "In RedisAwaitedActionDb::get_range_of_actions")?
+            .map_ok(move |awaited_action| {
+                OperationSubscriber::new(
+                    None,
+                    OperationIdToAwaitedAction(Cow::Owned(awaited_action.operation_id().clone())),
+                    Arc::downgrade(&self.store),
+                    self.now_fn.clone(),
+                    self.retain_completed_for,
+                    self.client_keepalive_ttl,
+                )
+                .listed(awaited_action)
+            }))
+    }
+}

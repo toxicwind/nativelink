@@ -7,7 +7,7 @@ description: An empty file to a running cache-and-execution cluster, one block a
 
 **Who this is for:** anyone who has read the rest of this section and wants to
 prove it by writing a config from nothing. **What you'll have at the end:** a
-single-process NativeLink serving a cache and executing actions, from a file
+single-process Forge serving a cache and executing actions, from a file
 you wrote yourself and can explain line by line. **Time:** about an hour.
 
 <Prerequisites>
@@ -21,18 +21,18 @@ feedback is immediate. The same blocks split across machines unchanged; see
 
 ## Before you start [#before-you-start]
 
-You need the `nativelink` binary and a writable directory. This walkthrough
-uses `/tmp/nativelink`; if you use somewhere else, keep the **content path and
+You need the `forge` binary and a writable directory. This walkthrough
+uses `/tmp/forge`; if you use somewhere else, keep the **content path and
 the work directory on the same filesystem**, because the worker hard-links
 between them.
 
 ```sh
-mkdir -p /tmp/nativelink/data /tmp/nativelink/work
+mkdir -p /tmp/forge/data /tmp/forge/work
 ```
 
 ## Step 1: Two stores and a listener [#step-1--two-stores-and-a-listener]
 
-Start a file called `my-config.json5`. The smallest useful NativeLink is a
+Start a file called `my-config.json5`. The smallest useful Forge is a
 cache: two stores and one server.
 
 ```json5
@@ -41,16 +41,16 @@ cache: two stores and one server.
     {
       name: "CAS_MAIN_STORE",
       filesystem: {
-        content_path: "/tmp/nativelink/data/content_path-cas",
-        temp_path: "/tmp/nativelink/data/tmp_path-cas",
+        content_path: "/tmp/forge/data/content_path-cas",
+        temp_path: "/tmp/forge/data/tmp_path-cas",
         eviction_policy: { max_bytes: 10000000000 }, // 10 GB
       },
     },
     {
       name: "AC_MAIN_STORE",
       filesystem: {
-        content_path: "/tmp/nativelink/data/content_path-ac",
-        temp_path: "/tmp/nativelink/data/tmp_path-ac",
+        content_path: "/tmp/forge/data/content_path-ac",
+        temp_path: "/tmp/forge/data/tmp_path-ac",
         eviction_policy: { max_bytes: 500000000 }, // 500 MB
       },
     },
@@ -79,13 +79,13 @@ cache: two stores and one server.
 Run it:
 
 ```sh
-nativelink ./my-config.json5
+forge ./my-config.json5
 ```
 
 <VerifyBlock title="Step 1 is right if">
 
 - The process starts and logs `Ready, listening on 0.0.0.0:50051`.
-- `/tmp/nativelink/data/` now contains a content and a temp directory for
+- `/tmp/forge/data/` now contains a content and a temp directory for
   each store (plus a `content_path-*.exec` sibling on Unix), all empty apart
   from their `s/` and `d/` subdirectories.
 - Deliberately misspelling `eviction_policy` and re-running makes it exit
@@ -218,8 +218,8 @@ A worker needs a `fast_slow` store with a filesystem fast tier. Replace
   fast_slow: {
     fast: {
       filesystem: {
-        content_path: "/tmp/nativelink/data/content_path-cas",
-        temp_path: "/tmp/nativelink/data/tmp_path-cas",
+        content_path: "/tmp/forge/data/content_path-cas",
+        temp_path: "/tmp/forge/data/tmp_path-cas",
         eviction_policy: { max_bytes: 10000000000 },
       },
     },
@@ -245,7 +245,7 @@ workers: [
       },
       cas_fast_slow_store: "CAS_MAIN_STORE",
       upload_action_result: { ac_store: "AC_MAIN_STORE" },
-      work_directory: "/tmp/nativelink/work",
+      work_directory: "/tmp/forge/work",
       platform_properties: {
         cpu_count: { query_cmd: "nproc" },
         OSFamily: { values: ["linux"] },
@@ -265,9 +265,9 @@ Restart.
 
 - The logs show `Worker registered with scheduler` with the worker id it was
   assigned.
-- `content_path-cas` and `/tmp/nativelink/work` are on the same filesystem:
-  `df /tmp/nativelink/data /tmp/nativelink/work` reports the same device.
-- `/tmp/nativelink/work` is empty; the worker purges it on startup.
+- `content_path-cas` and `/tmp/forge/work` are on the same filesystem:
+  `df /tmp/forge/data /tmp/forge/work` reports the same device.
+- `/tmp/forge/work` is empty; the worker purges it on startup.
 
 </VerifyBlock>
 
@@ -310,8 +310,8 @@ here.
       fast_slow: {
         fast: {
           filesystem: {
-            content_path: "/tmp/nativelink/data/content_path-cas",
-            temp_path: "/tmp/nativelink/data/tmp_path-cas",
+            content_path: "/tmp/forge/data/content_path-cas",
+            temp_path: "/tmp/forge/data/tmp_path-cas",
             eviction_policy: { max_bytes: 10000000000 },
           },
         },
@@ -321,8 +321,8 @@ here.
     {
       name: "AC_MAIN_STORE",
       filesystem: {
-        content_path: "/tmp/nativelink/data/content_path-ac",
-        temp_path: "/tmp/nativelink/data/tmp_path-ac",
+        content_path: "/tmp/forge/data/content_path-ac",
+        temp_path: "/tmp/forge/data/tmp_path-ac",
         eviction_policy: { max_bytes: 500000000 },
       },
     },
@@ -348,7 +348,7 @@ here.
         },
         cas_fast_slow_store: "CAS_MAIN_STORE",
         upload_action_result: { ac_store: "AC_MAIN_STORE" },
-        work_directory: "/tmp/nativelink/work",
+        work_directory: "/tmp/forge/work",
         platform_properties: {
           cpu_count: { query_cmd: "nproc" },
           OSFamily: { values: ["linux"] },
@@ -397,7 +397,7 @@ here.
 
 </Accordions>
 
-Compare it with `nativelink-config/examples/basic_cas.json5` in the source
+Compare it with `forge-config/examples/basic_cas.json5` in the source
 tree. The differences are instructive: the shipped example registers every
 service twice, under `instance_name: ""` and `"main"`, so clients that omit
 the instance name also work, and it declares nineteen platform properties

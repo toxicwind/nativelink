@@ -22,7 +22,7 @@ invokes isn't in that description, the action is a lie: it works on your
 machine because your machine happens to have the compiler, and it fails on a
 worker that doesn't.
 
-This is not a NativeLink behaviour. It is what remote execution *is*: the
+This is not a Forge behaviour. It is what remote execution *is*: the
 protocol will faithfully reproduce whatever you described, and no more.
 Caching lets you get away with an under-described action because the only
 machine that ever ran it was yours. Execution doesn't.
@@ -58,8 +58,8 @@ Three toolchain families, and they do not behave the same way once you leave
 | Family | Bazel target prefix | Platforms with a native config |
 | --- | --- | --- |
 | Rust | `@local-remote-execution//rust/...` | `aarch64-darwin`, `aarch64-linux`, `x86_64-darwin`, `x86_64-linux` |
-| C++ | `@local-remote-execution//generated-cc/...` | `x86_64-linux` only (container `nativelink-worker-lre-cc`) |
-| Java | `@local-remote-execution//generated-java/...` | `x86_64-linux` only (container `nativelink-worker-lre-java`) |
+| C++ | `@local-remote-execution//generated-cc/...` | `x86_64-linux` only (container `forge-worker-lre-cc`) |
+| Java | `@local-remote-execution//generated-java/...` | `x86_64-linux` only (container `forge-worker-lre-java`) |
 
 <SourceLink file="local-remote-execution/README.md" />
 <SourceLink file="local-remote-execution/flake-module.nix" />
@@ -104,10 +104,10 @@ hashes match across machines. No non-Nix version of this mechanism exists.
 
 ```bash
 mkdir my-lre-test && cd my-lre-test
-nix flake init -t github:TraceMachina/nativelink#bazel
+nix flake init -t github:toxicwind/forge#bazel
 ```
 
-This writes a `flake.nix` importing `nativelink.flakeModules.lre` and
+This writes a `flake.nix` importing `forge.flakeModules.lre` and
 pinning `lre = { inherit (pkgs.lre.lre-cc.meta) Env; }`, plus a
 `hello-world.cpp` example, its `BUILD.bazel`, and `platforms/BUILD.bazel`.
 
@@ -225,7 +225,7 @@ remote-cache` means Bazel had already committed to executing remotely.
 bazel build hello-world
 ```
 
-With a real endpoint and a worker running the `nativelink-worker-lre-cc`
+With a real endpoint and a worker running the `forge-worker-lre-cc`
 image, this compiles `src/hello-world.cpp` on that worker and returns the
 binary through the same CAS your local Bazel reads from. Run it again and
 it's a cache hit.
@@ -249,7 +249,7 @@ it's a cache hit.
 
 <Callout type="info" title="No container-capable worker handy?">
   You can still validate the cache half.
-  [Local testing](/remote-execution/local-testing) starts a NativeLink
+  [Local testing](/remote-execution/local-testing) starts a Forge
   instance on `localhost`, which is enough to exercise `--remote_cache`
   against real credentials before you also need a worker matching
   `lre-cc`'s platform requirements.
@@ -285,7 +285,7 @@ of this page, and for many teams it's enough. What you don't get is matching
 action digests between a developer's laptop and the fleet, because the
 laptop isn't running that image. Nix pinning is what closes that gap.
 
-Note this is a client-side requirement only. The NativeLink server, the
+Note this is a client-side requirement only. The Forge server, the
 scheduler, and the workers run fine with no Nix anywhere.
 </Accordion>
 

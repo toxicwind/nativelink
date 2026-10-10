@@ -2,11 +2,11 @@
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
-  name: nativelink
+  name: forge
   namespace: default
 spec:
   interval: 2m
-  path: PLACEHOLDER_NATIVELINK_KUSTOMIZATION
+  path: PLACEHOLDER_FORGE_KUSTOMIZATION
   prune: true
   force: true
   retryInterval: 20s
@@ -14,9 +14,9 @@ spec:
   wait: true
   sourceRef:
     kind: GitRepository
-    name: nativelink
+    name: forge
     namespace: default
   postBuild:
     substituteFrom:
       - kind: ConfigMap
-        name: nativelink-image-tags
+        name: forge-image-tags

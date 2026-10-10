@@ -14,7 +14,7 @@ honest account of what moving it costs.
   The production shape running (see [Production configuration](/operate/production-config)), and a number you don't like.
 </Prerequisites>
 
-Tuning NativeLink is not a matter of turning up every dial. A small number of
+Tuning Forge is not a matter of turning up every dial. A small number of
 levers move real workloads; most of the config surface does not. Each row below
 starts from **a signal you can actually observe** (a metric, an error, a
 complaint), because starting from a knob and hoping is how afternoons disappear.
@@ -40,7 +40,7 @@ complaint), because starting from a knob and hoping is how afternoons disappear.
 | Worker disk filling with blobs it only reads | `fast_direction: "get"` | Set it | Local tier caches inputs without being written through on upload | Outputs are not locally cached; they go straight to the CAS |
 | Page cache growth on a co-located filesystem-only deployment | `evict_page_cache` | **Almost always leave off** | Kernel drops this store's pages after each read and write | Severe on many-core hosts; see below |
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="StoreSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="StoreSpec" />
 
 ### The `evict_page_cache` lever [#the-evict_page_cache-lever]
 
@@ -56,8 +56,8 @@ enabling it carries two costs.
 stores: [{
   name: "CAS_MAIN_STORE",
   filesystem: {
-    content_path: "/var/lib/nativelink/content_path-cas",
-    temp_path: "/var/lib/nativelink/tmp_path-cas",
+    content_path: "/var/lib/forge/content_path-cas",
+    temp_path: "/var/lib/forge/tmp_path-cas",
     // Leave this off unless the narrow case below applies.
     evict_page_cache: false,
   },
@@ -89,7 +89,7 @@ dominant OOM driver is a worker's anonymous memory (action processes and
 allocator retention), so this flag is a narrow mitigation, not a general OOM fix.
 Do **not** enable it on many-core hosts or object-store / multi-CAS deployments.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="FilesystemSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="FilesystemSpec" />
 
 ## Workers [#workers]
 
@@ -102,10 +102,10 @@ Do **not** enable it on many-core hosts or object-store / multi-CAS deployments.
 | `work_directory` filling or slow | `work_directory` | Move to fast local disk, size for the largest action | Faster staging on every action | Never put it on network storage; it is the hot path of every action |
 | Actions never dispatched to the right hardware | worker `platform_properties` | Add the property | The scheduler can route on it | The scheduler must list it too, or it rejects the worker's registration with `Unknown platform property`; see below |
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
 
 Worker count itself is not a lever on this page; it is a
-[scaling](/operate) decision driven by `nativelink:queue_depth`, not by
+[scaling](/operate) decision driven by `forge:queue_depth`, not by
 worker CPU.
 
 ## Scheduler [#scheduler]
@@ -118,7 +118,7 @@ worker CPU.
 | Actions stuck in `executing` on a wedged worker | `max_action_executing_timeout_s` | Set it (default `0` = disabled) | Wedged actions are reclaimed | Too low and long legitimate actions get killed mid-flight |
 | Clients giving up before the scheduler does | `client_action_timeout_s` | Align with client timeouts | Scheduler and client agree on how long is too long | Default is 60 seconds |
 
-<SourceLink file="nativelink-config/src/schedulers.rs" symbol="SimpleSpec" />
+<SourceLink file="forge-config/src/schedulers.rs" symbol="SimpleSpec" />
 
 ## Process-level [#process-level]
 
@@ -129,15 +129,15 @@ worker CPU.
 | Redis commands timing out | `command_timeout_ms` / `connection_timeout_ms` on `redis_store` | Up from 10000 / 3000 | Fewer spurious failures on a loaded Redis | Slower failure detection. Use these, not the deprecated `response_timeout_s` / `connection_timeout_s` |
 | High-latency links between clients and CAS | `advanced_http` HTTP/2 window and stream settings | Up | Better throughput on fat, long pipes | These are hyper's knobs and mostly should be left alone; the reference config sets them only under a `TODO` |
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="GlobalConfig" />
-<SourceLink file="nativelink-config/src/stores.rs" symbol="RedisSpec" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="GlobalConfig" />
+<SourceLink file="forge-config/src/stores.rs" symbol="RedisSpec" />
 
 ## What is not a lever [#what-is-not-a-lever]
 
 Worth stating, because each of these gets reached for and none of them helps:
 
 **Worker CPU utilization as a scaling signal.** A worker waiting on the CAS looks
-idle. Scale on `nativelink:queue_depth` instead.
+idle. Scale on `forge:queue_depth` instead.
 
 **Adding parallelism to work around `evict_page_cache`.** It cannot work; see the
 callout above.

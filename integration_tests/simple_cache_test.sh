@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 The NativeLink Authors. All rights reserved.
+# Copyright 2022 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,12 +22,12 @@ fi
 
 # This test uploads a locally-run test result to the cache and asserts the
 # re-run is a cache hit, so it needs --remote_upload_local_results=true.
-# nativelink.bazelrc sets that false repo-wide to stop PR/developer lanes from
+# forge.bazelrc sets that false repo-wide to stop PR/developer lanes from
 # writing to the *shared* cache (cache-poisoning guard). Uploads here target
 # only the ephemeral, per-run docker-compose cache, so they are safe -- but to
 # keep the anti-poisoning default intact this test runs only where local
 # uploads are explicitly enabled: merges to main and the scheduled canary set
-# NL_LOCAL_UPLOADS=1 (see main.yaml / nativelink-cloud-canary.yaml).
+# NL_LOCAL_UPLOADS=1 (see main.yaml / forge-cloud-canary.yaml).
 if [[ ${NL_LOCAL_UPLOADS:-0} != "1" ]]; then
     echo "Skipping $(basename "$0"): requires local cache uploads (main/canary lanes only)."
     exit 0

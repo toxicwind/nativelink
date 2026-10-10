@@ -1,4 +1,4 @@
-import { Logo } from "@nativelink/ui";
+import { Logo } from "@forge/ui";
 import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
 export const baseOptions: BaseLayoutProps = {
@@ -11,5 +11,5 @@ export const baseOptions: BaseLayoutProps = {
   // (/product, /pricing, /resources) clutter a docs-focused nav.
   links: [
   ],
-  githubUrl: "https://github.com/TraceMachina/nativelink",
+  githubUrl: "https://github.com/toxicwind/forge",
 };

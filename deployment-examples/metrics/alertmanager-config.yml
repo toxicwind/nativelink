@@ -1,4 +1,4 @@
-# Alertmanager configuration for NativeLink metrics
+# Alertmanager configuration for Forge metrics
 global:
   # The smarthost and SMTP sender used for mail notifications.
   # smtp_smarthost: 'localhost:25'

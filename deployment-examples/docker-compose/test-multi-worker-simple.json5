@@ -4,8 +4,8 @@
     {
       name: "CAS_FS",
       filesystem: {
-        content_path: "/tmp/nativelink-multi-test/cas/content",
-        temp_path: "/tmp/nativelink-multi-test/cas/temp",
+        content_path: "/tmp/forge-multi-test/cas/content",
+        temp_path: "/tmp/forge-multi-test/cas/temp",
         eviction_policy: {
           max_bytes: 10000000000,
         },
@@ -16,8 +16,8 @@
       fast_slow: {
         fast: {
           filesystem: {
-            content_path: "/tmp/nativelink-multi-test/cas/content",
-            temp_path: "/tmp/nativelink-multi-test/cas/temp",
+            content_path: "/tmp/forge-multi-test/cas/content",
+            temp_path: "/tmp/forge-multi-test/cas/temp",
             eviction_policy: {
               max_bytes: 1000000000,
             },
@@ -25,8 +25,8 @@
         },
         slow: {
           filesystem: {
-            content_path: "/tmp/nativelink-multi-test/cas/content",
-            temp_path: "/tmp/nativelink-multi-test/cas/temp",
+            content_path: "/tmp/forge-multi-test/cas/content",
+            temp_path: "/tmp/forge-multi-test/cas/temp",
             eviction_policy: {
               max_bytes: 10000000000,
             },
@@ -37,8 +37,8 @@
     {
       name: "AC",
       filesystem: {
-        content_path: "/tmp/nativelink-multi-test/ac/content",
-        temp_path: "/tmp/nativelink-multi-test/ac/temp",
+        content_path: "/tmp/forge-multi-test/ac/content",
+        temp_path: "/tmp/forge-multi-test/ac/temp",
         eviction_policy: {
           max_bytes: 1000000000,
         },
@@ -66,7 +66,7 @@
         upload_action_result: {
           ac_store: "AC",
         },
-        work_directory: "/tmp/nativelink-multi-test/worker1/work",
+        work_directory: "/tmp/forge-multi-test/worker1/work",
         platform_properties: {
           cpu_count: {
             values: [
@@ -86,7 +86,7 @@
         upload_action_result: {
           ac_store: "AC",
         },
-        work_directory: "/tmp/nativelink-multi-test/worker2/work",
+        work_directory: "/tmp/forge-multi-test/worker2/work",
         platform_properties: {
           cpu_count: {
             values: [
@@ -106,7 +106,7 @@
         upload_action_result: {
           ac_store: "AC",
         },
-        work_directory: "/tmp/nativelink-multi-test/worker3/work",
+        work_directory: "/tmp/forge-multi-test/worker3/work",
         platform_properties: {
           cpu_count: {
             values: [

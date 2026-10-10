@@ -1,13 +1,13 @@
 ---
 title: Configuration
-description: The config model on one page, so you can read and write a NativeLink config instead of copying one.
+description: The config model on one page, so you can read and write a Forge config instead of copying one.
 ---
 
 {/* archetype: explanation (waypoint), see /web/apps/docs/templates/explanation.mdx */}
 
 **Who this is for:** anyone running a cluster they got working by copying an
 example, who now needs to change it. **What you'll have at the end of this
-section:** the ability to read any NativeLink config and write one from an
+section:** the ability to read any Forge config and write one from an
 empty file. **Time:** an afternoon, most of it on the capstone.
 
 <Prerequisites>
@@ -16,7 +16,7 @@ empty file. **Time:** an afternoon, most of it on the capstone.
 
 ## One file, six keys [#one-file-six-keys]
 
-A NativeLink deployment of any shape (one process on a laptop, a sharded
+A Forge deployment of any shape (one process on a laptop, a sharded
 fleet across three regions) is described by a single JSON5 file. It has
 exactly six top-level keys, and only two of them are required.
 
@@ -29,11 +29,11 @@ exactly six top-level keys, and only two of them are required.
 | `global` | no | object | Process-wide settings: file limits, default digest function |
 | `experimental_origin_events` | no | object | Event publishing, still experimental |
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CasConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CasConfig" />
 
 `schedulers` and `workers` are optional because a cache-only deployment has
 neither. That's Getting started: a config with just `stores` and `servers` is a
-complete, valid NativeLink cache.
+complete, valid Forge cache.
 
 ## How a request traverses them [#how-a-request-traverses-them]
 
@@ -143,7 +143,7 @@ want is the shape a real fleet runs, rather than the model behind it.
   wrong before it takes a cluster down with it.
 </NextStep>
 
-<NextStep href="/reference/nativelink-config" kind="aside" title="Configuration reference">
+<NextStep href="/reference/forge-config" kind="aside" title="Configuration reference">
   Generated from the Rust source: every field, every default, every
   constraint. This section is for understanding; that one is for lookups.
 </NextStep>

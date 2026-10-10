@@ -1,6 +1,6 @@
 ---
 title: Scaling workers
-description: How much work one worker should take, how many workers you need, which signal tells you, and how to let something else make the decision, including the parts NativeLink does not enforce for you.
+description: How much work one worker should take, how many workers you need, which signal tells you, and how to let something else make the decision, including the parts Forge does not enforce for you.
 ---
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
@@ -19,10 +19,10 @@ you're building the autoscaling path.
 worker to several. This page is about the questions that come next: how much
 work each one should take, how many you need, and who decides.
 
-## Two axes, and only one of them is a NativeLink knob [#two-axes-and-only-one-of-them-is-a-nativelink-knob]
+## Two axes, and only one of them is a Forge knob [#two-axes-and-only-one-of-them-is-a-forge-knob]
 
 Capacity has a vertical axis (how many actions one worker runs at once) and a
-horizontal axis (how many workers exist). NativeLink has a field for the first.
+horizontal axis (how many workers exist). Forge has a field for the first.
 It has nothing at all for the second, by design: a worker is a process that
 dials the scheduler and announces itself, so "more workers" means "start more
 processes," and whatever starts processes for you is the thing that scales.
@@ -43,7 +43,7 @@ workers: [{
 }],
 ```
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
 
 Three things about it are not what most people assume, and each has bitten
 somebody.
@@ -62,7 +62,7 @@ is invisible. It matters if you ever run two schedulers against one worker, or
 if you're reasoning about what protects the host: the answer is the scheduler's
 bookkeeping, and nothing else.
 
-<SourceLink file="nativelink-scheduler/src/worker.rs" symbol="Worker" />
+<SourceLink file="forge-scheduler/src/worker.rs" symbol="Worker" />
 
 **`cpu_count` does not limit anything on the worker.** This is the one that
 surprises people most. The `cpu_count` platform property, usually populated
@@ -91,13 +91,13 @@ host sits at half its CPU with a deep queue, you're undersubscribed.
 A worker sized generously runs into limits that are not on the worker config,
 and they're worth knowing before you go hunting.
 
-**File descriptors.** NativeLink holds a process-wide semaphore over open files,
+**File descriptors.** Forge holds a process-wide semaphore over open files,
 defaulting to **24,576**. Every action materializing inputs and writing outputs
 draws from it. Raise it with `max_open_files` under `global` (the shipped
 Kubernetes worker config sets 524,288) and raise the OS limit to match, or the
 semaphore will let through more than the kernel allows.
 
-<SourceLink file="nativelink-util/src/fs.rs" symbol="DEFAULT_OPEN_FILE_LIMIT" />
+<SourceLink file="forge-util/src/fs.rs" symbol="DEFAULT_OPEN_FILE_LIMIT" />
 
 **gRPC connections to the CAS.** The `grpc` store's `connections_per_endpoint`
 defaults to **1**. One HTTP/2 connection multiplexes streams well up to a point
@@ -110,7 +110,7 @@ for when a worker's CPU is idle and its actions are slow.
 sit between the worker and its bytes. A worker that scales up without these
 scaling with it just queues internally.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="StoreSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="StoreSpec" />
 
 **One `work_directory` per worker process, always.** The worker **purges its
 work directory on startup**. Two workers pointed at the same path means the
@@ -124,20 +124,20 @@ whether there is work waiting that nobody is doing, and that's the only question
 an autoscaler needs answered.
 
 The signal is **queue depth**: actions in the `queued` stage rather than
-`executing`. NativeLink emits `execution.active.count` as an up-down counter
+`executing`. Forge emits `execution.active.count` as an up-down counter
 attributed by `execution.stage`, which reaches Prometheus as
-`nativelink_execution_active_count` after the OTLP collector's Prometheus
-exporter adds its `nativelink` namespace.
+`forge_execution_active_count` after the OTLP collector's Prometheus
+exporter adds its `forge` namespace.
 
-<SourceLink file="nativelink-util/src/metrics.rs" symbol="EXECUTION_METRICS" />
+<SourceLink file="forge-util/src/metrics.rs" symbol="EXECUTION_METRICS" />
 
 The shipped recording rule is:
 
 ```yaml
-- record: nativelink:queue_depth
+- record: forge:queue_depth
   expr: |
     sum by (instance_name, execution_priority) (
-      nativelink_execution_active_count{execution_stage="queued"}
+      forge_execution_active_count{execution_stage="queued"}
     )
 ```
 
@@ -154,10 +154,10 @@ terrible autoscaling trigger. An HPA wants a window in the tens of seconds. Use
 the alert for paging and a much shorter window for scaling.
 
 **The repository disagrees with itself about worker utilization.**
-`nativelink:worker_utilization` is defined one way in
+`forge:worker_utilization` is defined one way in
 `deployment-examples/metrics/prometheus-recording-rules.yml` and differently in
 the inline rules inside `prometheus-config.yaml`, and the Kubernetes alert uses
-a third expression. `nativelink:actions_per_worker` is also misnamed; it
+a third expression. `forge:actions_per_worker` is also misnamed; it
 records a per-worker sum, not an average. Scale on queue depth, which is
 unambiguous, and treat the utilization series as a dashboard aid rather than a
 control input.
@@ -184,7 +184,7 @@ vertical one, and nothing you measure will be stable.
 
 <li>
 
-**Get `nativelink:queue_depth` onto a dashboard** and watch it through a normal
+**Get `forge:queue_depth` onto a dashboard** and watch it through a normal
 day. You are looking for its shape: how deep it goes at peak, how long it stays
 there, and how quickly it drains. That shape is what sizing decisions are made
 against.
@@ -213,7 +213,7 @@ the thresholds an autoscaler needs.
 <li>
 
 **Then automate that rule.** On Kubernetes, an HPA on the external metric backed
-by `nativelink:queue_depth`, plus a cluster autoscaler or Karpenter underneath
+by `forge:queue_depth`, plus a cluster autoscaler or Karpenter underneath
 so pods have somewhere to land. Elsewhere, whatever your platform's equivalent
 is. The rule you validated by hand becomes the policy.
 [The reference deployment](/operate/autoscaling-reference) is that assembled end
@@ -263,7 +263,7 @@ priority and its platform properties, reservations included. A worker's id
 starts with the name it registered under, which on Kubernetes is the pod
 name, so a drain script can find the ids to drain from the pod.
 
-<SourceLink file="src/bin/nativelink.rs" symbol="set_drain_worker" />
+<SourceLink file="src/bin/forge.rs" symbol="set_drain_worker" />
 
 </li>
 
@@ -306,9 +306,9 @@ and `lre-rs` overlays patch it to 1. The `siso-chromium` overlay does not patch
 it, so it inherits 3, which looks unintentional.
 
 **No HorizontalPodAutoscaler, KEDA `ScaledObject`, or VPA exists anywhere in
-the repository for NativeLink.** The single HPA in the tree scales the
+the repository for Forge.** The single HPA in the tree scales the
 OpenTelemetry collector. No heterogeneous-pool example exists in
-`nativelink-config/examples/` either; every shipped worker example is a single
+`forge-config/examples/` either; every shipped worker example is a single
 homogeneous pool. The autoscaling path on this page is one you assemble from
 standard Kubernetes parts; the recording rules are the raw material, not a
 finished artifact.
@@ -324,8 +324,8 @@ one of them completes. An idle worker whose script fails is never paused: it
 keeps its registration and is handed the action again on the next
 matching pass, and rejects it again.
 
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="preconditions_met" />
-<SourceLink file="nativelink-scheduler/src/api_worker_scheduler.rs" symbol="update_action" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="preconditions_met" />
+<SourceLink file="forge-scheduler/src/api_worker_scheduler.rs" symbol="update_action" />
 
 This is the hook for host-level conditions the scheduler cannot see: disk
 filling, a shared license pool exhausted, a GPU in a bad state. It costs a
@@ -338,7 +338,7 @@ One scheduler can route to pools of different shapes; the mechanism is platform
 properties, and it is covered in full on
 [platform properties](/remote-execution/platform-properties). The scaling point
 is narrower: **each pool is a separate scaling unit with its own queue-depth
-series**, because `nativelink:queue_depth` groups by instance and priority, not
+series**, because `forge:queue_depth` groups by instance and priority, not
 by which pool could serve the work.
 
 If you scale a mixed fleet on one aggregate number, a backlog of GPU actions
@@ -390,7 +390,7 @@ heartbeats, so a worker busy reporting results could still be evicted.
 
 A configured `0` is read as unset and falls back to the default of **3**. The
 field cannot express "never retry" through that field. If an action must not be
-retried, that has to be handled above NativeLink.
+retried, that has to be handled above Forge.
 
 </Accordion>
 

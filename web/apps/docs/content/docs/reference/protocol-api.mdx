@@ -1,6 +1,6 @@
 ---
 title: Protocol and API surface
-description: Every gRPC service NativeLink serves, which RPCs are implemented, and the values it advertises.
+description: Every gRPC service Forge serves, which RPCs are implemented, and the values it advertises.
 ---
 
 {/* archetype: reference. See /web/apps/docs/templates/reference.mdx */}
@@ -10,12 +10,12 @@ whether a given REAPI feature is available. **What you'll have at the end:**
 the complete service list with implementation status. **Time:** use as a
 lookup.
 
-NativeLink implements the [Remote Execution API](https://github.com/bazelbuild/remote-apis)
+Forge implements the [Remote Execution API](https://github.com/bazelbuild/remote-apis)
 plus the adjacent protocols it depends on (ByteStream, long-running
 Operations, Remote Asset and the Build Event Protocol), and defines exactly
-one service of its own. Every vendored `.proto` under `nativelink-proto/` is
+one service of its own. Every vendored `.proto` under `forge-proto/` is
 copied from upstream with only its licence header replaced; there are no
-NativeLink-specific fields or extensions on the standard messages.
+Forge-specific fields or extensions on the standard messages.
 
 ## Services [#services]
 
@@ -30,7 +30,7 @@ NativeLink-specific fields or extensions on the standard messages.
 | Remote Asset `Fetch` | Remote Asset v1 | Implemented |
 | Remote Asset `Push` | Remote Asset v1 | Implemented |
 | `PublishBuildEvent` | Build Event Protocol | Implemented, marked experimental |
-| `WorkerApi` | **NativeLink** | Implemented |
+| `WorkerApi` | **Forge** | Implemented |
 
 Each is registered only if the configuration asks for it. Registration order
 at startup is fixed: action cache, CAS, execution, `Operations`, fetch, push,
@@ -43,10 +43,10 @@ ByteStream, capabilities, worker API, BEP.
   not need a gRPC client.
 </Callout>
 
-## `WorkerApi`: the only NativeLink-defined service [#worker-api]
+## `WorkerApi`: the only Forge-defined service [#worker-api]
 
 Defined in
-<SourceLink file="nativelink-proto/com/github/trace_machina/nativelink/remote_execution/worker_api.proto" />.
+<SourceLink file="forge-proto/com/github/trace_machina/forge/remote_execution/worker_api.proto" />.
 It has **exactly one RPC**:
 
 ```proto
@@ -78,13 +78,13 @@ get it here. Actions are instead reaped by timeout; see
 which kills an action nobody is listening to.
 
 <Callout type="info" title="SplitBlob and SpliceBlob are upstream RPCs">
-  Both appear in NativeLink's vendored CAS proto and are sometimes mistaken
-  for NativeLink inventions. They are part of the upstream REAPI definition
-  (content-defined chunking), vendored along with everything else. NativeLink
+  Both appear in Forge's vendored CAS proto and are sometimes mistaken
+  for Forge inventions. They are part of the upstream REAPI definition
+  (content-defined chunking), vendored along with everything else. Forge
   serves them only for CAS instances that configure `experimental_chunking`
   (or proxy to a `grpc` store that does); elsewhere the capabilities response
   reports them unsupported and the RPCs return `Unimplemented`.
-  <SourceLink file="nativelink-service/src/cas_server.rs" symbol="split_blob" />
+  <SourceLink file="forge-service/src/cas_server.rs" symbol="split_blob" />
 </Callout>
 
 ## What `Capabilities` advertises [#what-capabilities-advertises]
@@ -101,7 +101,7 @@ which kills an action nobody is listening to.
 | `split_blob_support`, `splice_blob_support`, `fast_cdc_2020_params` | set when the instance's `cas` entry configures `experimental_chunking`; otherwise `false`/unset |
 | `execution_capabilities` | present only when the instance's `capabilities` entry has `remote_execution`; then `exec_enabled` is `true` and the priority range is 0 to `i32::MAX` |
 
-<SourceLink file="nativelink-service/src/capabilities_server.rs" symbol="get_capabilities" />
+<SourceLink file="forge-service/src/capabilities_server.rs" symbol="get_capabilities" />
 
 Two of these need a caveat.
 
@@ -124,7 +124,7 @@ the advertised limit send anything larger through ByteStream.
 `{instance_name}/blobs/{hash}/{size}`, and the instance name may itself
 contain slashes, so left-to-right parsing cannot find the boundary, while
 right-to-left can, because the trailing components are fixed. See
-<SourceLink file="nativelink-util/src/resource_info.rs" symbol="ResourceInfo" />.
+<SourceLink file="forge-util/src/resource_info.rs" symbol="ResourceInfo" />.
 
 **`GetTree` page tokens are `"{hash}-{size}"`**, constructed and parsed by
 splitting on `-`. They are neither opaque nor signed. The protocol asks
@@ -135,7 +135,7 @@ format changes.
 does not walk the full input tree, and a blob can be evicted between the
 check and the worker's fetch. It exists to turn the common "inputs were never
 uploaded" mistake into a fast error, not to provide a guarantee. See
-<SourceLink file="nativelink-service/src/execution_server.rs" symbol="ExecutionServer" />.
+<SourceLink file="forge-service/src/execution_server.rs" symbol="ExecutionServer" />.
 
 **`ActionStage::CacheCheck` is never emitted.** The cache lookup happens in a
 decorator in front of the scheduler, so the state is skipped entirely. A
@@ -157,5 +157,5 @@ fill it.
   between `Execute` and a worker
 - [Worker execution](/explanations/worker-execution): the `WorkerApi` stream
   from the worker's side
-- [Configuration reference](/reference/nativelink-config): which services a
+- [Configuration reference](/reference/forge-config): which services a
   given config enables

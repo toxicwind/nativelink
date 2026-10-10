@@ -1,0 +1,8840 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#![recursion_limit = "256"]
+
+use serial_test::serial;
+
+#[serial]
+mod tests {
+    #[cfg(target_family = "unix")]
+    use core::pin::Pin;
+    use core::str::from_utf8;
+    use core::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
+    #[cfg(target_family = "unix")]
+    use core::task::Poll;
+    use core::time::Duration;
+    use std::collections::HashMap;
+    use std::env;
+    use std::ffi::OsString;
+    use std::io::{Cursor, Write};
+    #[cfg(target_family = "unix")]
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    use std::path::{Path, PathBuf};
+    use std::sync::{Arc, LazyLock, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(target_family = "unix")]
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use futures::prelude::*;
+    use forge_config::cas_server::{
+        DiskEnforcement, EnvironmentSource, MemoryEnforcement, ResourceEnforcementConfig,
+        UploadActionResultConfig, UploadCacheResultsStrategy,
+    };
+    use forge_config::stores::{
+        EvictionPolicy, FastSlowSpec, FilesystemSpec, MemorySpec, StoreDirection, StoreSpec,
+    };
+    use forge_error::{Code, Error, ResultExt, make_input_err};
+    use forge_macro::forge_test;
+    #[cfg(target_family = "unix")]
+    use forge_metric::{
+        MetricFieldData, MetricKind, MetricPublishKnownKindData, MetricsComponent,
+    };
+    use forge_proto::build::bazel::remote::execution::v2::command::EnvironmentVariable;
+    #[cfg_attr(target_family = "windows", allow(unused_imports))]
+    use forge_proto::build::bazel::remote::execution::v2::{
+        Action, ActionResult as ProtoActionResult, Command, Directory, DirectoryNode,
+        ExecuteRequest, ExecuteResponse, FileNode, NodeProperties, Platform, SymlinkNode, Tree,
+        digest_function::Value as ProtoDigestFunction, platform::Property,
+    };
+    use forge_proto::com::github::trace_machina::forge::remote_execution::{
+        HistoricalExecuteResponse, ResourceOutcome, StartExecute,
+    };
+    use forge_proto::google::rpc::Status;
+    #[cfg(target_family = "unix")]
+    use forge_store::ac_utils::compute_buf_digest;
+    use forge_store::ac_utils::{get_and_decode_digest, serialize_and_upload_message};
+    use forge_store::fast_slow_store::FastSlowStore;
+    use forge_store::filesystem_store::FilesystemStore;
+    use forge_store::memory_store::MemoryStore;
+    #[cfg(target_family = "unix")]
+    use forge_util::action_messages::DirectoryInfo;
+    #[cfg_attr(target_family = "windows", allow(unused_imports))]
+    use forge_util::action_messages::SymlinkInfo;
+    use forge_util::action_messages::{
+        ActionResult, ExecutionMetadata, FileInfo, NameOrPath, OperationId,
+    };
+    #[cfg(target_family = "unix")]
+    use forge_util::buf_channel::{DropCloserReadHalf, DropCloserWriteHalf};
+    use forge_util::common::{DigestInfo, fs, make_temp_path};
+    use forge_util::digest_hasher::{DigestHasher, DigestHasherFunc};
+    #[cfg(target_family = "unix")]
+    use forge_util::health_utils::{HealthStatusIndicator, default_health_status_indicator};
+    #[cfg(target_family = "unix")]
+    use forge_util::store_trait::{RemoveItemCallback, StoreDriver, UploadSizeInfo};
+    use forge_util::store_trait::{Store, StoreKey, StoreLike};
+    use forge_worker::directory_cache::{DirectoryCache, DirectoryCacheConfig};
+    #[cfg(target_os = "linux")]
+    use forge_worker::namespace_utils;
+    #[cfg(target_os = "linux")]
+    use forge_worker::running_actions_manager::MemoryLimit;
+    #[cfg(target_family = "unix")]
+    use forge_worker::running_actions_manager::free_disk_kb;
+    use forge_worker::running_actions_manager::{
+        Callbacks, ExecutionConfiguration, KillReason, PersistentWorkersSettings,
+        ResourceEnforcement, RunningAction, RunningActionImpl, RunningActionsManager,
+        RunningActionsManagerArgs, RunningActionsManagerImpl, classify_outcome,
+        download_to_directory, log_excerpt, parse_kb_field,
+    };
+    use pretty_assertions::assert_eq;
+    use prost::Message;
+    use tokio::sync::oneshot;
+    #[cfg(target_family = "unix")]
+    use tokio::sync::watch;
+    use tracing::info;
+
+    const DEFAULT_MAX_UPLOAD_TIMEOUT: u64 = 600;
+    const DEFAULT_MAX_DOWNLOAD_TIMEOUT: u64 = 600;
+    const DEFAULT_MAX_CLEANUP_WAIT: u64 = 30;
+    const DEFAULT_MAX_CLEANUP_BACKOFF: u64 = 500;
+
+    #[cfg(target_os = "linux")]
+    fn use_namespaces() -> forge_worker::running_actions_manager::UseNamespaces {
+        // Keep the host's /tmp visible here: several tests stage wrappers and
+        // payloads under the temp dir, which is /tmp outside of Bazel. The
+        // private /tmp has its own dedicated test below.
+        if namespace_utils::namespaces_supported(true, false) {
+            forge_worker::running_actions_manager::UseNamespaces::YesAndMount {
+                isolate_tmp: false,
+            }
+        } else if namespace_utils::namespaces_supported(false, false) {
+            forge_worker::running_actions_manager::UseNamespaces::Yes
+        } else {
+            forge_worker::running_actions_manager::UseNamespaces::No
+        }
+    }
+
+    async fn setup_stores() -> Result<
+        (
+            Arc<FilesystemStore>,
+            Arc<MemoryStore>,
+            Arc<FastSlowStore>,
+            Arc<MemoryStore>,
+        ),
+        Error,
+    > {
+        setup_stores_with_eviction_policy(None).await
+    }
+
+    async fn setup_stores_with_eviction_policy(
+        eviction_policy: Option<EvictionPolicy>,
+    ) -> Result<
+        (
+            Arc<FilesystemStore>,
+            Arc<MemoryStore>,
+            Arc<FastSlowStore>,
+            Arc<MemoryStore>,
+        ),
+        Error,
+    > {
+        let fast_config = FilesystemSpec {
+            content_path: make_temp_path("content_path"),
+            temp_path: make_temp_path("temp_path"),
+            eviction_policy,
+            ..Default::default()
+        };
+        let slow_config = MemorySpec::default();
+        let fast_store = FilesystemStore::new(&fast_config).await?;
+        let slow_store = MemoryStore::new(&slow_config);
+        let ac_store = MemoryStore::new(&slow_config);
+        let cas_store = FastSlowStore::new(
+            &FastSlowSpec {
+                fast: StoreSpec::Filesystem(fast_config),
+                slow: StoreSpec::Memory(slow_config),
+                fast_direction: StoreDirection::default(),
+                slow_direction: StoreDirection::default(),
+                bypass_dedup_threshold_bytes: 0,
+            },
+            Store::new(fast_store.clone()),
+            Store::new(slow_store.clone()),
+        );
+        Ok((fast_store, slow_store, cas_store, ac_store))
+    }
+
+    async fn run_action(action: Arc<RunningActionImpl>) -> Result<ActionResult, Error> {
+        action
+            .clone()
+            .prepare_action()
+            .and_then(RunningAction::execute)
+            .and_then(RunningAction::upload_results)
+            .and_then(RunningAction::get_finished_result)
+            .then(|result| async move {
+                action.cleanup().await?;
+                result
+            })
+            .await
+    }
+
+    const NOW_TIME: u64 = 10000;
+
+    fn make_system_time(add_time: u64) -> SystemTime {
+        UNIX_EPOCH
+            .checked_add(Duration::from_secs(NOW_TIME + add_time))
+            .unwrap()
+    }
+
+    fn monotonic_clock(counter: &AtomicU64) -> SystemTime {
+        let count = counter.fetch_add(1, Ordering::Relaxed);
+        make_system_time(count)
+    }
+
+    fn increment_clock(time: &mut SystemTime) -> SystemTime {
+        let previous_time = *time;
+        *time = previous_time.checked_add(Duration::from_secs(1)).unwrap();
+        previous_time
+    }
+
+    #[forge_test]
+    async fn download_to_directory_file_download_test() -> Result<(), Box<dyn core::error::Error>> {
+        const FILE1_NAME: &str = "file1.txt";
+        const FILE1_CONTENT: &str = "HELLOFILE1";
+        const FILE2_NAME: &str = "file2.exec";
+        const FILE2_CONTENT: &str = "HELLOFILE2";
+        const FILE2_MODE: u32 = 0o710;
+        const FILE2_MTIME: u64 = 5;
+
+        let (fast_store, slow_store, cas_store, _ac_store) = setup_stores().await?;
+
+        let root_directory_digest = {
+            // Make and insert (into store) our digest info needed to create our directory & files.
+            let file1_content_digest = DigestInfo::new([2u8; 32], 32);
+            slow_store
+                .as_ref()
+                .update_oneshot(file1_content_digest, FILE1_CONTENT.into())
+                .await?;
+            let file2_content_digest = DigestInfo::new([3u8; 32], 32);
+            slow_store
+                .as_ref()
+                .update_oneshot(file2_content_digest, FILE2_CONTENT.into())
+                .await?;
+
+            let root_directory_digest = DigestInfo::new([1u8; 32], 32);
+            let root_directory = Directory {
+                files: vec![
+                    FileNode {
+                        name: FILE1_NAME.to_string(),
+                        digest: Some(file1_content_digest.into()),
+                        is_executable: false,
+                        node_properties: None,
+                    },
+                    FileNode {
+                        name: FILE2_NAME.to_string(),
+                        digest: Some(file2_content_digest.into()),
+                        is_executable: true,
+                        node_properties: Some(NodeProperties {
+                            properties: vec![],
+                            mtime: Some(
+                                SystemTime::UNIX_EPOCH
+                                    .checked_add(Duration::from_secs(FILE2_MTIME))
+                                    .unwrap()
+                                    .into(),
+                            ),
+                            unix_mode: Some(FILE2_MODE),
+                        }),
+                    },
+                ],
+                ..Default::default()
+            };
+
+            slow_store
+                .as_ref()
+                .update_oneshot(root_directory_digest, root_directory.encode_to_vec().into())
+                .await?;
+            root_directory_digest
+        };
+
+        let download_dir = {
+            // Tell it to download the digest info to a directory.
+            let download_dir = make_temp_path("download_dir");
+            fs::create_dir_all(&download_dir)
+                .await
+                .err_tip(|| format!("Could not make download_dir : {download_dir}"))?;
+            download_to_directory(
+                cas_store.as_ref(),
+                fast_store.as_pin(),
+                &root_directory_digest,
+                &download_dir,
+            )
+            .await?;
+            download_dir
+        };
+        {
+            // Now ensure that our download_dir has the files.
+            let file1_content = fs::read(format!("{download_dir}/{FILE1_NAME}")).await?;
+            assert_eq!(from_utf8(&file1_content)?, FILE1_CONTENT);
+
+            let file2_path = format!("{download_dir}/{FILE2_NAME}");
+            let file2_content = fs::read(&file2_path).await?;
+            assert_eq!(from_utf8(&file2_content)?, FILE2_CONTENT);
+
+            let file2_metadata = fs::metadata(&file2_path).await?;
+            // Note: We sent 0o710, but because is_executable was set it turns into 0o711.
+            #[cfg(target_family = "unix")]
+            assert_eq!(file2_metadata.mode() & 0o777, FILE2_MODE | 0o111);
+            assert_eq!(
+                file2_metadata
+                    .modified()?
+                    .duration_since(SystemTime::UNIX_EPOCH)?
+                    .as_secs(),
+                FILE2_MTIME
+            );
+        }
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn active_action_input_lease_survives_fast_store_pressure()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const FILE_CONTENT: &[u8] = b"leased input";
+        const PRESSURE_CONTENT: &[u8] = b"pressure";
+
+        let (fast_store, slow_store, cas_store, _ac_store) =
+            setup_stores_with_eviction_policy(Some(EvictionPolicy {
+                max_count: 1,
+                ..Default::default()
+            }))
+            .await?;
+
+        let file_digest = DigestInfo::new([7u8; 32], FILE_CONTENT.len() as u64);
+        slow_store
+            .as_ref()
+            .update_oneshot(file_digest, FILE_CONTENT.into())
+            .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory {
+                files: vec![FileNode {
+                    name: "input.txt".to_string(),
+                    digest: Some(file_digest.into()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            slow_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let command_digest = serialize_and_upload_message(
+            &Command::default(),
+            slow_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action_digest = serialize_and_upload_message(
+            &Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            },
+            slow_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let operation_id = OperationId::default().to_string();
+
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let directory_cache = Arc::new(
+            DirectoryCache::new(
+                DirectoryCacheConfig {
+                    cache_root: make_temp_path("directory_cache").into(),
+                    ..Default::default()
+                },
+                cas_store.clone(),
+            )
+            .await?,
+        );
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::from_mins(10),
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: true,
+                directory_cache: Some(directory_cache),
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action = running_actions_manager
+            .create_and_add_action(
+                "test-worker".to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: operation_id.clone(),
+                    ..Default::default()
+                },
+            )
+            .await?
+            .prepare_action()
+            .await?;
+
+        let pressure_digest = DigestInfo::new([8u8; 32], PRESSURE_CONTENT.len() as u64);
+        fast_store
+            .as_ref()
+            .update_oneshot(pressure_digest, PRESSURE_CONTENT.into())
+            .await?;
+        assert!(
+            fast_store
+                .as_ref()
+                .has(StoreKey::Digest(file_digest))
+                .await?
+                .is_some(),
+            "an active action input must survive fast-tier pressure",
+        );
+
+        let duplicate_result = running_actions_manager
+            .create_and_add_action(
+                "test-worker".to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id,
+                    ..Default::default()
+                },
+            )
+            .await;
+        let duplicate_error =
+            duplicate_result.expect_err("a duplicate operation id must be rejected");
+        assert_eq!(duplicate_error.code, Code::AlreadyExists);
+        assert!(
+            fs::metadata(action.get_work_directory()).await.is_ok(),
+            "a duplicate operation must not remove the active action directory",
+        );
+
+        let action = action.cleanup().await?;
+        let second_pressure_digest = DigestInfo::new([9u8; 32], PRESSURE_CONTENT.len() as u64);
+        fast_store
+            .as_ref()
+            .update_oneshot(second_pressure_digest, PRESSURE_CONTENT.into())
+            .await?;
+        assert_eq!(
+            fast_store
+                .as_ref()
+                .has(StoreKey::Digest(file_digest))
+                .await?,
+            None,
+            "released action inputs must become ordinary eviction candidates",
+        );
+
+        drop(action);
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn action_inputs_stay_evictable_when_leases_disabled()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const FILE_CONTENT: &[u8] = b"unleased input";
+        const PRESSURE_CONTENT: &[u8] = b"pressure";
+        // High enough that action preparation never triggers eviction; the
+        // pressure loop below inserts this many fresh digests so every entry
+        // that predates it is evicted.
+        const MAX_COUNT: u64 = 10;
+
+        let (fast_store, slow_store, cas_store, _ac_store) =
+            setup_stores_with_eviction_policy(Some(EvictionPolicy {
+                max_count: MAX_COUNT,
+                ..Default::default()
+            }))
+            .await?;
+
+        let file_digest = DigestInfo::new([7u8; 32], FILE_CONTENT.len() as u64);
+        slow_store
+            .as_ref()
+            .update_oneshot(file_digest, FILE_CONTENT.into())
+            .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory {
+                files: vec![FileNode {
+                    name: "input.txt".to_string(),
+                    digest: Some(file_digest.into()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            slow_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let command_digest = serialize_and_upload_message(
+            &Command::default(),
+            slow_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action_digest = serialize_and_upload_message(
+            &Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            },
+            slow_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let directory_cache = Arc::new(
+            DirectoryCache::new(
+                DirectoryCacheConfig {
+                    cache_root: make_temp_path("directory_cache").into(),
+                    ..Default::default()
+                },
+                cas_store.clone(),
+            )
+            .await?,
+        );
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::from_mins(10),
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: Some(directory_cache),
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action = running_actions_manager
+            .create_and_add_action(
+                "test-worker".to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    ..Default::default()
+                },
+            )
+            .await?
+            .prepare_action()
+            .await?;
+
+        for pressure_index in 0..MAX_COUNT {
+            let pressure_digest = DigestInfo::new(
+                [0x80 + u8::try_from(pressure_index)?; 32],
+                PRESSURE_CONTENT.len() as u64,
+            );
+            fast_store
+                .as_ref()
+                .update_oneshot(pressure_digest, PRESSURE_CONTENT.into())
+                .await?;
+        }
+        assert_eq!(
+            fast_store
+                .as_ref()
+                .has(StoreKey::Digest(file_digest))
+                .await?,
+            None,
+            "with active input leases disabled, the fast tier must honor its eviction limits even while an action is running",
+        );
+
+        let action = action.cleanup().await?;
+        drop(action);
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn download_to_directory_folder_download_test() -> Result<(), Box<dyn core::error::Error>>
+    {
+        const DIRECTORY1_NAME: &str = "folder1";
+        const FILE1_NAME: &str = "file1.txt";
+        const FILE1_CONTENT: &str = "HELLOFILE1";
+        const DIRECTORY2_NAME: &str = "folder2";
+
+        let (fast_store, slow_store, cas_store, _ac_store) = setup_stores().await?;
+
+        let root_directory_digest = {
+            // Make and insert (into store) our digest info needed to create our directory & files.
+            let directory1_digest = DigestInfo::new([1u8; 32], 32);
+            {
+                let file1_content_digest = DigestInfo::new([2u8; 32], 32);
+                slow_store
+                    .as_ref()
+                    .update_oneshot(file1_content_digest, FILE1_CONTENT.into())
+                    .await?;
+                let directory1 = Directory {
+                    files: vec![FileNode {
+                        name: FILE1_NAME.to_string(),
+                        digest: Some(file1_content_digest.into()),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                };
+                slow_store
+                    .as_ref()
+                    .update_oneshot(directory1_digest, directory1.encode_to_vec().into())
+                    .await?;
+            }
+            let directory2_digest = DigestInfo::new([3u8; 32], 32);
+            {
+                // Now upload an empty directory.
+                slow_store
+                    .as_ref()
+                    .update_oneshot(
+                        directory2_digest,
+                        Directory::default().encode_to_vec().into(),
+                    )
+                    .await?;
+            }
+            let root_directory_digest = DigestInfo::new([5u8; 32], 32);
+            {
+                let root_directory = Directory {
+                    directories: vec![
+                        DirectoryNode {
+                            name: DIRECTORY1_NAME.to_string(),
+                            digest: Some(directory1_digest.into()),
+                        },
+                        DirectoryNode {
+                            name: DIRECTORY2_NAME.to_string(),
+                            digest: Some(directory2_digest.into()),
+                        },
+                    ],
+                    ..Default::default()
+                };
+                slow_store
+                    .as_ref()
+                    .update_oneshot(root_directory_digest, root_directory.encode_to_vec().into())
+                    .await?;
+            }
+            root_directory_digest
+        };
+
+        let download_dir = {
+            // Tell it to download the digest info to a directory.
+            let download_dir = make_temp_path("download_dir");
+            fs::create_dir_all(&download_dir)
+                .await
+                .err_tip(|| format!("Could not make download_dir : {download_dir}"))?;
+            download_to_directory(
+                cas_store.as_ref(),
+                fast_store.as_pin(),
+                &root_directory_digest,
+                &download_dir,
+            )
+            .await?;
+            download_dir
+        };
+        {
+            // Now ensure that our download_dir has the files.
+            let file1_content = fs::read(format!("{download_dir}/{DIRECTORY1_NAME}/{FILE1_NAME}"))
+                .await
+                .err_tip(|| "On file_1 read")?;
+            assert_eq!(from_utf8(&file1_content)?, FILE1_CONTENT);
+
+            let folder2_path = format!("{download_dir}/{DIRECTORY2_NAME}");
+            let folder2_metadata = fs::metadata(&folder2_path)
+                .await
+                .err_tip(|| "On folder2_metadata metadata")?;
+            assert_eq!(folder2_metadata.is_dir(), true);
+        }
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn download_to_directory_zero_digest_empty_file_test()
+    -> Result<(), Box<dyn core::error::Error>> {
+        // Regression test: zero-digest files used to fall through a
+        // synthetic FileEntry path that pointed at a non-existent content
+        // path on disk. The worker's prefetched-hardlink path silently
+        // failed to materialise the empty file. Verify that an empty file
+        // declared as part of an input directory now lands on disk at the
+        // expected location with zero bytes — exercising the
+        // FilesystemStore + running_actions_manager output-materialisation
+        // path. Complements PR #2338's DirectoryCache zero-byte test
+        // which covers a different code path (the input directory cache
+        // short-circuit).
+        const EMPTY_FILE_NAME: &str = "empty.txt";
+        const SECOND_EMPTY_FILE_NAME: &str = "also_empty.log";
+        const NESTED_EMPTY_FILE_NAME: &str = "nested_empty";
+        const NESTED_DIR_NAME: &str = "subdir";
+        const NON_EMPTY_FILE_NAME: &str = "non_empty.txt";
+        const NON_EMPTY_CONTENT: &str = "non-empty";
+
+        let (fast_store, slow_store, cas_store, _ac_store) = setup_stores().await?;
+
+        // SHA-256 of empty content.
+        let zero_digest = DigestInfo::try_new(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            0,
+        )?;
+        let non_empty_digest = DigestInfo::new([7u8; 32], NON_EMPTY_CONTENT.len() as u64);
+        slow_store
+            .as_ref()
+            .update_oneshot(non_empty_digest, NON_EMPTY_CONTENT.into())
+            .await?;
+
+        // A nested subdirectory containing yet another zero-digest file —
+        // confirms the recursive download path also takes the empty-file
+        // branch (i.e. NotFound from get_file_entry_for_digest is handled
+        // by every caller, not just the root). The cas_store is a
+        // FastSlowStore, so the subdir Directory proto must live in slow.
+        let nested_dir_digest = DigestInfo::new([9u8; 32], 96);
+        let nested_dir = Directory {
+            files: vec![FileNode {
+                name: NESTED_EMPTY_FILE_NAME.to_string(),
+                digest: Some(zero_digest.into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        slow_store
+            .as_ref()
+            .update_oneshot(nested_dir_digest, nested_dir.encode_to_vec().into())
+            .await?;
+
+        let root_directory_digest = DigestInfo::new([8u8; 32], 64);
+        let root_directory = Directory {
+            files: vec![
+                FileNode {
+                    name: EMPTY_FILE_NAME.to_string(),
+                    digest: Some(zero_digest.into()),
+                    ..Default::default()
+                },
+                // Second zero-digest at the same level — proves the path
+                // is not single-use / not dependent on any one filename.
+                FileNode {
+                    name: SECOND_EMPTY_FILE_NAME.to_string(),
+                    digest: Some(zero_digest.into()),
+                    ..Default::default()
+                },
+                FileNode {
+                    name: NON_EMPTY_FILE_NAME.to_string(),
+                    digest: Some(non_empty_digest.into()),
+                    ..Default::default()
+                },
+            ],
+            directories: vec![DirectoryNode {
+                name: NESTED_DIR_NAME.to_string(),
+                digest: Some(nested_dir_digest.into()),
+            }],
+            ..Default::default()
+        };
+        slow_store
+            .as_ref()
+            .update_oneshot(root_directory_digest, root_directory.encode_to_vec().into())
+            .await?;
+
+        let download_dir = make_temp_path("download_dir");
+        fs::create_dir_all(&download_dir).await?;
+        // The whole download succeeding is itself the strongest assertion
+        // that NotFound from get_file_entry_for_digest is HANDLED by the
+        // download_to_directory caller — if NotFound propagated it would
+        // surface as an Err here.
+        download_to_directory(
+            cas_store.as_ref(),
+            fast_store.as_pin(),
+            &root_directory_digest,
+            &download_dir,
+        )
+        .await?;
+
+        // All three zero-digest files must exist on disk as regular files
+        // with exactly zero bytes — strict assertions so a silent
+        // regression (missing file, wrong type, non-zero length) is
+        // impossible.
+        for relative in [
+            EMPTY_FILE_NAME.to_string(),
+            SECOND_EMPTY_FILE_NAME.to_string(),
+            format!("{NESTED_DIR_NAME}/{NESTED_EMPTY_FILE_NAME}"),
+        ] {
+            let path = format!("{download_dir}/{relative}");
+            let meta = fs::metadata(&path)
+                .await
+                .err_tip(|| format!("Expected zero-digest file to be materialised at {path}"))?;
+            assert!(meta.is_file(), "{path} must be a regular file");
+            assert!(!meta.is_symlink(), "{path} must not be a symlink");
+            assert_eq!(meta.len(), 0, "{path} must be exactly zero bytes");
+            // Read back to confirm it is actually readable (not a phantom
+            // dirent) and truly empty.
+            let bytes = fs::read(&path).await?;
+            assert_eq!(bytes, Vec::<u8>::new(), "{path} must read back as empty");
+        }
+
+        // Sanity-check the non-zero-digest path still works.
+        let non_empty_path = format!("{download_dir}/{NON_EMPTY_FILE_NAME}");
+        let non_empty_bytes = fs::read(&non_empty_path).await?;
+        assert_eq!(from_utf8(&non_empty_bytes)?, NON_EMPTY_CONTENT);
+        Ok(())
+    }
+
+    // Windows does not support symlinks.
+    #[cfg(not(target_family = "windows"))]
+    #[forge_test]
+    async fn download_to_directory_symlink_download_test() -> Result<(), Box<dyn core::error::Error>>
+    {
+        const FILE_NAME: &str = "file.txt";
+        const FILE_CONTENT: &str = "HELLOFILE";
+        const SYMLINK_NAME: &str = "symlink_file.txt";
+        const SYMLINK_TARGET: &str = "file.txt";
+
+        let (fast_store, slow_store, cas_store, _ac_store) = setup_stores().await?;
+
+        let root_directory_digest = {
+            // Make and insert (into store) our digest info needed to create our directory & files.
+            let file_content_digest = DigestInfo::new([1u8; 32], 32);
+            slow_store
+                .as_ref()
+                .update_oneshot(file_content_digest, FILE_CONTENT.into())
+                .await?;
+
+            let root_directory_digest = DigestInfo::new([2u8; 32], 32);
+            let root_directory = Directory {
+                files: vec![FileNode {
+                    name: FILE_NAME.to_string(),
+                    digest: Some(file_content_digest.into()),
+                    is_executable: false,
+                    node_properties: None,
+                }],
+                symlinks: vec![SymlinkNode {
+                    name: SYMLINK_NAME.to_string(),
+                    target: SYMLINK_TARGET.to_string(),
+                    node_properties: None,
+                }],
+                ..Default::default()
+            };
+
+            slow_store
+                .as_ref()
+                .update_oneshot(root_directory_digest, root_directory.encode_to_vec().into())
+                .await?;
+            root_directory_digest
+        };
+
+        let download_dir = {
+            // Tell it to download the digest info to a directory.
+            let download_dir = make_temp_path("download_dir");
+            fs::create_dir_all(&download_dir)
+                .await
+                .err_tip(|| format!("Could not make download_dir : {download_dir}"))?;
+            download_to_directory(
+                cas_store.as_ref(),
+                fast_store.as_pin(),
+                &root_directory_digest,
+                &download_dir,
+            )
+            .await?;
+            download_dir
+        };
+        {
+            // Now ensure that our download_dir has the files.
+            let symlink_path = format!("{download_dir}/{SYMLINK_NAME}");
+            let symlink_content = fs::read(&symlink_path)
+                .await
+                .err_tip(|| "On symlink read")?;
+            assert_eq!(from_utf8(&symlink_content)?, FILE_CONTENT);
+
+            let symlink_metadata = fs::symlink_metadata(&symlink_path)
+                .await
+                .err_tip(|| "On symlink symlink_metadata")?;
+            assert_eq!(symlink_metadata.is_symlink(), true);
+        }
+        Ok(())
+    }
+
+    /// Staging runs as separate passes over the whole tree — collect, create
+    /// directories, materialize the individual nodes, then link the rest — so
+    /// every node kind has to survive being handled out of order with respect
+    /// to the walk that found it.
+    ///
+    /// A tree with one node kind per directory would pass even if the passes
+    /// ran in the wrong order, so this nests them several levels deep and mixes
+    /// the kinds: a plain file, an executable (which resolves through the 0o555
+    /// variant rather than the shared blob), a zero-digest file, a file with
+    /// metadata to stamp (which needs a private inode), and a symlink. The
+    /// deepest leaves are what catch a missing directory, since nothing else
+    /// creates their parents.
+    #[forge_test]
+    async fn download_to_directory_deep_mixed_tree_test() -> Result<(), Box<dyn core::error::Error>>
+    {
+        const PLAIN_CONTENT: &str = "plain";
+        const EXEC_CONTENT: &str = "exec";
+        const STAMPED_CONTENT: &str = "stamped";
+        const STAMPED_MODE: u32 = 0o640;
+        const STAMPED_MTIME: u64 = 42;
+
+        let (fast_store, slow_store, cas_store, _ac_store) = setup_stores().await?;
+
+        let plain_digest = DigestInfo::new([21u8; 32], PLAIN_CONTENT.len() as u64);
+        slow_store
+            .as_ref()
+            .update_oneshot(plain_digest, PLAIN_CONTENT.into())
+            .await?;
+        let exec_digest = DigestInfo::new([22u8; 32], EXEC_CONTENT.len() as u64);
+        slow_store
+            .as_ref()
+            .update_oneshot(exec_digest, EXEC_CONTENT.into())
+            .await?;
+        let stamped_digest = DigestInfo::new([23u8; 32], STAMPED_CONTENT.len() as u64);
+        slow_store
+            .as_ref()
+            .update_oneshot(stamped_digest, STAMPED_CONTENT.into())
+            .await?;
+        // SHA-256 of empty content.
+        let zero_digest = DigestInfo::try_new(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            0,
+        )?;
+
+        // The deepest level, holding every node kind that is not a plain
+        // hardlink, three directories below the root.
+        let leaf_digest = DigestInfo::new([24u8; 32], 128);
+        let leaf = Directory {
+            files: vec![
+                FileNode {
+                    name: "exec.sh".to_string(),
+                    digest: Some(exec_digest.into()),
+                    is_executable: true,
+                    node_properties: None,
+                },
+                FileNode {
+                    name: "zero.txt".to_string(),
+                    digest: Some(zero_digest.into()),
+                    ..Default::default()
+                },
+                FileNode {
+                    name: "stamped.txt".to_string(),
+                    digest: Some(stamped_digest.into()),
+                    is_executable: false,
+                    node_properties: Some(NodeProperties {
+                        properties: vec![],
+                        mtime: Some(
+                            SystemTime::UNIX_EPOCH
+                                .checked_add(Duration::from_secs(STAMPED_MTIME))
+                                .unwrap()
+                                .into(),
+                        ),
+                        unix_mode: Some(STAMPED_MODE),
+                    }),
+                },
+            ],
+            symlinks: vec![SymlinkNode {
+                name: "link".to_string(),
+                target: "exec.sh".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        slow_store
+            .as_ref()
+            .update_oneshot(leaf_digest, leaf.encode_to_vec().into())
+            .await?;
+
+        let middle_digest = DigestInfo::new([25u8; 32], 96);
+        let middle = Directory {
+            directories: vec![DirectoryNode {
+                name: "leaf".to_string(),
+                digest: Some(leaf_digest.into()),
+            }],
+            files: vec![FileNode {
+                name: "middle.txt".to_string(),
+                digest: Some(plain_digest.into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        slow_store
+            .as_ref()
+            .update_oneshot(middle_digest, middle.encode_to_vec().into())
+            .await?;
+
+        // A sibling of `middle`, so the batch creates directories that are not
+        // on a single root-to-leaf path.
+        let sibling_digest = DigestInfo::new([26u8; 32], 64);
+        let sibling = Directory {
+            files: vec![FileNode {
+                name: "sibling.txt".to_string(),
+                digest: Some(plain_digest.into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        slow_store
+            .as_ref()
+            .update_oneshot(sibling_digest, sibling.encode_to_vec().into())
+            .await?;
+
+        let root_digest = DigestInfo::new([27u8; 32], 128);
+        let root = Directory {
+            directories: vec![
+                DirectoryNode {
+                    name: "middle".to_string(),
+                    digest: Some(middle_digest.into()),
+                },
+                DirectoryNode {
+                    name: "sibling".to_string(),
+                    digest: Some(sibling_digest.into()),
+                },
+            ],
+            files: vec![FileNode {
+                name: "root.txt".to_string(),
+                digest: Some(plain_digest.into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        slow_store
+            .as_ref()
+            .update_oneshot(root_digest, root.encode_to_vec().into())
+            .await?;
+
+        let download_dir = make_temp_path("deep_mixed_tree");
+        fs::create_dir_all(&download_dir).await?;
+        download_to_directory(
+            cas_store.as_ref(),
+            fast_store.as_pin(),
+            &root_digest,
+            &download_dir,
+        )
+        .await?;
+
+        let leaf_dir = format!("{download_dir}/middle/leaf");
+        assert_eq!(
+            from_utf8(&fs::read(format!("{download_dir}/root.txt")).await?)?,
+            PLAIN_CONTENT
+        );
+        assert_eq!(
+            from_utf8(&fs::read(format!("{download_dir}/middle/middle.txt")).await?)?,
+            PLAIN_CONTENT
+        );
+        assert_eq!(
+            from_utf8(&fs::read(format!("{download_dir}/sibling/sibling.txt")).await?)?,
+            PLAIN_CONTENT
+        );
+        assert_eq!(
+            from_utf8(&fs::read(format!("{leaf_dir}/exec.sh")).await?)?,
+            EXEC_CONTENT
+        );
+        assert_eq!(
+            from_utf8(&fs::read(format!("{leaf_dir}/stamped.txt")).await?)?,
+            STAMPED_CONTENT
+        );
+
+        let zero_metadata = fs::metadata(format!("{leaf_dir}/zero.txt")).await?;
+        assert_eq!(zero_metadata.len(), 0, "zero-digest file must be empty");
+
+        #[cfg(target_family = "unix")]
+        {
+            let link_metadata = fs::symlink_metadata(format!("{leaf_dir}/link")).await?;
+            assert!(link_metadata.is_symlink());
+
+            let exec_metadata = fs::metadata(format!("{leaf_dir}/exec.sh")).await?;
+            assert_eq!(
+                exec_metadata.mode() & 0o111,
+                0o111,
+                "an executable input must arrive executable"
+            );
+
+            let stamped_metadata = fs::metadata(format!("{leaf_dir}/stamped.txt")).await?;
+            assert_eq!(stamped_metadata.mode() & 0o777, STAMPED_MODE);
+            assert_eq!(
+                stamped_metadata
+                    .modified()?
+                    .duration_since(SystemTime::UNIX_EPOCH)?
+                    .as_secs(),
+                STAMPED_MTIME
+            );
+            assert_eq!(
+                stamped_metadata.nlink(),
+                1,
+                "a stamped file must be a private inode, not a link to the shared blob"
+            );
+        }
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn ensure_output_files_full_directories_are_created_no_working_directory_test()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        {
+            let command = Command {
+                arguments: vec!["touch".to_string(), "./some/path/test.txt".to_string()],
+                output_files: vec!["some/path/test.txt".to_string()],
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory {
+                    directories: vec![DirectoryNode {
+                        name: "some_cwd".to_string(),
+                        digest: Some(
+                            serialize_and_upload_message(
+                                &Directory::default(),
+                                cas_store.as_pin(),
+                                &mut DigestHasherFunc::Sha256.hasher(),
+                            )
+                            .await?
+                            .into(),
+                        ),
+                    }],
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: None,
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            let running_action = running_action.clone().prepare_action().await?;
+
+            // The folder should have been created for our output file.
+            assert_eq!(
+                fs::metadata(format!(
+                    "{}/{}",
+                    running_action.get_work_directory(),
+                    "some/path"
+                ))
+                .await
+                .is_ok(),
+                true,
+                "Expected path to exist"
+            );
+
+            running_action.cleanup().await?;
+        };
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn ensure_output_files_full_directories_are_created_test()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        {
+            let working_directory = "some_cwd";
+            let command = Command {
+                arguments: vec!["touch".to_string(), "./some/path/test.txt".to_string()],
+                output_files: vec!["some/path/test.txt".to_string()],
+                working_directory: working_directory.to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory {
+                    directories: vec![DirectoryNode {
+                        name: "some_cwd".to_string(),
+                        digest: Some(
+                            serialize_and_upload_message(
+                                &Directory::default(),
+                                cas_store.as_pin(),
+                                &mut DigestHasherFunc::Sha256.hasher(),
+                            )
+                            .await?
+                            .into(),
+                        ),
+                    }],
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: None,
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            let running_action = running_action.clone().prepare_action().await?;
+
+            // The folder should have been created for our output file.
+            assert_eq!(
+                fs::metadata(format!(
+                    "{}/{}/{}",
+                    running_action.get_work_directory(),
+                    working_directory,
+                    "some/path"
+                ))
+                .await
+                .is_ok(),
+                true,
+                "Expected path to exist"
+            );
+
+            running_action.cleanup().await?;
+        };
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn blake3_upload_files() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        let action_result = {
+            #[cfg(target_family = "unix")]
+            let arguments = vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "printf '123 ' > ./test.txt; printf 'foo-stdout '; >&2 printf 'bar-stderr  '"
+                    .to_string(),
+            ];
+            #[cfg(target_family = "windows")]
+            let arguments = vec![
+                "cmd".to_string(),
+                "/C".to_string(),
+                // Note: Windows adds two spaces after 'set /p=XXX'.
+                "echo | set /p=123> ./test.txt & echo | set /p=foo-stdout & echo | set /p=bar-stderr 1>&2 & exit 0"
+                    .to_string(),
+            ];
+            let working_directory = "some_cwd";
+            let command = Command {
+                arguments,
+                output_paths: vec!["test.txt".to_string()],
+                working_directory: working_directory.to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Blake3.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory {
+                    directories: vec![DirectoryNode {
+                        name: working_directory.to_string(),
+                        digest: Some(
+                            serialize_and_upload_message(
+                                &Directory::default(),
+                                cas_store.as_pin(),
+                                &mut DigestHasherFunc::Blake3.hasher(),
+                            )
+                            .await?
+                            .into(),
+                        ),
+                    }],
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Blake3.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Blake3.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Blake3.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: None,
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            run_action(running_action_impl.clone()).await?
+        };
+        let file_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.output_files[0].digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&file_content)?, "123 ");
+        let stdout_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.stdout_digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&stdout_content)?, "foo-stdout ");
+        let stderr_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.stderr_digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&stderr_content)?, "bar-stderr  ");
+        let mut clock_time = make_system_time(0);
+        assert_eq!(
+            action_result,
+            ActionResult {
+                output_files: vec![FileInfo {
+                    name_or_path: NameOrPath::Path("test.txt".to_string()),
+                    digest: DigestInfo::try_new(
+                        "3f488ba478fc6716c756922c9f34ebd7e84b85c3e03e33e22e7a3736cafdc6d8",
+                        4
+                    )?,
+                    is_executable: false,
+                }],
+                stdout_digest: DigestInfo::try_new(
+                    "af1720193ae81515067a3ef39f0dfda3ad54a1a9d216e55d32fe5c1e178c6a7d",
+                    11
+                )?,
+                stderr_digest: DigestInfo::try_new(
+                    "65e0abbae32a3aedaf040b654c6f02ace03c7690c17a8415a90fc2ec9c809a16",
+                    12
+                )?,
+                exit_code: 0,
+                output_folders: vec![],
+                output_file_symlinks: vec![],
+                output_directory_symlinks: vec![],
+                server_logs: HashMap::new(),
+                execution_metadata: ExecutionMetadata {
+                    worker: WORKER_ID.to_string(),
+                    queued_timestamp: SystemTime::UNIX_EPOCH,
+                    worker_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_completed_timestamp: increment_clock(&mut clock_time),
+                    execution_start_timestamp: increment_clock(&mut clock_time),
+                    execution_completed_timestamp: increment_clock(&mut clock_time),
+                    output_upload_start_timestamp: increment_clock(&mut clock_time),
+                    output_upload_completed_timestamp: increment_clock(&mut clock_time),
+                    worker_completed_timestamp: increment_clock(&mut clock_time),
+                },
+                error: None,
+                message: String::new(),
+            }
+        );
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn upload_files_from_above_cwd_test() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        let action_result = {
+            #[cfg(target_family = "unix")]
+            let arguments = vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "printf '123 ' > ./test.txt; printf 'foo-stdout '; >&2 printf 'bar-stderr  '"
+                    .to_string(),
+            ];
+            #[cfg(target_family = "windows")]
+            let arguments = vec![
+                "cmd".to_string(),
+                "/C".to_string(),
+                // Note: Windows adds two spaces after 'set /p=XXX'.
+                "echo | set /p=123> ./test.txt & echo | set /p=foo-stdout & echo | set /p=bar-stderr 1>&2 & exit 0"
+                    .to_string(),
+            ];
+            let working_directory = "some_cwd";
+            let command = Command {
+                arguments,
+                output_paths: vec!["test.txt".to_string()],
+                working_directory: working_directory.to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory {
+                    directories: vec![DirectoryNode {
+                        name: working_directory.to_string(),
+                        digest: Some(
+                            serialize_and_upload_message(
+                                &Directory::default(),
+                                cas_store.as_pin(),
+                                &mut DigestHasherFunc::Sha256.hasher(),
+                            )
+                            .await?
+                            .into(),
+                        ),
+                    }],
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: None,
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            run_action(running_action_impl.clone()).await?
+        };
+        let file_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.output_files[0].digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&file_content)?, "123 ");
+        let stdout_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.stdout_digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&stdout_content)?, "foo-stdout ");
+        let stderr_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.stderr_digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&stderr_content)?, "bar-stderr  ");
+        let mut clock_time = make_system_time(0);
+        assert_eq!(
+            action_result,
+            ActionResult {
+                output_files: vec![FileInfo {
+                    name_or_path: NameOrPath::Path("test.txt".to_string()),
+                    digest: DigestInfo::try_new(
+                        "c69e10a5f54f4e28e33897fbd4f8701595443fa8c3004aeaa20dd4d9a463483b",
+                        4
+                    )?,
+                    is_executable: false,
+                }],
+                stdout_digest: DigestInfo::try_new(
+                    "15019a676f057d97d1ad3af86f3cc1e623cb33b18ff28422bbe3248d2471cc94",
+                    11
+                )?,
+                stderr_digest: DigestInfo::try_new(
+                    "2375ab8a01ca11e1ea7606dfb58756c153d49733cde1dbfb5a1e00f39afacf06",
+                    12
+                )?,
+                exit_code: 0,
+                output_folders: vec![],
+                output_file_symlinks: vec![],
+                output_directory_symlinks: vec![],
+                server_logs: HashMap::new(),
+                execution_metadata: ExecutionMetadata {
+                    worker: WORKER_ID.to_string(),
+                    queued_timestamp: SystemTime::UNIX_EPOCH,
+                    worker_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_completed_timestamp: increment_clock(&mut clock_time),
+                    execution_start_timestamp: increment_clock(&mut clock_time),
+                    execution_completed_timestamp: increment_clock(&mut clock_time),
+                    output_upload_start_timestamp: increment_clock(&mut clock_time),
+                    output_upload_completed_timestamp: increment_clock(&mut clock_time),
+                    worker_completed_timestamp: increment_clock(&mut clock_time),
+                },
+                error: None,
+                message: String::new(),
+            }
+        );
+        Ok(())
+    }
+
+    // Windows does not support symlinks.
+    #[cfg(not(target_family = "windows"))]
+    #[forge_test]
+    async fn upload_dir_and_symlink_test() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        let queued_timestamp = make_system_time(1000);
+        let action_result = {
+            let command = Command {
+                arguments: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "mkdir -p dir1/dir2 && \
+                         echo foo > dir1/file && \
+                         touch dir1/file2 && \
+                         ln -s ../file dir1/dir2/sym && \
+                         ln -s dir1/file rel_sym && \
+                         ln -s /dev/null empty_sym"
+                        .to_string(),
+                ],
+                // `dir1` exercises the directory upload path,
+                // `rel_sym` exercises the relative-symlink-preserved path,
+                // `empty_sym` exercises the absolute-symlink-resolved path
+                // against `/dev/null`. Pre-fix this test asserted `empty_sym`
+                // was kept as a `SymlinkInfo` with target `/dev/null`; that
+                // behavior is now incorrect because absolute symlinks are
+                // worker-local and must be resolved before upload. Reading
+                // `/dev/null` returns 0 bytes immediately by its character-
+                // device contract, so the worker produces an empty-file
+                // output with the canonical sha256 empty digest.
+                output_paths: vec![
+                    "dir1".to_string(),
+                    "empty_sym".to_string(),
+                    "rel_sym".to_string(),
+                ],
+                working_directory: ".".to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory::default(),
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: Some(queued_timestamp.into()),
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            run_action(running_action_impl.clone()).await?
+        };
+        let tree = get_and_decode_digest::<Tree>(
+            slow_store.as_ref(),
+            action_result.output_folders[0].tree_digest.into(),
+        )
+        .await?;
+        let root_directory = Directory {
+            files: vec![
+                FileNode {
+                    name: "file".to_string(),
+                    digest: Some(
+                        DigestInfo::try_new(
+                            "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c",
+                            4,
+                        )?
+                        .into(),
+                    ),
+                    ..Default::default()
+                },
+                FileNode {
+                    name: "file2".to_string(),
+                    digest: Some(
+                        DigestInfo::try_new(
+                            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                            0,
+                        )?
+                        .into(),
+                    ),
+                    ..Default::default()
+                },
+            ],
+            directories: vec![DirectoryNode {
+                name: "dir2".to_string(),
+                digest: Some(
+                    DigestInfo::try_new(
+                        "cce0098e0b0f1d785edb0da50beedb13e27dcd459b091b2f8f82543cb7cd0527",
+                        16,
+                    )?
+                    .into(),
+                ),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            tree,
+            Tree {
+                root: Some(root_directory.clone()),
+                children: vec![
+                    Directory {
+                        symlinks: vec![SymlinkNode {
+                            name: "sym".to_string(),
+                            target: "../file".to_string(),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    },
+                    root_directory
+                ],
+            }
+        );
+        let mut clock_time = make_system_time(0);
+        assert_eq!(
+            action_result,
+            ActionResult {
+                // `empty_sym` was an absolute symlink — the worker resolves
+                // it and uploads the underlying (empty) file. The resulting
+                // digest is the well-known sha256 of zero bytes.
+                output_files: vec![FileInfo {
+                    name_or_path: NameOrPath::Path("empty_sym".to_string()),
+                    digest: DigestInfo::try_new(
+                        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                        0,
+                    )?,
+                    is_executable: false,
+                }],
+                stdout_digest: DigestInfo::try_new(
+                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    0
+                )?,
+                stderr_digest: DigestInfo::try_new(
+                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    0
+                )?,
+                exit_code: 0,
+                output_folders: vec![DirectoryInfo {
+                    path: "dir1".to_string(),
+                    tree_digest: DigestInfo::try_new(
+                        "adbb04fa6e166e663c1310bbf8ba494e468b1b6c33e1e5346e2216b6904c9917",
+                        490
+                    )?,
+                }],
+                output_file_symlinks: vec![SymlinkInfo {
+                    name_or_path: NameOrPath::Path("rel_sym".to_string()),
+                    target: "dir1/file".to_string(),
+                }],
+                output_directory_symlinks: vec![],
+                server_logs: HashMap::new(),
+                execution_metadata: ExecutionMetadata {
+                    worker: WORKER_ID.to_string(),
+                    queued_timestamp,
+                    worker_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_completed_timestamp: increment_clock(&mut clock_time),
+                    execution_start_timestamp: increment_clock(&mut clock_time),
+                    execution_completed_timestamp: increment_clock(&mut clock_time),
+                    output_upload_start_timestamp: increment_clock(&mut clock_time),
+                    output_upload_completed_timestamp: increment_clock(&mut clock_time),
+                    worker_completed_timestamp: increment_clock(&mut clock_time),
+                },
+                error: None,
+                message: String::new(),
+            }
+        );
+        Ok(())
+    }
+
+    // The fixture is built with the `ln -s` shell builtin (matching the
+    // convention used by `upload_dir_and_symlink_test` above), so this test
+    // only runs on Unix-like platforms. Windows itself does support symlinks
+    // via `std::os::windows::fs::{symlink_file, symlink_dir}`, but creating
+    // them from a shell isn't portable.
+    #[cfg(not(target_family = "windows"))]
+    #[forge_test]
+    async fn upload_absolute_symlink_resolves_contents() -> Result<(), Box<dyn core::error::Error>>
+    {
+        // Regression test: when an action produces an absolute symlink as one
+        // of its declared outputs (for example because the work directory was
+        // populated via DirectoryCache and contains absolute symlinks into the
+        // cache), uploading the literal symlink target yields a path that is
+        // meaningless on the client. The worker must resolve absolute
+        // symlinks and upload the underlying file/directory contents.
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        // Create an out-of-tree file whose absolute path the action will
+        // symlink into the work directory.
+        let external_root = make_temp_path("external_payload");
+        fs::create_dir_all(&external_root).await?;
+        let external_file = format!("{external_root}/payload.txt");
+        tokio::fs::write(&external_file, b"hello-from-outside").await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        let queued_timestamp = make_system_time(1000);
+        let action_result = {
+            let command = Command {
+                arguments: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    format!("ln -s {external_file} resolved_output"),
+                ],
+                output_paths: vec!["resolved_output".to_string()],
+                working_directory: ".".to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory::default(),
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: Some(queued_timestamp.into()),
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            run_action(running_action_impl.clone()).await?
+        };
+
+        // With the fix, the absolute symlink should be resolved and the
+        // payload uploaded as a regular file with the payload's content
+        // hash. The output_file_symlinks list must be empty.
+        assert_eq!(
+            action_result.output_file_symlinks.len(),
+            0,
+            "absolute symlink should be resolved to file, not uploaded as symlink"
+        );
+        assert_eq!(
+            action_result.output_directory_symlinks.len(),
+            0,
+            "no directory symlinks expected"
+        );
+        assert_eq!(
+            action_result.output_files.len(),
+            1,
+            "absolute symlink should appear as an uploaded file"
+        );
+        let uploaded = &action_result.output_files[0];
+        assert_eq!(
+            uploaded.name_or_path,
+            NameOrPath::Path("resolved_output".to_string())
+        );
+        assert_eq!(
+            usize::try_from(uploaded.digest.size_bytes())?,
+            b"hello-from-outside".len()
+        );
+        // Verify the blob actually landed in CAS by re-reading it.
+        let key: StoreKey<'_> = uploaded.digest.into();
+        let blob = slow_store.as_ref().get_part_unchunked(key, 0, None).await?;
+        assert_eq!(blob.as_ref(), b"hello-from-outside");
+        Ok(())
+    }
+
+    // The fixture is built with the `ln -s` shell builtin (matching the
+    // convention used by `upload_dir_and_symlink_test` above), so this test
+    // only runs on Unix-like platforms. Windows itself does support symlinks
+    // via `std::os::windows::fs::{symlink_file, symlink_dir}`, but creating
+    // them from a shell isn't portable.
+    #[cfg(not(target_family = "windows"))]
+    #[forge_test]
+    async fn upload_absolute_symlink_to_directory_uploads_tree()
+    -> Result<(), Box<dyn core::error::Error>> {
+        // Regression test (companion to upload_absolute_symlink_resolves_contents):
+        // exercises the directory branch. When an absolute symlink points
+        // at a directory, the worker must walk it and upload a Tree proto
+        // — NOT preserve the symlink. The previous implementation produced
+        // an OutputType::DirectorySymlink with a worker-local absolute
+        // target that is meaningless on the client.
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        // Out-of-tree directory the action will absolute-symlink to.
+        let external_root = make_temp_path("external_dir_payload");
+        fs::create_dir_all(&external_root).await?;
+        tokio::fs::write(format!("{external_root}/inner.txt"), b"inner-payload").await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        let queued_timestamp = make_system_time(1000);
+        let action_result = {
+            let command = Command {
+                arguments: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    format!("ln -s {external_root} resolved_dir"),
+                ],
+                output_paths: vec!["resolved_dir".to_string()],
+                working_directory: ".".to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory::default(),
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: Some(queued_timestamp.into()),
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+            run_action(running_action_impl.clone()).await?
+        };
+
+        // The absolute directory symlink must be resolved into a Tree, not
+        // preserved as DirectorySymlink/FileSymlink.
+        assert_eq!(
+            action_result.output_directory_symlinks.len(),
+            0,
+            "absolute dir symlink must be resolved, not uploaded as DirectorySymlink"
+        );
+        assert_eq!(
+            action_result.output_file_symlinks.len(),
+            0,
+            "absolute dir symlink must not appear as FileSymlink either"
+        );
+        assert_eq!(
+            action_result.output_files.len(),
+            0,
+            "directory target should not surface as an output file"
+        );
+        assert_eq!(
+            action_result.output_folders.len(),
+            1,
+            "absolute dir symlink should produce a single output_folders entry"
+        );
+        let folder = &action_result.output_folders[0];
+        assert_eq!(folder.path, "resolved_dir");
+        // Walk the uploaded Tree and confirm inner.txt is present with
+        // correct content. This proves the directory was actually walked
+        // and uploaded — not a stub.
+        let tree =
+            get_and_decode_digest::<Tree>(slow_store.as_ref(), folder.tree_digest.into()).await?;
+        let root = tree.root.expect("Tree must have a root Directory");
+        let inner = root
+            .files
+            .iter()
+            .find(|f| f.name == "inner.txt")
+            .expect("inner.txt must be in uploaded Tree root");
+        let inner_digest: DigestInfo = inner
+            .digest
+            .clone()
+            .expect("inner.txt must have a digest")
+            .try_into()?;
+        let key: StoreKey<'_> = inner_digest.into();
+        let blob = slow_store.as_ref().get_part_unchunked(key, 0, None).await?;
+        assert_eq!(blob.as_ref(), b"inner-payload");
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn cleanup_happens_on_job_failure() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        let queued_timestamp = make_system_time(1000);
+
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["sh".to_string(), "-c".to_string(), "exit 33".to_string()];
+        #[cfg(target_family = "windows")]
+        let arguments = vec!["cmd".to_string(), "/C".to_string(), "exit 33".to_string()];
+
+        let action_result = {
+            let command = Command {
+                arguments,
+                output_paths: vec![],
+                working_directory: ".".to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory::default(),
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: Some(queued_timestamp.into()),
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            run_action(running_action_impl.clone()).await?
+        };
+        let mut clock_time = make_system_time(0);
+        assert_eq!(
+            action_result,
+            ActionResult {
+                output_files: vec![],
+                stdout_digest: DigestInfo::try_new(
+                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    0
+                )?,
+                stderr_digest: DigestInfo::try_new(
+                    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    0
+                )?,
+                exit_code: 33,
+                output_folders: vec![],
+                output_file_symlinks: vec![],
+                output_directory_symlinks: vec![],
+                server_logs: HashMap::new(),
+                execution_metadata: ExecutionMetadata {
+                    worker: WORKER_ID.to_string(),
+                    queued_timestamp,
+                    worker_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_completed_timestamp: increment_clock(&mut clock_time),
+                    execution_start_timestamp: increment_clock(&mut clock_time),
+                    execution_completed_timestamp: increment_clock(&mut clock_time),
+                    output_upload_start_timestamp: increment_clock(&mut clock_time),
+                    output_upload_completed_timestamp: increment_clock(&mut clock_time),
+                    worker_completed_timestamp: increment_clock(&mut clock_time),
+                },
+                error: None,
+                message: String::new(),
+            }
+        );
+        let mut dir_stream = fs::read_dir(&root_action_directory).await?;
+        assert!(
+            dir_stream.as_mut().next_entry().await?.is_none(),
+            "Expected empty directory at {root_action_directory}"
+        );
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn kill_ends_action() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        #[cfg(target_family = "unix")]
+        let (arguments, process_started_file) = {
+            let process_started_file = {
+                let tmp_dir = make_temp_path("root_action_directory");
+                fs::create_dir_all(&tmp_dir).await.unwrap();
+                format!("{tmp_dir}/process_started")
+            };
+            (
+                vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    format!("touch {process_started_file} && sleep 24h"),
+                ],
+                process_started_file,
+            )
+        };
+        #[cfg(target_family = "windows")]
+        // Windows is weird with timeout, so we use ping. See:
+        // https://www.ibm.com/support/pages/timeout-command-run-batch-job-exits-immediately-and-returns-error-input-redirection-not-supported-exiting-process-immediately
+        let arguments = vec![
+            "cmd".to_string(),
+            "/C".to_string(),
+            "ping -n 99999 127.0.0.1".to_string(),
+        ];
+
+        let command = Command {
+            arguments,
+            output_paths: vec![],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let running_action_impl = running_actions_manager
+            .clone()
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        // The inputs first: a kill that lands while they are still fetching
+        // ends the action there, and this test is about killing the command.
+        let running_action_impl = running_action_impl.prepare_action().await?;
+        let run_action_fut = running_action_impl
+            .clone()
+            .execute()
+            .and_then(RunningAction::upload_results)
+            .and_then(RunningAction::get_finished_result)
+            .then(|result| async move {
+                running_action_impl.cleanup().await?;
+                result
+            });
+        tokio::pin!(run_action_fut);
+
+        #[cfg(target_family = "unix")]
+        loop {
+            assert_eq!(futures::poll!(&mut run_action_fut), Poll::Pending);
+            tokio::task::yield_now().await;
+            match fs::metadata(&process_started_file).await {
+                Ok(_) => break,
+                Err(err) => {
+                    assert_eq!(err.code, Code::NotFound, "Unknown error {err:?}");
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            }
+        }
+
+        let result = futures::join!(run_action_fut, running_actions_manager.kill_all())
+            .0
+            .unwrap();
+
+        // Check that the action was killed.
+        #[cfg(all(target_family = "unix", not(target_os = "macos")))]
+        assert_eq!(9, result.exit_code, "Wrong exit_code - {result:?}");
+        // Mac for some reason sometimes returns 1 and 9.
+        #[cfg(all(target_family = "unix", target_os = "macos"))]
+        assert!(
+            9 == result.exit_code || 1 == result.exit_code,
+            "Wrong exit_code - {result:?}"
+        );
+        // Note: Windows kill command returns exit code 1.
+        #[cfg(target_family = "windows")]
+        assert_eq!(1, result.exit_code);
+
+        Ok(())
+    }
+
+    // This script runs a command under a wrapper script set in a config.
+    // The wrapper script will print a constant string to stderr, and the test itself will
+    // print to stdout. We then check the results of both to make sure the shell script was
+    // invoked and the actual command was invoked under the shell script.
+    #[cfg_attr(feature = "nix", ignore)]
+    #[forge_test]
+    async fn entrypoint_does_invoke_if_set() -> Result<(), Box<dyn core::error::Error>> {
+        #[cfg(target_family = "unix")]
+        const TEST_WRAPPER_SCRIPT_CONTENT: &str = "\
+#!/usr/bin/env bash
+# Print some static text to stderr. This is what the test uses to
+# make sure the script did run.
+>&2 printf \"Wrapper script did run\"
+
+# Now run the real command.
+exec \"$@\"
+";
+        #[cfg(target_family = "windows")]
+        const TEST_WRAPPER_SCRIPT_CONTENT: &str = "\
+@echo off
+:: Print some static text to stderr. This is what the test uses to
+:: make sure the script did run.
+echo | set /p=\"Wrapper script did run\" 1>&2
+
+:: Run command, but morph the echo to ensure it doesn't
+:: add a new line to the end of the output.
+%1 | set /p=%2
+exit 0
+";
+        const WORKER_ID: &str = "foo_worker_id";
+        const EXPECTED_STDOUT: &str = "Action did run";
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let test_wrapper_script = {
+            let test_wrapper_dir = make_temp_path("wrapper_dir");
+            fs::create_dir_all(&test_wrapper_dir).await?;
+            #[cfg(target_family = "unix")]
+            let test_wrapper_script = OsString::from(test_wrapper_dir + "/test_wrapper_script.sh");
+            #[cfg(target_family = "windows")]
+            let test_wrapper_script =
+                OsString::from(test_wrapper_dir + "\\test_wrapper_script.bat");
+            {
+                let mut file_options = std::fs::OpenOptions::new();
+                file_options.create(true);
+                file_options.truncate(true);
+                file_options.write(true);
+                #[cfg(target_family = "unix")]
+                file_options.mode(0o777);
+                let mut test_wrapper_script_handle = file_options
+                    .open(OsString::from(&test_wrapper_script))
+                    .unwrap();
+                test_wrapper_script_handle
+                    .write_all(TEST_WRAPPER_SCRIPT_CONTENT.as_bytes())
+                    .unwrap();
+                test_wrapper_script_handle.sync_all().unwrap();
+                // Note: Github runners appear to use some kind of filesystem driver
+                // that does not sync data as expected. This is the easiest solution.
+                // See: https://github.com/pantsbuild/pants/issues/10507
+                // See: https://github.com/moby/moby/issues/9547
+                std::process::Command::new("sync").output().unwrap();
+            }
+            test_wrapper_script
+        };
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    max_captured_output_bytes: 0,
+                    resource_enforcement: None,
+                    kill_grace: Duration::ZERO,
+                    set_tmpdir: false,
+                    buck2_file_capture: None,
+                    entrypoint: Some(test_wrapper_script.into_string().unwrap()),
+                    additional_environment: None,
+                },
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["printf".to_string(), EXPECTED_STDOUT.to_string()];
+        #[cfg(target_family = "windows")]
+        let arguments = vec!["echo".to_string(), EXPECTED_STDOUT.to_string()];
+        let command = Command {
+            arguments,
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let running_action_impl = running_actions_manager
+            .clone()
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let result = run_action(running_action_impl).await?;
+        assert_eq!(result.exit_code, 0, "Exit code should be 0");
+
+        let expected_stdout = DigestHasherFunc::Sha256
+            .hasher()
+            .compute_from_reader(Cursor::new(EXPECTED_STDOUT))
+            .await?;
+        // Note: This string should match what is in worker_for_test.sh
+        let expected_stderr = DigestHasherFunc::Sha256
+            .hasher()
+            .compute_from_reader(Cursor::new("Wrapper script did run"))
+            .await?;
+        assert_eq!(expected_stdout, result.stdout_digest);
+        assert_eq!(expected_stderr, result.stderr_digest);
+
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "nix", ignore)]
+    #[forge_test]
+    async fn entrypoint_injects_properties() -> Result<(), Box<dyn core::error::Error>> {
+        #[cfg(target_family = "unix")]
+        const TEST_WRAPPER_SCRIPT_CONTENT: &str = "\
+#!/usr/bin/env bash
+# Print some static text to stderr. This is what the test uses to
+# make sure the script did run.
+>&2 printf \"Wrapper script did run with property $PROPERTY $VALUE $INNER_TIMEOUT\"
+
+# Now run the real command.
+exec \"$@\"
+";
+        #[cfg(target_family = "windows")]
+        const TEST_WRAPPER_SCRIPT_CONTENT: &str = "\
+@echo off
+:: Print some static text to stderr. This is what the test uses to
+:: make sure the script did run.
+echo | set /p=\"Wrapper script did run with property %PROPERTY% %VALUE% %INNER_TIMEOUT%\" 1>&2
+
+:: Run command, but morph the echo to ensure it doesn't
+:: add a new line to the end of the output.
+%1 | set /p=%2
+exit 0
+";
+        const WORKER_ID: &str = "foo_worker_id";
+        const EXPECTED_STDOUT: &str = "Action did run";
+        const TASK_TIMEOUT: Duration = Duration::from_secs(122);
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let test_wrapper_script = {
+            let test_wrapper_dir = make_temp_path("wrapper_dir");
+            fs::create_dir_all(&test_wrapper_dir).await?;
+            #[cfg(target_family = "unix")]
+            let test_wrapper_script = OsString::from(test_wrapper_dir + "/test_wrapper_script.sh");
+            #[cfg(target_family = "windows")]
+            let test_wrapper_script =
+                OsString::from(test_wrapper_dir + "\\test_wrapper_script.bat");
+            {
+                let mut file_options = std::fs::OpenOptions::new();
+                file_options.create(true);
+                file_options.truncate(true);
+                file_options.write(true);
+                #[cfg(target_family = "unix")]
+                file_options.mode(0o777);
+                let mut test_wrapper_script_handle = file_options
+                    .open(OsString::from(&test_wrapper_script))
+                    .unwrap();
+                test_wrapper_script_handle
+                    .write_all(TEST_WRAPPER_SCRIPT_CONTENT.as_bytes())
+                    .unwrap();
+                test_wrapper_script_handle.sync_all().unwrap();
+                // Note: Github runners appear to use some kind of filesystem driver
+                // that does not sync data as expected. This is the easiest solution.
+                // See: https://github.com/pantsbuild/pants/issues/10507
+                // See: https://github.com/moby/moby/issues/9547
+                std::process::Command::new("sync").output().unwrap();
+            }
+            test_wrapper_script
+        };
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    max_captured_output_bytes: 0,
+                    resource_enforcement: None,
+                    kill_grace: Duration::ZERO,
+                    set_tmpdir: false,
+                    buck2_file_capture: None,
+                    entrypoint: Some(test_wrapper_script.into_string().unwrap()),
+                    additional_environment: Some(HashMap::from([
+                        (
+                            "PROPERTY".to_string(),
+                            EnvironmentSource::Property("property_name".to_string()),
+                        ),
+                        (
+                            "VALUE".to_string(),
+                            EnvironmentSource::Value("raw_value".to_string()),
+                        ),
+                        (
+                            "INNER_TIMEOUT".to_string(),
+                            EnvironmentSource::TimeoutMillis,
+                        ),
+                        (
+                            "PATH".to_string(),
+                            EnvironmentSource::Value(env::var("PATH").unwrap()),
+                        ),
+                    ])),
+                },
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["printf".to_string(), EXPECTED_STDOUT.to_string()];
+        #[cfg(target_family = "windows")]
+        let arguments = vec!["echo".to_string(), EXPECTED_STDOUT.to_string()];
+        let command = Command {
+            arguments,
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            platform: Some(Platform {
+                properties: vec![Property {
+                    name: "property_name".into(),
+                    value: "property_value".into(),
+                }],
+            }),
+            timeout: Some(prost_types::Duration {
+                seconds: TASK_TIMEOUT.as_secs().try_into().unwrap_or(i64::MAX),
+                nanos: 0,
+            }),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let running_action_impl = running_actions_manager
+            .clone()
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let result = run_action(running_action_impl).await?;
+        assert_eq!(result.exit_code, 0, "Exit code should be 0");
+
+        let expected_stdout = DigestHasherFunc::Sha256
+            .hasher()
+            .compute_from_reader(Cursor::new(EXPECTED_STDOUT))
+            .await?;
+        // Note: This string should match what is in worker_for_test.sh
+        let expected_stderr =
+            "Wrapper script did run with property property_value raw_value 122000";
+        let expected_stderr_digest = DigestHasherFunc::Sha256
+            .hasher()
+            .compute_from_reader(Cursor::new(expected_stderr))
+            .await?;
+
+        let actual_stderr: Bytes = cas_store
+            .as_ref()
+            .get_part_unchunked(result.stderr_digest, 0, None)
+            .await?;
+        let actual_stderr_decoded = from_utf8(&actual_stderr)?;
+        assert_eq!(expected_stderr, actual_stderr_decoded);
+        assert_eq!(expected_stdout, result.stdout_digest);
+        assert_eq!(expected_stderr_digest, result.stderr_digest);
+
+        Ok(())
+    }
+
+    /// Each axis of `resource_enforcement` is honoured on its own: the disk
+    /// guard with memory off, memory with the guard off, and nothing when
+    /// both are off.
+    #[forge_test]
+    async fn resource_enforcement_config_honours_each_axis_alone()
+    -> Result<(), Box<dyn core::error::Error>> {
+        let config = |memory, disk| ResourceEnforcementConfig {
+            memory,
+            disk,
+            disk_property_name: "disk_kb".to_string(),
+            memory_property_name: "memory_kb".to_string(),
+            memory_headroom_percent: 20,
+            disk_headroom_percent: 20,
+        };
+        assert!(
+            ResourceEnforcement::from_config(&config(
+                MemoryEnforcement::None,
+                DiskEnforcement::None
+            ))
+            .is_none()
+        );
+        let guard_only = ResourceEnforcement::from_config(&config(
+            MemoryEnforcement::None,
+            DiskEnforcement::Guard,
+        ))
+        .expect("the guard alone is enforcement");
+        assert!(guard_only.memory.is_none());
+        assert_eq!(guard_only.disk_property_name.as_deref(), Some("disk_kb"));
+        let memory_only = ResourceEnforcement::from_config(&config(
+            MemoryEnforcement::Soft,
+            DiskEnforcement::None,
+        ))
+        .expect("memory alone is enforcement");
+        let memory = memory_only.memory.expect("the memory axis is on");
+        assert_eq!(memory.property_name, "memory_kb");
+        assert_eq!(memory.headroom_percent, 20);
+        assert!(memory_only.disk_property_name.is_none());
+        Ok(())
+    }
+
+    /// The sampler reads `Pss` out of `smaps_rollup`, not a field that
+    /// happens to share the prefix, and `VmRSS` out of `status`.
+    #[forge_test]
+    async fn parse_kb_field_reads_the_named_field() -> Result<(), Box<dyn core::error::Error>> {
+        let rollup = "00400000-7fff Rollup\nRss:                1234 kB\nPss_Anon:            100 kB\nPss:                 567 kB\n";
+        assert_eq!(parse_kb_field(rollup, "Pss:"), Some(567));
+        assert_eq!(parse_kb_field(rollup, "Rss:"), Some(1234));
+        assert_eq!(parse_kb_field("VmRSS:\t  42 kB\n", "VmRSS:"), Some(42));
+        assert_eq!(parse_kb_field("VmRSS:\t  42 kB\n", "Pss:"), None);
+        Ok(())
+    }
+
+    /// A manager with only the enforcement given, for the guard tests. Used by the unix-only tests below.
+    #[cfg(target_family = "unix")]
+    async fn enforcing_manager(
+        root_action_directory: &str,
+        cas_store: &Arc<FastSlowStore>,
+        execution_configuration: ExecutionConfiguration,
+    ) -> Result<Arc<RunningActionsManagerImpl>, Error> {
+        Ok(Arc::new(RunningActionsManagerImpl::new(
+            RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.to_string(),
+                execution_configuration,
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+        )?))
+    }
+
+    /// Uploads a command with an empty input root and returns the action digest. Used by the unix-only tests below.
+    #[cfg(target_family = "unix")]
+    async fn upload_action(
+        cas_store: &Arc<FastSlowStore>,
+        command: &Command,
+    ) -> Result<DigestInfo, Error> {
+        let command_digest = serialize_and_upload_message(
+            command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        serialize_and_upload_message(
+            &Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            },
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await
+    }
+
+    /// A dispatch of the action carrying the scheduler's properties. Used by the unix-only tests below.
+    #[cfg(target_family = "unix")]
+    fn dispatch_with_properties(
+        action_digest: DigestInfo,
+        properties: &[(&str, String)],
+    ) -> StartExecute {
+        StartExecute {
+            request_metadata: None,
+            execute_request: Some(ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            }),
+            operation_id: OperationId::default().to_string(),
+            queued_timestamp: None,
+            platform: Some(Platform {
+                properties: properties
+                    .iter()
+                    .map(|(name, value)| Property {
+                        name: (*name).to_string(),
+                        value: value.clone(),
+                    })
+                    .collect(),
+            }),
+            worker_id: "foo_worker_id".to_string(),
+        }
+    }
+
+    /// The guard counts what the admitted actions reserved: with almost all
+    /// the free space reserved by one action still running, a second is
+    /// refused although the disk itself would admit it, and admitted again
+    /// once the first has cleaned up.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn disk_guard_counts_what_admitted_actions_reserved()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager = enforcing_manager(
+            &root_action_directory,
+            &cas_store,
+            ExecutionConfiguration {
+                resource_enforcement: Some(ResourceEnforcement {
+                    memory: None,
+                    disk_property_name: Some("disk_kb".to_string()),
+                    disk_soft: false,
+                    disk_headroom_percent: 20,
+                }),
+                ..Default::default()
+            },
+        )
+        .await?;
+        let action_digest = upload_action(
+            &cas_store,
+            &Command {
+                arguments: vec!["true".to_string()],
+                working_directory: ".".to_string(),
+                ..Default::default()
+            },
+        )
+        .await?;
+        let free_kb = free_disk_kb(&root_action_directory).expect("statvfs on unix");
+        assert!(free_kb > 4096, "the test needs a few MiB free");
+        let dispatch = |reserved_kb: u64| {
+            dispatch_with_properties(action_digest, &[("disk_kb", reserved_kb.to_string())])
+        };
+
+        // Most of it, admitted and held; the rest is slack for whatever else
+        // the machine writes while the test runs.
+        let first = running_actions_manager
+            .create_and_add_action(WORKER_ID.to_string(), dispatch(free_kb / 4 * 3))
+            .await?
+            .prepare_action()
+            .await?;
+
+        // Half of what the disk shows: refused, because the first holds it.
+        let second = running_actions_manager
+            .create_and_add_action(WORKER_ID.to_string(), dispatch(free_kb / 2))
+            .await?;
+        let err = second
+            .clone()
+            .prepare_action()
+            .await
+            .expect_err("the free space is spoken for");
+        assert_eq!(err.code, Code::ResourceExhausted, "{err}");
+        assert!(
+            err.to_string()
+                .contains("reserved by the actions already admitted"),
+            "{err}"
+        );
+        second.cleanup().await?;
+
+        // The first is done; the same reservation now fits.
+        first.cleanup().await?;
+        let third = running_actions_manager
+            .create_and_add_action(WORKER_ID.to_string(), dispatch(free_kb / 2))
+            .await?
+            .prepare_action()
+            .await?;
+        third.cleanup().await?;
+        Ok(())
+    }
+
+    /// The scheduler's properties replace the client's only with enforcement
+    /// on. An environment variable read from a property the client never
+    /// sent sees the scheduler's value then, and nothing otherwise, so an
+    /// upgrade alone changes no action's environment.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn scheduler_properties_reach_the_action_only_with_enforcement_on()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, slow_store, cas_store, _ac_store) = setup_stores().await?;
+        let action_digest = upload_action(
+            &cas_store,
+            &Command {
+                arguments: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    "printf '%s' \"$MEM\"".to_string(),
+                ],
+                working_directory: ".".to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            },
+        )
+        .await?;
+        let environment = Some(HashMap::from([(
+            "MEM".to_string(),
+            EnvironmentSource::Property("memory_kb".to_string()),
+        )]));
+        let mut seen = Vec::new();
+        for enforcement in [
+            Some(ResourceEnforcement {
+                memory: None,
+                disk_property_name: Some("disk_kb".to_string()),
+                disk_soft: false,
+                disk_headroom_percent: 20,
+            }),
+            None,
+        ] {
+            let root_action_directory = make_temp_path("root_action_directory");
+            fs::create_dir_all(&root_action_directory).await?;
+            let running_actions_manager = enforcing_manager(
+                &root_action_directory,
+                &cas_store,
+                ExecutionConfiguration {
+                    resource_enforcement: enforcement,
+                    additional_environment: environment.clone(),
+                    ..Default::default()
+                },
+            )
+            .await?;
+            let running_action = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    dispatch_with_properties(action_digest, &[("memory_kb", "4096".to_string())]),
+                )
+                .await?;
+            let result = run_action(running_action).await?;
+            assert_eq!(result.exit_code, 0);
+            let stdout = slow_store
+                .as_ref()
+                .get_part_unchunked(result.stdout_digest, 0, None)
+                .await?;
+            seen.push(String::from_utf8(stdout.to_vec())?);
+        }
+        assert_eq!(seen, ["4096", ""]);
+        Ok(())
+    }
+
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn action_reserving_more_disk_than_is_free_is_refused_as_backpressure()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    // The guard alone: the memory axis is off.
+                    resource_enforcement: Some(ResourceEnforcement {
+                        memory: None,
+                        disk_property_name: Some("disk_kb".to_string()),
+                        disk_soft: false,
+                        disk_headroom_percent: 20,
+                    }),
+                    ..Default::default()
+                },
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let command = Command {
+            arguments: vec!["true".to_string()],
+            working_directory: ".".to_string(),
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    // More than any test machine has free.
+                    platform: Some(Platform {
+                        properties: vec![Property {
+                            name: "disk_kb".into(),
+                            value: (u64::MAX / 2).to_string(),
+                        }],
+                    }),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let err = run_action(running_action_impl)
+            .await
+            .expect_err("an action reserving more disk than is free must be refused");
+        assert_eq!(err.code, Code::ResourceExhausted, "{err}");
+        assert!(
+            err.to_string().contains("Not enough free disk"),
+            "the refusal should name the disk: {err}"
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[forge_test]
+    async fn timed_out_action_takes_its_children_with_it() -> Result<(), Box<dyn core::error::Error>>
+    {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        // Under the (existing) action root, so its parent directory exists.
+        let pid_file = format!("{root_action_directory}/children.pids");
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                // Host pids and a host-visible pid file: the point is what the kill
+                // reaches, not the namespaces.
+                use_namespaces: forge_worker::running_actions_manager::UseNamespaces::No,
+            })?);
+        // Two grandchildren that would outlive a kill aimed at the shell
+        // alone; their pids land in a file outside the action directory.
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!("sleep 60 & echo $! > {pid_file}; sleep 60 & echo $! >> {pid_file}; wait"),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            timeout: Some(prost_types::Duration {
+                seconds: 1,
+                nanos: 0,
+            }),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let result = run_action(running_action_impl).await?;
+        let err = result
+            .error
+            .expect("a timed-out action must carry an error");
+        assert_eq!(err.code, Code::DeadlineExceeded, "{err}");
+
+        let pids: Vec<i32> = std::fs::read_to_string(&pid_file)?
+            .lines()
+            .filter_map(|line| line.trim().parse().ok())
+            .collect();
+        assert_eq!(pids.len(), 2, "both children should have written their pid");
+        // A moment for the kernel to reap; then neither pid may exist.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        for pid in pids {
+            // SAFETY: signal 0 checks for existence and sends nothing.
+            let alive = unsafe { libc::kill(pid, 0) } == 0;
+            assert!(!alive, "child {pid} outlived the timed-out action");
+        }
+        Ok(())
+    }
+
+    /// A store whose uploads wait at a gate, counting how many are waiting
+    /// at once. Every upload of an output file arrives here with that file
+    /// open, so the peak is the number of files the worker had open together.
+    /// Unix only, with the one test that drives it.
+    #[cfg(target_family = "unix")]
+    #[derive(Debug)]
+    struct GatedStore {
+        inner: Store,
+        gate: watch::Sender<bool>,
+        in_flight: AtomicU64,
+        max_in_flight: AtomicU64,
+    }
+
+    #[cfg(target_family = "unix")]
+    impl GatedStore {
+        fn new(inner: Arc<MemoryStore>) -> Arc<Self> {
+            Arc::new(Self {
+                inner: Store::new(inner),
+                gate: watch::Sender::new(true),
+                in_flight: AtomicU64::new(0),
+                max_in_flight: AtomicU64::new(0),
+            })
+        }
+
+        fn set_open(&self, open: bool) {
+            self.gate.send_replace(open);
+        }
+
+        fn in_flight(&self) -> u64 {
+            self.in_flight.load(Ordering::SeqCst)
+        }
+
+        fn max_in_flight(&self) -> u64 {
+            self.max_in_flight.load(Ordering::SeqCst)
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    impl MetricsComponent for GatedStore {
+        fn publish(
+            &self,
+            _kind: MetricKind,
+            _field_metadata: MetricFieldData,
+        ) -> Result<MetricPublishKnownKindData, forge_metric::Error> {
+            Ok(MetricPublishKnownKindData::Component)
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    #[async_trait]
+    impl StoreDriver for GatedStore {
+        async fn post_init(self: Arc<Self>) -> Result<(), Error> {
+            Ok(())
+        }
+
+        async fn has_with_results(
+            self: Pin<&Self>,
+            keys: &[StoreKey<'_>],
+            results: &mut [Option<u64>],
+        ) -> Result<(), Error> {
+            self.inner
+                .as_store_driver_pin()
+                .has_with_results(keys, results)
+                .await
+        }
+
+        async fn update(
+            self: Pin<&Self>,
+            key: StoreKey<'_>,
+            reader: DropCloserReadHalf,
+            size_info: UploadSizeInfo,
+        ) -> Result<u64, Error> {
+            let now_in_flight = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            self.max_in_flight
+                .fetch_max(now_in_flight, Ordering::SeqCst);
+            let mut gate = self.gate.subscribe();
+            gate.wait_for(|open| *open)
+                .await
+                .map_err(|_| make_input_err!("gate dropped"))?;
+            let result = self
+                .inner
+                .as_store_driver_pin()
+                .update(key, reader, size_info)
+                .await;
+            self.in_flight.fetch_sub(1, Ordering::SeqCst);
+            result
+        }
+
+        async fn get_part(
+            self: Pin<&Self>,
+            key: StoreKey<'_>,
+            writer: &mut DropCloserWriteHalf,
+            offset: u64,
+            length: Option<u64>,
+        ) -> Result<(), Error> {
+            self.inner
+                .as_store_driver_pin()
+                .get_part(key, writer, offset, length)
+                .await
+        }
+
+        fn inner_store(&self, _key: Option<StoreKey>) -> &dyn StoreDriver {
+            self
+        }
+
+        fn as_any<'a>(&'a self) -> &'a (dyn core::any::Any + Sync + Send + 'static) {
+            self
+        }
+
+        fn as_any_arc(self: Arc<Self>) -> Arc<dyn core::any::Any + Sync + Send + 'static> {
+            self
+        }
+
+        fn register_remove_callback(
+            self: Arc<Self>,
+            _callback: Arc<dyn RemoveItemCallback>,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    default_health_status_indicator!(GatedStore);
+
+    /// A store that answers `has` and uploads normally but can be told to
+    /// never finish a read of one digest, or any write: what a wedged tier
+    /// looks like to the worker.
+    #[cfg(target_family = "unix")]
+    #[derive(Debug)]
+    struct HangingStore {
+        inner: Store,
+        hang_on: DigestInfo,
+        hang_reads: AtomicBool,
+        hang_updates: AtomicBool,
+    }
+
+    #[cfg(target_family = "unix")]
+    impl HangingStore {
+        fn new(inner: Arc<MemoryStore>, hang_on: DigestInfo) -> Arc<Self> {
+            Arc::new(Self {
+                inner: Store::new(inner),
+                hang_on,
+                hang_reads: AtomicBool::new(true),
+                hang_updates: AtomicBool::new(false),
+            })
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    impl MetricsComponent for HangingStore {
+        fn publish(
+            &self,
+            _kind: MetricKind,
+            _field_metadata: MetricFieldData,
+        ) -> Result<MetricPublishKnownKindData, forge_metric::Error> {
+            Ok(MetricPublishKnownKindData::Component)
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    #[async_trait]
+    impl StoreDriver for HangingStore {
+        async fn post_init(self: Arc<Self>) -> Result<(), Error> {
+            Ok(())
+        }
+        async fn has_with_results(
+            self: Pin<&Self>,
+            keys: &[StoreKey<'_>],
+            results: &mut [Option<u64>],
+        ) -> Result<(), Error> {
+            self.inner
+                .as_store_driver_pin()
+                .has_with_results(keys, results)
+                .await
+        }
+        async fn update(
+            self: Pin<&Self>,
+            key: StoreKey<'_>,
+            reader: DropCloserReadHalf,
+            size_info: UploadSizeInfo,
+        ) -> Result<u64, Error> {
+            if self.hang_updates.load(Ordering::Acquire) {
+                future::pending::<()>().await;
+            }
+            self.inner
+                .as_store_driver_pin()
+                .update(key, reader, size_info)
+                .await
+        }
+        async fn get_part(
+            self: Pin<&Self>,
+            key: StoreKey<'_>,
+            writer: &mut DropCloserWriteHalf,
+            offset: u64,
+            length: Option<u64>,
+        ) -> Result<(), Error> {
+            if self.hang_reads.load(Ordering::Acquire) && key == StoreKey::Digest(self.hang_on) {
+                future::pending::<()>().await;
+            }
+            self.inner
+                .as_store_driver_pin()
+                .get_part(key, writer, offset, length)
+                .await
+        }
+        fn inner_store(&self, _key: Option<StoreKey>) -> &dyn StoreDriver {
+            self
+        }
+        fn as_any<'a>(&'a self) -> &'a (dyn core::any::Any + Sync + Send + 'static) {
+            self
+        }
+        fn as_any_arc(self: Arc<Self>) -> Arc<dyn core::any::Any + Sync + Send + 'static> {
+            self
+        }
+        fn register_remove_callback(
+            self: Arc<Self>,
+            _callback: Arc<dyn RemoveItemCallback>,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    default_health_status_indicator!(HangingStore);
+
+    /// A manager whose CAS never finishes reading one input of the action it
+    /// returns the digest of; the store comes back too, so a test can lift
+    /// that or make writes hang instead.
+    #[cfg(target_family = "unix")]
+    async fn hung_fetch_setup(
+        max_download_timeout: Duration,
+    ) -> Result<
+        (
+            Arc<RunningActionsManagerImpl>,
+            DigestInfo,
+            Arc<HangingStore>,
+        ),
+        Box<dyn core::error::Error>,
+    > {
+        const FILE_CONTENT: &[u8] = b"never arrives";
+        let inner = MemoryStore::new(&MemorySpec::default());
+        let file_digest = DigestInfo::new([9u8; 32], FILE_CONTENT.len() as u64);
+        inner
+            .as_ref()
+            .update_oneshot(file_digest, FILE_CONTENT.into())
+            .await?;
+        let slow_store = HangingStore::new(inner.clone(), file_digest);
+        let fast_config = FilesystemSpec {
+            content_path: make_temp_path("content_path"),
+            temp_path: make_temp_path("temp_path"),
+            eviction_policy: None,
+            ..Default::default()
+        };
+        let fast_store: Arc<FilesystemStore> = FilesystemStore::new(&fast_config).await?;
+        let cas_store = FastSlowStore::new(
+            &FastSlowSpec {
+                fast: StoreSpec::Filesystem(fast_config),
+                slow: StoreSpec::Memory(MemorySpec::default()),
+                fast_direction: StoreDirection::default(),
+                slow_direction: StoreDirection::default(),
+                bypass_dedup_threshold_bytes: 0,
+            },
+            Store::new(fast_store),
+            Store::new(slow_store.clone()),
+        );
+        let input_root_digest = serialize_and_upload_message(
+            &Directory {
+                files: vec![FileNode {
+                    name: "input.txt".to_string(),
+                    digest: Some(file_digest.into()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+            inner.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let command_digest = serialize_and_upload_message(
+            &Command {
+                arguments: vec!["sh".to_string(), "-c".to_string(), "echo hi".to_string()],
+                ..Default::default()
+            },
+            inner.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action_digest = serialize_and_upload_message(
+            &Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            },
+            inner.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::from_mins(10),
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout,
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        Ok((running_actions_manager, action_digest, slow_store))
+    }
+
+    #[cfg(target_family = "unix")]
+    fn start_execute_for(action_digest: DigestInfo, operation_id: &str) -> StartExecute {
+        StartExecute {
+            request_metadata: None,
+            execute_request: Some(ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            }),
+            operation_id: operation_id.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// An input whose fetch never completes fails the action at
+    /// `max_download_timeout` with `DeadlineExceeded` instead of holding its
+    /// slot for good, and the action then cleans up like any other.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn prepare_action_times_out_on_a_hung_fetch() -> Result<(), Box<dyn core::error::Error>> {
+        let (running_actions_manager, action_digest, _store) =
+            hung_fetch_setup(Duration::from_secs(1)).await?;
+        let operation_id = OperationId::default();
+        let started = std::time::Instant::now();
+        let action = running_actions_manager
+            .create_and_add_action(
+                "test-worker".to_string(),
+                start_execute_for(action_digest, &operation_id.to_string()),
+            )
+            .await?;
+        let action_directory = action.get_work_directory().clone();
+        let result = action.clone().prepare_action().await;
+        let err = result.expect_err("the fetch never completes, prepare must fail");
+        assert_eq!(err.code, Code::DeadlineExceeded, "{err:?}");
+        assert!(err.to_string().contains("max_download_timeout"), "{err:?}");
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "took {:?}",
+            started.elapsed()
+        );
+        action.cleanup().await?;
+        assert!(
+            !Path::new(&action_directory).exists(),
+            "the work directory is gone after cleanup"
+        );
+        tokio::time::timeout(Duration::from_secs(5), running_actions_manager.kill_all())
+            .await
+            .expect("an entry was left behind");
+        Ok(())
+    }
+
+    /// A kill that arrives while the inputs are still fetching ends the
+    /// action at once with `Aborted`; it does not wait for the fetch, a
+    /// later `execute` fails instead of panicking, and cleanup runs.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn prepare_action_stops_on_a_kill() -> Result<(), Box<dyn core::error::Error>> {
+        let (running_actions_manager, action_digest, _store) =
+            hung_fetch_setup(Duration::from_mins(1)).await?;
+        let operation_id = OperationId::default();
+        let action = running_actions_manager
+            .create_and_add_action(
+                "test-worker".to_string(),
+                start_execute_for(action_digest, &operation_id.to_string()),
+            )
+            .await?;
+        let action_directory = action.get_work_directory().clone();
+        let started = std::time::Instant::now();
+        let killer = {
+            let manager = running_actions_manager.clone();
+            let operation_id = operation_id.clone();
+            async move {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                manager.kill_operation(&operation_id).await
+            }
+        };
+        let (kill_res, prepare_res) = tokio::join!(killer, action.clone().prepare_action());
+        kill_res?;
+        let err = prepare_res.expect_err("a killed fetch must not complete");
+        assert_eq!(err.code, Code::Aborted, "{err:?}");
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "took {:?}",
+            started.elapsed()
+        );
+        let err = action
+            .clone()
+            .execute()
+            .await
+            .expect_err("execute after a killed prepare must fail");
+        assert_ne!(err.code, Code::Ok, "{err:?}");
+        action.cleanup().await?;
+        assert!(
+            !Path::new(&action_directory).exists(),
+            "the work directory is gone after cleanup"
+        );
+        Ok(())
+    }
+
+    /// A kill that arrives while the results upload ends it at once with
+    /// `Aborted`: a kill is acknowledged in every phase, not only while the
+    /// command runs.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn upload_results_stops_on_a_kill() -> Result<(), Box<dyn core::error::Error>> {
+        let (running_actions_manager, action_digest, store) =
+            hung_fetch_setup(Duration::from_mins(1)).await?;
+        // The fetch completes; the write of the results never does.
+        store.hang_reads.store(false, Ordering::Release);
+        store.hang_updates.store(true, Ordering::Release);
+        let operation_id = OperationId::default();
+        let action = running_actions_manager
+            .create_and_add_action(
+                "test-worker".to_string(),
+                start_execute_for(action_digest, &operation_id.to_string()),
+            )
+            .await?;
+        let action_directory = action.get_work_directory().clone();
+        let started = std::time::Instant::now();
+        let killer = {
+            let manager = running_actions_manager.clone();
+            let operation_id = operation_id.clone();
+            async move {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                manager.kill_operation(&operation_id).await
+            }
+        };
+        let (kill_res, upload_res) = tokio::join!(killer, async {
+            action
+                .clone()
+                .prepare_action()
+                .await?
+                .execute()
+                .await?
+                .upload_results()
+                .await
+        });
+        kill_res?;
+        let err = upload_res.expect_err("a killed upload must not complete");
+        assert_eq!(err.code, Code::Aborted, "{err:?}");
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "took {:?}",
+            started.elapsed()
+        );
+        action.cleanup().await?;
+        assert!(!Path::new(&action_directory).exists());
+        Ok(())
+    }
+
+    /// The bound on open output files holds across the whole tree, not per
+    /// directory: eight directories of thirty-two files each are uploaded
+    /// through one gate, and never more than the bound (plus stdout and
+    /// stderr, which hold no file) are in flight at once. Per-directory
+    /// bounds would have all 256 open together.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn output_uploads_share_one_open_file_bound() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        const DIRS: u64 = 8;
+        const FILES_PER_DIR: u64 = 32;
+        const BOUND: u64 = 64;
+        // The gate is the slow store: the manager insists on a filesystem
+        // fast store, and an upload is not done until both sides have it.
+        let fast_config = FilesystemSpec {
+            content_path: make_temp_path("content_path"),
+            temp_path: make_temp_path("temp_path"),
+            eviction_policy: None,
+            ..Default::default()
+        };
+        let fast_store: Arc<FilesystemStore> = FilesystemStore::new(&fast_config).await?;
+        let gated = GatedStore::new(MemoryStore::new(&MemorySpec::default()));
+        let cas_store = FastSlowStore::new(
+            &FastSlowSpec {
+                fast: StoreSpec::Filesystem(fast_config),
+                slow: StoreSpec::Memory(MemorySpec::default()),
+                fast_direction: StoreDirection::default(),
+                slow_direction: StoreDirection::default(),
+                bypass_dedup_threshold_bytes: 0,
+            },
+            Store::new(fast_store),
+            Store::new(gated.clone()),
+        );
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        // Every file's content is unique, so none is skipped as a duplicate.
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "for d in $(seq {DIRS}); do mkdir -p out/d$d; for f in $(seq {FILES_PER_DIR}); do echo $d-$f > out/d$d/f$f; done; done"
+                ),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            output_paths: vec!["out".to_string()],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        // Inputs are fetched and the command runs with the gate open; the
+        // uploads then pile up against it.
+        let running_action_impl = running_action_impl
+            .clone()
+            .prepare_action()
+            .and_then(RunningAction::execute)
+            .await?;
+        gated.set_open(false);
+        let upload = tokio::spawn(running_action_impl.upload_results());
+        let filled = async {
+            while gated.in_flight() < BOUND {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        };
+        tokio::time::timeout(Duration::from_secs(30), filled)
+            .await
+            .expect("the uploads should reach the bound");
+        // Anything more that could be in flight arrives in this window.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let peak_at_gate = gated.in_flight();
+        gated.set_open(true);
+        let running_action_impl = upload.await??;
+        let result = running_action_impl.clone().get_finished_result().await?;
+        running_action_impl.cleanup().await?;
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.output_folders.len(), 1);
+
+        // stdout and stderr are the two uploads that hold no file.
+        assert!(
+            peak_at_gate <= BOUND + 2 && gated.max_in_flight() <= BOUND + 2,
+            "{} at the gate, {} at most: more files open than the bound",
+            peak_at_gate,
+            gated.max_in_flight()
+        );
+        assert!(
+            gated.max_in_flight() >= BOUND,
+            "{} in flight at most: the bound was never reached",
+            gated.max_in_flight()
+        );
+        Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    #[forge_test]
+    async fn action_writing_past_its_disk_reservation_is_killed()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    resource_enforcement: Some(ResourceEnforcement {
+                        memory: None,
+                        disk_property_name: Some("disk_kb".to_string()),
+                        disk_soft: true,
+                        disk_headroom_percent: 20,
+                    }),
+                    ..Default::default()
+                },
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                // Thirty MiB of its own under the action directory, then a
+                // long sleep: a disk sample sees it past the reservation.
+                "dd if=/dev/zero of=fill.bin bs=1M count=30 status=none; sleep 60".to_string(),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        // The client tagged nothing; the reservation arrives the way a hint or
+        // cold start does, on the scheduler's StartExecute, not on the Action.
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    // 1 MiB of disk reserved: thirty MiB written is far past
+                    // it with 20% headroom.
+                    platform: Some(Platform {
+                        properties: vec![Property {
+                            name: "disk_kb".into(),
+                            value: "1024".into(),
+                        }],
+                    }),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let started = std::time::Instant::now();
+        let result = run_action(running_action_impl.clone()).await?;
+        let err = result
+            .error
+            .expect("an action over its reservation must fail with an error");
+        assert_eq!(err.code, Code::FailedPrecondition, "{err}");
+        assert!(
+            err.to_string().contains("disk reservation"),
+            "error should name the reservation: {err}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "the worker should have killed the action at a disk sample, long before its sleep ended"
+        );
+        // The measurement says what happened and what it was measured against.
+        let usage = running_action_impl
+            .resource_usage()
+            .expect("usage is reported for every executed action");
+        assert_eq!(
+            usage.outcome,
+            ResourceOutcome::KilledDisk as i32,
+            "{usage:?}"
+        );
+        assert!(usage.enforced, "the worker's own limit ended it: {usage:?}");
+        // The sample that ended it caught the write in progress, so the
+        // figure is whatever had landed by then: past the reservation, not
+        // necessarily the whole thirty MiB.
+        assert!(
+            usage.peak_disk_kb > 1024,
+            "the measurement should carry what the action had written: {usage:?}"
+        );
+        Ok(())
+    }
+
+    /// Only what the action wrote counts: files modified at or after the
+    /// directory's stamp, taken from the filesystem's own clock, which on
+    /// Linux lags the wall clock by a tick. An input materialized before it, hard-linked or copied and
+    /// whatever its link count now, keeps its earlier time and is not
+    /// counted; nor are a symlink or the directories' own blocks.
+    #[cfg(target_family = "unix")]
+    #[test]
+    fn directory_private_kb_counts_only_files_newer_than_the_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let before = SystemTime::now() - Duration::from_secs(90);
+        // An input with one link, as after the store evicted its blob, and
+        // one with two: both older than the action, both left out.
+        let input = dir.path().join("input.bin");
+        std::fs::write(&input, vec![0u8; 64 * 1024]).unwrap();
+        std::fs::File::open(&input)
+            .unwrap()
+            .set_modified(before)
+            .unwrap();
+        let linked = dir.path().join("linked.bin");
+        std::fs::write(&linked, vec![0u8; 64 * 1024]).unwrap();
+        std::fs::File::open(&linked)
+            .unwrap()
+            .set_modified(before)
+            .unwrap();
+        std::fs::hard_link(&linked, dir.path().join("linked-2.bin")).unwrap();
+        let since =
+            forge_worker::running_actions_manager::directory_stamp(dir.path()).unwrap();
+        let own = dir.path().join("own.bin");
+        std::fs::write(&own, vec![0u8; 64 * 1024]).unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        std::fs::write(
+            dir.path().join("sub").join("deep.bin"),
+            vec![0u8; 32 * 1024],
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(&own, dir.path().join("own-symlink")).unwrap();
+        let kb =
+            forge_worker::running_actions_manager::directory_private_kb(dir.path(), since);
+        assert!(
+            (90..=100).contains(&kb),
+            "own 64 KiB plus deep 32 KiB, not the inputs: {kb} KiB"
+        );
+    }
+
+    /// A timed-out action gets SIGTERM first and keeps what it printed;
+    /// SIGKILL follows only when it ignores the grace period. Linux only:
+    /// the worker signals the process group, which only Linux sets up.
+    #[cfg(target_os = "linux")]
+    #[forge_test]
+    async fn timed_out_action_gets_a_grace_period_and_keeps_its_output()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    kill_grace: Duration::from_secs(5),
+                    ..Default::default()
+                },
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                // The namespaced stub turns SIGTERM into SIGKILL for its child,
+                // so the grace period is only observable without it.
+                #[cfg(target_os = "linux")]
+                use_namespaces: forge_worker::running_actions_manager::UseNamespaces::No,
+            })?);
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo partial; trap 'echo cleaned > cleanup.marker; exit 3' TERM; while :; do sleep 0.1; done"
+                    .to_string(),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            timeout: Some(prost_types::Duration {
+                seconds: 1,
+                nanos: 0,
+            }),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let running_action = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+        let started = std::time::Instant::now();
+        let running_action = running_action.prepare_action().await?.execute().await?;
+        assert!(
+            started.elapsed() < Duration::from_secs(4),
+            "the shell exits on SIGTERM, so the grace period should not run out"
+        );
+        // The trap ran, so SIGTERM arrived before any SIGKILL.
+        let action_directory = std::fs::read_dir(&root_action_directory)?
+            .filter_map(Result::ok)
+            .find(|entry| entry.path().is_dir())
+            .expect("the action directory exists until cleanup")
+            .path();
+        assert!(
+            action_directory.join("work/cleanup.marker").exists(),
+            "the shell's TERM trap should have written its marker"
+        );
+        let running_action = running_action.upload_results().await?;
+        let usage = running_action
+            .resource_usage()
+            .expect("usage is reported for every executed action");
+        assert_eq!(
+            usage.outcome,
+            ResourceOutcome::KilledTimeout as i32,
+            "{usage:?}"
+        );
+        assert!(!usage.enforced, "{usage:?}");
+        assert!(usage.wall_time_ms >= 900, "{usage:?}");
+        let result = running_action.clone().get_finished_result().await?;
+        running_action.cleanup().await?;
+        let err = result
+            .error
+            .as_ref()
+            .expect("a timed-out action carries the error");
+        assert_eq!(err.code, Code::DeadlineExceeded, "{err}");
+        // The shell left through its trap, not through SIGKILL.
+        assert_eq!(result.exit_code, 3, "{result:?}");
+        // What it printed before the kill was uploaded, not dropped.
+        let partial = compute_buf_digest(b"partial\n", &mut DigestHasherFunc::Sha256.hasher());
+        assert_eq!(result.stdout_digest, partial, "{result:?}");
+        assert!(
+            cas_store
+                .as_pin()
+                .has(StoreKey::Digest(partial))
+                .await?
+                .is_some(),
+            "the killed action's stdout should be in CAS"
+        );
+        Ok(())
+    }
+
+    /// An action that exits leaving a process behind holding its stdout
+    /// finishes when it exits, with what it printed, instead of sitting
+    /// there until its timeout. On Linux the straggler is killed with the
+    /// group; elsewhere the drain deadline ends the wait.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn an_action_that_leaves_a_process_on_its_pipes_still_finishes()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, slow_store, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        // The sleep inherits stdout and would hold it for a minute.
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo partial; sleep 60 & exit 0".to_string(),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            timeout: Some(prost_types::Duration {
+                seconds: 60,
+                nanos: 0,
+            }),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+        let started = std::time::Instant::now();
+        let result = run_action(running_action_impl).await?;
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "the action waited on the straggler: {:?}",
+            started.elapsed()
+        );
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        assert!(result.error.is_none(), "{:?}", result.error);
+        let stdout = slow_store
+            .as_ref()
+            .get_part_unchunked(result.stdout_digest, 0, None)
+            .await?;
+        assert_eq!(stdout, "partial\n", "what it printed is kept");
+        Ok(())
+    }
+
+    /// Each action gets its own `TMPDIR` under its action directory.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn set_tmpdir_gives_each_action_its_own_directory()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, slow_store, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    set_tmpdir: true,
+                    ..Default::default()
+                },
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "touch \"$TMPDIR/probe\" && printf %s \"$TMPDIR\" > out.txt".to_string(),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            output_paths: vec!["out.txt".to_string()],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+        let result = run_action(running_action_impl.clone()).await?;
+        assert_eq!(result.exit_code, 0, "{result:?}");
+        let tmpdir = slow_store
+            .as_ref()
+            .get_part_unchunked(result.output_files[0].digest, 0, None)
+            .await?;
+        let tmpdir = String::from_utf8(tmpdir.to_vec())?;
+        assert!(
+            tmpdir.starts_with(&root_action_directory) && tmpdir.ends_with("/tmp"),
+            "TMPDIR should sit under the action directory, got {tmpdir}"
+        );
+        let usage = running_action_impl
+            .resource_usage()
+            .expect("usage is reported for every executed action");
+        assert_eq!(
+            usage.outcome,
+            ResourceOutcome::Completed as i32,
+            "{usage:?}"
+        );
+        Ok(())
+    }
+
+    /// The outcome names who ended the action: the worker's own kills by
+    /// reason, a SIGKILL near the memory limit as the kernel, anything else
+    /// from outside.
+    #[forge_test]
+    async fn outcome_classification() -> Result<(), Box<dyn core::error::Error>> {
+        const SIGKILL: i32 = 9;
+        const SIGTERM: i32 = 15;
+        assert_eq!(
+            classify_outcome(None, None, 900, Some(1000)),
+            (ResourceOutcome::Completed, false)
+        );
+        assert_eq!(
+            classify_outcome(Some(KillReason::Memory), None, 0, None),
+            (ResourceOutcome::KilledMemory, true)
+        );
+        assert_eq!(
+            classify_outcome(Some(KillReason::Timeout), Some(SIGKILL), 999, Some(1000)),
+            (ResourceOutcome::KilledTimeout, false)
+        );
+        assert_eq!(
+            classify_outcome(Some(KillReason::External), Some(SIGTERM), 0, None),
+            (ResourceOutcome::KilledExternal, false)
+        );
+        // The kernel's SIGKILL within 10% of the limit is an OOM kill.
+        assert_eq!(
+            classify_outcome(None, Some(SIGKILL), 900, Some(1000)),
+            (ResourceOutcome::KilledMemory, false)
+        );
+        assert_eq!(
+            classify_outcome(None, Some(SIGKILL), 899, Some(1000)),
+            (ResourceOutcome::KilledExternal, false)
+        );
+        // No yardstick, no verdict.
+        assert_eq!(
+            classify_outcome(None, Some(SIGKILL), 900, None),
+            (ResourceOutcome::KilledExternal, false)
+        );
+        assert_eq!(
+            classify_outcome(None, Some(SIGTERM), 1000, Some(1000)),
+            (ResourceOutcome::KilledExternal, false)
+        );
+        Ok(())
+    }
+
+    /// Output past the cap spills to disk and is uploaded whole; the worker
+    /// keeps only the cap in memory.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn output_past_the_cap_spills_to_disk_and_uploads_whole()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        const OUTPUT_BYTES: usize = 3_000_000;
+        let (_, slow_store, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    max_captured_output_bytes: 1_000_000,
+                    ..Default::default()
+                },
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "head -c {OUTPUT_BYTES} /dev/zero | tr '\\0' a; head -c 100 /dev/zero | tr '\\0' b >&2"
+                ),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+        let result = run_action(running_action_impl).await?;
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.stdout_digest.size_bytes(), OUTPUT_BYTES as u64);
+        let stdout = slow_store
+            .as_ref()
+            .get_part_unchunked(result.stdout_digest, 0, None)
+            .await?;
+        assert_eq!(stdout.len(), OUTPUT_BYTES);
+        assert!(
+            stdout.iter().all(|b| *b == b'a'),
+            "spilled output should be intact"
+        );
+        assert_eq!(
+            result.stderr_digest.size_bytes(),
+            100,
+            "small stderr stays in memory"
+        );
+        Ok(())
+    }
+
+    /// The log excerpt of a failed command is cut by bytes: through a
+    /// multibyte character it ends in U+FFFD instead of panicking, and
+    /// bytes that were never text are shown the same way.
+    #[forge_test]
+    async fn log_excerpt_cuts_multibyte_output_safely() -> Result<(), Box<dyn core::error::Error>> {
+        let text = "héllo wörld";
+        assert_eq!(log_excerpt(text.as_bytes(), 2), "h\u{FFFD}");
+        assert_eq!(log_excerpt(text.as_bytes(), 3), "hé");
+        assert_eq!(log_excerpt(text.as_bytes(), 1000), text);
+        assert_eq!(log_excerpt(&[0xff, b'a'], 1000), "\u{FFFD}a");
+        assert_eq!(log_excerpt(b"", 1000), "");
+        Ok(())
+    }
+
+    /// A directory under the action root that no running action owns and
+    /// The sweep visits a directory whose operation is already marked as
+    /// cleaning (its own cleanup is running). Taking the mark a second time
+    /// must hand back `None`, not a guard built under the lock and dropped
+    /// there, which deadlocked the runtime thread on its own mutex.
+    #[forge_test]
+    async fn orphan_sweep_skips_a_directory_already_being_cleaned_without_deadlocking()
+    -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::ZERO,
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let operation_id = OperationId::from("mid-cleanup");
+        fs::create_dir_all(format!("{root_action_directory}/{operation_id}")).await?;
+        let held = running_actions_manager
+            .perform_cleanup(operation_id.clone())
+            .expect("first mark is granted");
+        // The second mark and the sweep on their own thread: a deadlock
+        // blocks that thread, not this one, and the wait turns it into a
+        // failure instead of a hung test.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let manager = running_actions_manager.clone();
+        let marked_operation_id = operation_id.clone();
+        std::thread::spawn(move || {
+            let second_mark = manager.perform_cleanup(marked_operation_id).is_some();
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("runtime");
+            let swept = runtime.block_on(manager.sweep_orphaned_directories());
+            drop(tx.send((second_mark, swept.map_err(|e| e.to_string()))));
+        });
+        let (second_mark, swept) = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the second cleanup mark deadlocked on its own lock");
+        assert!(!second_mark, "a mark already held is not granted again");
+        assert_eq!(
+            swept,
+            Ok(0),
+            "a directory being cleaned is left to its cleanup"
+        );
+        assert!(
+            Path::new(&format!("{root_action_directory}/{operation_id}")).exists(),
+            "the sweep must not remove a directory being cleaned"
+        );
+        drop(held);
+        assert_eq!(
+            running_actions_manager.sweep_orphaned_directories().await?,
+            1,
+            "once the mark is released the settled directory is an orphan"
+        );
+        Ok(())
+    }
+
+    /// A manager with a root directory, a cleanup wait of two seconds and no
+    /// directory cache.
+    async fn manager_for_cleanup_tests(
+        root_action_directory: &str,
+    ) -> Result<(Arc<RunningActionsManagerImpl>, Arc<MemoryStore>), Box<dyn core::error::Error>>
+    {
+        let (_, slow_store, cas_store, _ac_store) = setup_stores().await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.to_string(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(2),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        Ok((running_actions_manager, slow_store))
+    }
+
+    async fn empty_action_digest(
+        store: &Arc<MemoryStore>,
+    ) -> Result<DigestInfo, Box<dyn core::error::Error>> {
+        let command_digest = serialize_and_upload_message(
+            &Command::default(),
+            store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        Ok(serialize_and_upload_message(
+            &Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            },
+            store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?)
+    }
+
+    fn start_execute_with(action_digest: DigestInfo, operation_id: &OperationId) -> StartExecute {
+        StartExecute {
+            request_metadata: None,
+            execute_request: Some(ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            }),
+            operation_id: operation_id.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// An action's cleanup waits for a held mark (the sweep's, a retry's)
+    /// and then cleans; it does not step aside and leave its entries behind.
+    #[forge_test]
+    async fn cleanup_waits_for_a_held_mark_then_cleans() -> Result<(), Box<dyn core::error::Error>>
+    {
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let (running_actions_manager, store) =
+            manager_for_cleanup_tests(&root_action_directory).await?;
+        let action_digest = empty_action_digest(&store).await?;
+        let operation_id = OperationId::default();
+        let action = running_actions_manager
+            .create_and_add_action(
+                "test-worker".to_string(),
+                start_execute_with(action_digest, &operation_id),
+            )
+            .await?;
+        let action_directory = format!("{root_action_directory}/{operation_id}");
+        assert!(Path::new(&action_directory).exists());
+        let held = running_actions_manager
+            .perform_cleanup(operation_id.clone())
+            .expect("the mark is free");
+        let mut cleanup = tokio::spawn(action.cleanup());
+        tokio::select! {
+            _ = &mut cleanup => panic!("cleanup ran while the mark was held"),
+            () = tokio::time::sleep(Duration::from_millis(300)) => {}
+        }
+        assert!(
+            Path::new(&action_directory).exists(),
+            "nothing is removed while the mark is held"
+        );
+        drop(held);
+        tokio::time::timeout(Duration::from_secs(5), cleanup)
+            .await
+            .expect("cleanup did not resume when the mark was released")??;
+        assert!(
+            !Path::new(&action_directory).exists(),
+            "the directory goes once cleanup runs"
+        );
+        // The manager entry went with it: nothing for kill_all to wait on.
+        tokio::time::timeout(Duration::from_secs(5), running_actions_manager.kill_all())
+            .await
+            .expect("an entry was left behind");
+        Ok(())
+    }
+
+    /// A retry removes the stale directory of its earlier attempt only with
+    /// the mark held, so it waits while the sweep (or anyone) holds it and
+    /// never races a removal of the same tree.
+    #[forge_test]
+    async fn retry_waits_for_the_mark_before_removing_a_stale_directory()
+    -> Result<(), Box<dyn core::error::Error>> {
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let (running_actions_manager, store) =
+            manager_for_cleanup_tests(&root_action_directory).await?;
+        let action_digest = empty_action_digest(&store).await?;
+        let operation_id = OperationId::default();
+        let stale = format!("{root_action_directory}/{operation_id}");
+        fs::create_dir_all(&stale).await?;
+        tokio::fs::write(format!("{stale}/left-behind"), b"x").await?;
+        let held = running_actions_manager
+            .perform_cleanup(operation_id.clone())
+            .expect("the mark is free");
+        let manager = running_actions_manager.clone();
+        let start_execute = start_execute_with(action_digest, &operation_id);
+        let mut retry = tokio::spawn(async move {
+            manager
+                .create_and_add_action("w".to_string(), start_execute)
+                .await
+        });
+        tokio::select! {
+            _ = &mut retry => panic!("the retry proceeded while the mark was held"),
+            () = tokio::time::sleep(Duration::from_millis(300)) => {}
+        }
+        assert!(
+            Path::new(&format!("{stale}/left-behind")).exists(),
+            "the stale tree is untouched while the mark is held"
+        );
+        drop(held);
+        let action = tokio::time::timeout(Duration::from_secs(5), retry)
+            .await
+            .expect("the retry did not proceed once the mark was released")??;
+        assert!(
+            !Path::new(&format!("{stale}/left-behind")).exists(),
+            "the stale tree was replaced by the retry's fresh directory"
+        );
+        action.cleanup().await?;
+        Ok(())
+    }
+
+    /// that has settled is removed by the sweep; a running action's is kept.
+    #[forge_test]
+    async fn orphan_sweep_removes_settled_unowned_directories()
+    -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                // Zero: anything unowned counts as settled at once.
+                max_cleanup_wait: Duration::ZERO,
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let stray = format!("{root_action_directory}/left-behind-by-a-failed-cleanup");
+        fs::create_dir_all(&stray).await?;
+        let stray_file = format!("{root_action_directory}/not-a-directory");
+        tokio::fs::write(&stray_file, b"x").await?;
+
+        assert_eq!(
+            running_actions_manager.sweep_orphaned_directories().await?,
+            1
+        );
+        assert!(!Path::new(&stray).exists(), "the orphan should be gone");
+        assert!(
+            Path::new(&stray_file).exists(),
+            "files are not the sweep's business"
+        );
+        assert_eq!(
+            running_actions_manager.sweep_orphaned_directories().await?,
+            0
+        );
+        Ok(())
+    }
+
+    /// A symlink under the action root is not an action directory, whatever
+    /// it points at: the sweep neither follows it nor removes it.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn orphan_sweep_leaves_symlinks_alone() -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::ZERO,
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        // A settled directory outside the root, reachable through a symlink
+        // inside it, next to a real orphan.
+        let elsewhere = make_temp_path("elsewhere");
+        fs::create_dir_all(&elsewhere).await?;
+        tokio::fs::write(format!("{elsewhere}/kept"), b"x").await?;
+        let link = format!("{root_action_directory}/a-link");
+        tokio::fs::symlink(&elsewhere, &link).await?;
+        let orphan = format!("{root_action_directory}/b-orphan");
+        fs::create_dir_all(&orphan).await?;
+
+        assert_eq!(
+            running_actions_manager.sweep_orphaned_directories().await?,
+            1
+        );
+        assert!(!Path::new(&orphan).exists(), "the orphan should be gone");
+        assert!(
+            Path::new(&link).symlink_metadata().is_ok(),
+            "the symlink is not the sweep's business"
+        );
+        assert!(
+            Path::new(&format!("{elsewhere}/kept")).exists(),
+            "and neither is what it points at"
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[forge_test]
+    async fn action_over_its_memory_reservation_is_killed_by_the_worker()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, _, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    resource_enforcement: Some(ResourceEnforcement {
+                        memory: Some(MemoryLimit {
+                            property_name: "memory_kb".to_string(),
+                            headroom_percent: 20,
+                        }),
+                        disk_property_name: None,
+                        disk_soft: false,
+                        disk_headroom_percent: 20,
+                    }),
+                    ..Default::default()
+                },
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        // A shell holding 60 MB in a variable, then a child that would keep
+        // the memory if only the shell were killed.
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "s=$(head -c 60000000 /dev/zero | tr '\\0' a); sleep 30; echo $s | head -c 1"
+                    .to_string(),
+            ],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        // The client tagged nothing; the reservation arrives the way a hint or
+        // cold start does, on the scheduler's StartExecute, not on the Action.
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    // 2 MiB reserved: the shell is far over it within two samples.
+                    platform: Some(Platform {
+                        properties: vec![Property {
+                            name: "memory_kb".into(),
+                            value: "2048".into(),
+                        }],
+                    }),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let started = std::time::Instant::now();
+        let result = run_action(running_action_impl.clone()).await?;
+        let err = result
+            .error
+            .expect("an action over its reservation must fail with an error");
+        assert_eq!(err.code, Code::FailedPrecondition, "{err}");
+        assert!(
+            err.to_string().contains("memory reservation"),
+            "error should name the reservation: {err}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "the worker should have killed the action long before its 30s sleep ended"
+        );
+        // The measurement says what happened and what it was measured against.
+        let usage = running_action_impl
+            .resource_usage()
+            .expect("usage is reported for every executed action");
+        assert_eq!(
+            usage.outcome,
+            ResourceOutcome::KilledMemory as i32,
+            "{usage:?}"
+        );
+        assert!(usage.enforced, "the worker's own limit ended it: {usage:?}");
+        assert_eq!(
+            usage.reserved.map(|r| r.memory_kb),
+            Some(2048),
+            "the reservation travels with the measurement: {usage:?}"
+        );
+        // No wall time assertion: the gross-overrun kill lands within a millisecond.
+        Ok(())
+    }
+
+    #[cfg_attr(feature = "nix", ignore)]
+    #[forge_test]
+    async fn entrypoint_sends_timeout_via_side_channel() -> Result<(), Box<dyn core::error::Error>>
+    {
+        #[cfg(target_family = "unix")]
+        const TEST_WRAPPER_SCRIPT_CONTENT: &str = "\
+#!/bin/bash
+echo '{\"failure\":\"timeout\"}' > \"$SIDE_CHANNEL_FILE\"
+exit 1
+";
+        #[cfg(target_family = "windows")]
+        const TEST_WRAPPER_SCRIPT_CONTENT: &str = "\
+@echo off
+echo | set /p={\"failure\":\"timeout\"} 1>&2 > %SIDE_CHANNEL_FILE%
+exit 1
+";
+        const WORKER_ID: &str = "foo_worker_id";
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let test_wrapper_script = {
+            let test_wrapper_dir = make_temp_path("wrapper_dir");
+            fs::create_dir_all(&test_wrapper_dir).await?;
+            #[cfg(target_family = "unix")]
+            let test_wrapper_script = OsString::from(test_wrapper_dir + "/test_wrapper_script.sh");
+            #[cfg(target_family = "windows")]
+            let test_wrapper_script =
+                OsString::from(test_wrapper_dir + "\\test_wrapper_script.bat");
+            {
+                let mut file_options = std::fs::OpenOptions::new();
+                file_options.create(true);
+                file_options.truncate(true);
+                file_options.write(true);
+                #[cfg(target_family = "unix")]
+                file_options.mode(0o777);
+                let mut test_wrapper_script_handle = file_options
+                    .open(OsString::from(&test_wrapper_script))
+                    .unwrap();
+                test_wrapper_script_handle
+                    .write_all(TEST_WRAPPER_SCRIPT_CONTENT.as_bytes())
+                    .unwrap();
+                test_wrapper_script_handle.sync_all().unwrap();
+                // Note: Github runners appear to use some kind of filesystem driver
+                // that does not sync data as expected. This is the easiest solution.
+                // See: https://github.com/pantsbuild/pants/issues/10507
+                // See: https://github.com/moby/moby/issues/9547
+                std::process::Command::new("sync").output().unwrap();
+            }
+            test_wrapper_script
+        };
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    max_captured_output_bytes: 0,
+                    resource_enforcement: None,
+                    kill_grace: Duration::ZERO,
+                    set_tmpdir: false,
+                    buck2_file_capture: None,
+                    entrypoint: Some(test_wrapper_script.into_string().unwrap()),
+                    additional_environment: Some(HashMap::from([(
+                        "SIDE_CHANNEL_FILE".to_string(),
+                        EnvironmentSource::SideChannelFile,
+                    )])),
+                },
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let arguments = vec!["true".to_string()];
+        let command = Command {
+            arguments,
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let running_action_impl = running_actions_manager
+            .clone()
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let result = run_action(running_action_impl).await?;
+        assert_eq!(result.exit_code, 1, "Exit code should be 1");
+        assert_eq!(
+            result.error.err_tip(|| "Error should exist")?.code,
+            Code::DeadlineExceeded
+        );
+        assert!(logs_contain(
+            "Command returned non-zero exit code exit_code=1 stdout=\"\" stderr=\"\" command=[\"true\"]"
+        ));
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn caches_results_in_action_cache_store() -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: String::new(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::SuccessOnly,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action_digest = DigestInfo::new([2u8; 32], 32);
+        let mut action_result = ActionResult {
+            output_files: vec![FileInfo {
+                name_or_path: NameOrPath::Path("test.txt".to_string()),
+                digest: DigestInfo::try_new(
+                    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+                    3,
+                )?,
+                is_executable: false,
+            }],
+            stdout_digest: DigestInfo::try_new(
+                "426afaf613d8cfdd9fa8addcc030ae6c95a7950ae0301164af1d5851012081d5",
+                10,
+            )?,
+            stderr_digest: DigestInfo::try_new(
+                "7b2e400d08b8e334e3172d105be308b506c6036c62a9bde5c509d7808b28b213",
+                10,
+            )?,
+            exit_code: 0,
+            output_folders: vec![],
+            output_file_symlinks: vec![],
+            output_directory_symlinks: vec![],
+            server_logs: HashMap::new(),
+            execution_metadata: ExecutionMetadata {
+                worker: "WORKER_ID".to_string(),
+                queued_timestamp: SystemTime::UNIX_EPOCH,
+                worker_start_timestamp: make_system_time(0),
+                input_fetch_start_timestamp: make_system_time(1),
+                input_fetch_completed_timestamp: make_system_time(2),
+                execution_start_timestamp: make_system_time(3),
+                execution_completed_timestamp: make_system_time(4),
+                output_upload_start_timestamp: make_system_time(5),
+                output_upload_completed_timestamp: make_system_time(6),
+                worker_completed_timestamp: make_system_time(7),
+            },
+            error: None,
+            message: String::new(),
+        };
+        running_actions_manager
+            .cache_action_result(action_digest, &mut action_result, DigestHasherFunc::Sha256)
+            .await?;
+
+        let retrieved_result =
+            get_and_decode_digest::<ProtoActionResult>(ac_store.as_ref(), action_digest.into())
+                .await?;
+
+        let proto_result: ProtoActionResult = action_result.try_into()?;
+        assert_eq!(proto_result, retrieved_result);
+
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn failed_action_does_not_cache_in_action_cache()
+    -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: String::new(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Everything,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action_digest = DigestInfo::new([2u8; 32], 32);
+        let mut action_result = ActionResult {
+            output_files: vec![FileInfo {
+                name_or_path: NameOrPath::Path("test.txt".to_string()),
+                digest: DigestInfo::try_new(
+                    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+                    3,
+                )?,
+                is_executable: false,
+            }],
+            stdout_digest: DigestInfo::try_new(
+                "426afaf613d8cfdd9fa8addcc030ae6c95a7950ae0301164af1d5851012081d5",
+                10,
+            )?,
+            stderr_digest: DigestInfo::try_new(
+                "7b2e400d08b8e334e3172d105be308b506c6036c62a9bde5c509d7808b28b213",
+                10,
+            )?,
+            exit_code: 1,
+            output_folders: vec![],
+            output_file_symlinks: vec![],
+            output_directory_symlinks: vec![],
+            server_logs: HashMap::new(),
+            execution_metadata: ExecutionMetadata {
+                worker: "WORKER_ID".to_string(),
+                queued_timestamp: SystemTime::UNIX_EPOCH,
+                worker_start_timestamp: make_system_time(0),
+                input_fetch_start_timestamp: make_system_time(1),
+                input_fetch_completed_timestamp: make_system_time(2),
+                execution_start_timestamp: make_system_time(3),
+                execution_completed_timestamp: make_system_time(4),
+                output_upload_start_timestamp: make_system_time(5),
+                output_upload_completed_timestamp: make_system_time(6),
+                worker_completed_timestamp: make_system_time(7),
+            },
+            error: None,
+            message: String::new(),
+        };
+        running_actions_manager
+            .cache_action_result(action_digest, &mut action_result, DigestHasherFunc::Sha256)
+            .await?;
+
+        let retrieved_result =
+            get_and_decode_digest::<ProtoActionResult>(ac_store.as_ref(), action_digest.into())
+                .await?;
+
+        let proto_result: ProtoActionResult = action_result.try_into()?;
+        assert_eq!(proto_result, retrieved_result);
+
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn success_does_cache_in_historical_results() -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: String::new(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_historical_results_strategy: Some(
+                        UploadCacheResultsStrategy::SuccessOnly,
+                    ),
+                    #[expect(
+                        clippy::literal_string_with_formatting_args,
+                        reason = "passed to `formatx` crate for runtime interpretation"
+                    )]
+                    success_message_template: "{historical_results_hash}-{historical_results_size}"
+                        .to_string(),
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action_digest = DigestInfo::new([2u8; 32], 32);
+        let mut action_result = ActionResult {
+            output_files: vec![FileInfo {
+                name_or_path: NameOrPath::Path("test.txt".to_string()),
+                digest: DigestInfo::try_new(
+                    "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+                    3,
+                )?,
+                is_executable: false,
+            }],
+            stdout_digest: DigestInfo::try_new(
+                "426afaf613d8cfdd9fa8addcc030ae6c95a7950ae0301164af1d5851012081d5",
+                10,
+            )?,
+            stderr_digest: DigestInfo::try_new(
+                "7b2e400d08b8e334e3172d105be308b506c6036c62a9bde5c509d7808b28b213",
+                10,
+            )?,
+            exit_code: 0,
+            output_folders: vec![],
+            output_file_symlinks: vec![],
+            output_directory_symlinks: vec![],
+            server_logs: HashMap::new(),
+            execution_metadata: ExecutionMetadata {
+                worker: "WORKER_ID".to_string(),
+                queued_timestamp: SystemTime::UNIX_EPOCH,
+                worker_start_timestamp: make_system_time(0),
+                input_fetch_start_timestamp: make_system_time(1),
+                input_fetch_completed_timestamp: make_system_time(2),
+                execution_start_timestamp: make_system_time(3),
+                execution_completed_timestamp: make_system_time(4),
+                output_upload_start_timestamp: make_system_time(5),
+                output_upload_completed_timestamp: make_system_time(6),
+                worker_completed_timestamp: make_system_time(7),
+            },
+            error: None,
+            message: String::new(),
+        };
+        running_actions_manager
+            .cache_action_result(action_digest, &mut action_result, DigestHasherFunc::Sha256)
+            .await?;
+
+        assert!(!action_result.message.is_empty(), "Message should be set");
+
+        let historical_digest = {
+            let (historical_results_hash, historical_results_size) = action_result
+                .message
+                .split_once('-')
+                .expect("Message should be in format {hash}-{size}");
+
+            DigestInfo::try_new(
+                historical_results_hash,
+                historical_results_size.parse::<i64>()?,
+            )?
+        };
+        let retrieved_result = get_and_decode_digest::<HistoricalExecuteResponse>(
+            cas_store.as_ref(),
+            historical_digest.into(),
+        )
+        .await?;
+
+        assert_eq!(
+            HistoricalExecuteResponse {
+                action_digest: Some(action_digest.into()),
+                execute_response: Some(ExecuteResponse {
+                    result: Some(action_result.try_into()?),
+                    status: Some(Status::default()),
+                    ..Default::default()
+                }),
+            },
+            retrieved_result
+        );
+
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn failure_does_not_cache_in_historical_results()
+    -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: String::new(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_historical_results_strategy: Some(
+                        UploadCacheResultsStrategy::SuccessOnly,
+                    ),
+                    success_message_template: "{historical_results_hash}-{historical_results_size}"
+                        .to_string(),
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action_digest = DigestInfo::new([2u8; 32], 32);
+        let mut action_result = ActionResult {
+            exit_code: 1,
+            ..Default::default()
+        };
+        running_actions_manager
+            .cache_action_result(action_digest, &mut action_result, DigestHasherFunc::Sha256)
+            .await?;
+
+        assert!(
+            action_result.message.is_empty(),
+            "Message should not be set"
+        );
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn infra_failure_does_cache_in_historical_results()
+    -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: String::new(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_historical_results_strategy: Some(
+                        UploadCacheResultsStrategy::FailuresOnly,
+                    ),
+                    #[expect(
+                        clippy::literal_string_with_formatting_args,
+                        reason = "passed to `formatx` crate for runtime interpretation"
+                    )]
+                    failure_message_template: "{historical_results_hash}-{historical_results_size}"
+                        .to_string(),
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action_digest = DigestInfo::new([2u8; 32], 32);
+        let mut action_result = ActionResult {
+            exit_code: 0,
+            error: Some(make_input_err!("test error")),
+            ..Default::default()
+        };
+        running_actions_manager
+            .cache_action_result(action_digest, &mut action_result, DigestHasherFunc::Sha256)
+            .await?;
+
+        assert!(!action_result.message.is_empty(), "Message should be set");
+
+        let historical_digest = {
+            let (historical_results_hash, historical_results_size) = action_result
+                .message
+                .split_once('-')
+                .expect("Message should be in format {hash}-{size}");
+
+            DigestInfo::try_new(
+                historical_results_hash,
+                historical_results_size.parse::<i64>()?,
+            )?
+        };
+
+        let retrieved_result = get_and_decode_digest::<HistoricalExecuteResponse>(
+            cas_store.as_ref(),
+            historical_digest.into(),
+        )
+        .await?;
+
+        assert_eq!(
+            HistoricalExecuteResponse {
+                action_digest: Some(action_digest.into()),
+                execute_response: Some(ExecuteResponse {
+                    result: Some(action_result.try_into()?),
+                    status: Some(make_input_err!("test error").into()),
+                    ..Default::default()
+                }),
+            },
+            retrieved_result
+        );
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn action_result_has_used_in_message() -> Result<(), Box<dyn core::error::Error>> {
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: String::new(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::SuccessOnly,
+                    success_message_template: "{action_digest_hash}-{action_digest_size}"
+                        .to_string(),
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        let action_digest = DigestInfo::new([2u8; 32], 32);
+        let mut action_result = ActionResult {
+            exit_code: 0,
+            ..Default::default()
+        };
+        running_actions_manager
+            .cache_action_result(action_digest, &mut action_result, DigestHasherFunc::Sha256)
+            .await?;
+
+        assert!(!action_result.message.is_empty(), "Message should be set");
+
+        let action_result_digest = {
+            let (action_result_hash, action_result_size) = action_result
+                .message
+                .split_once('-')
+                .expect("Message should be in format {hash}-{size}");
+
+            DigestInfo::try_new(action_result_hash, action_result_size.parse::<i64>()?)?
+        };
+
+        let retrieved_result = get_and_decode_digest::<ProtoActionResult>(
+            ac_store.as_ref(),
+            action_result_digest.into(),
+        )
+        .await?;
+
+        let proto_result: ProtoActionResult = action_result.try_into()?;
+        assert_eq!(proto_result, retrieved_result);
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn ensure_worker_timeout_chooses_correct_values()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["true".to_string()];
+        #[cfg(target_family = "windows")]
+        let arguments = vec![
+            "cmd".to_string(),
+            "/C".to_string(),
+            "exit".to_string(),
+            "0".to_string(),
+        ];
+
+        let command = Command {
+            arguments,
+            output_paths: vec![],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        {
+            // Test to ensure that the task timeout is chosen if it is less than the max timeout.
+            static SENT_TIMEOUT: AtomicI64 = AtomicI64::new(-1);
+            const MAX_TIMEOUT_DURATION: Duration = Duration::from_secs(100);
+            const TASK_TIMEOUT: Duration = Duration::from_secs(10);
+
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                timeout: Some(prost_types::Duration {
+                    seconds: TASK_TIMEOUT.as_secs().try_into().unwrap_or(i64::MAX),
+                    nanos: 0,
+                }),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+                RunningActionsManagerArgs {
+                    root_action_directory: root_action_directory.clone(),
+                    execution_configuration: ExecutionConfiguration::default(),
+                    cas_store: cas_store.clone(),
+                    ac_store: Some(Store::new(ac_store.clone())),
+                    historical_store: Store::new(cas_store.clone()),
+                    upload_action_result_config: &UploadActionResultConfig {
+                        upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                        ..Default::default()
+                    },
+                    max_action_timeout: MAX_TIMEOUT_DURATION,
+                    max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                    max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                    max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                    max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                    timeout_handled_externally: false,
+                    active_input_leases: false,
+                    directory_cache: None,
+                    #[cfg(target_os = "linux")]
+                    use_namespaces: use_namespaces(),
+                },
+                Callbacks {
+                    now_fn: test_monotonic_clock,
+                    sleep_fn: |duration| {
+                        SENT_TIMEOUT.store(
+                            i64::try_from(duration.as_millis()).unwrap_or(i64::MAX),
+                            Ordering::Relaxed,
+                        );
+                        Box::pin(future::pending())
+                    },
+                },
+            )?);
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: Some(make_system_time(1000).into()),
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .and_then(|action| {
+                    action
+                        .clone()
+                        .prepare_action()
+                        .and_then(RunningAction::execute)
+                        .then(|result| async move {
+                            if let Err(e) = action.cleanup().await {
+                                return Result::<ActionResult, Error>::Err(e).merge(result);
+                            }
+                            result
+                        })
+                })
+                .await?;
+            assert_eq!(
+                SENT_TIMEOUT.load(Ordering::Relaxed),
+                i64::try_from(TASK_TIMEOUT.as_millis())
+                    .expect("TASK_TIMEOUT.as_millis() exceeds i64::MAX")
+            );
+        }
+        {
+            // Ensure if no timeout is set use max timeout.
+            static SENT_TIMEOUT: AtomicI64 = AtomicI64::new(-1);
+            const MAX_TIMEOUT_DURATION: Duration = Duration::from_secs(100);
+            const TASK_TIMEOUT: Duration = Duration::from_secs(0);
+
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                timeout: Some(prost_types::Duration {
+                    seconds: TASK_TIMEOUT.as_secs().try_into().unwrap_or(i64::MAX),
+                    nanos: 0,
+                }),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+                RunningActionsManagerArgs {
+                    root_action_directory: root_action_directory.clone(),
+                    execution_configuration: ExecutionConfiguration::default(),
+                    cas_store: cas_store.clone(),
+                    ac_store: Some(Store::new(ac_store.clone())),
+                    historical_store: Store::new(cas_store.clone()),
+                    upload_action_result_config: &UploadActionResultConfig {
+                        upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                        ..Default::default()
+                    },
+                    max_action_timeout: MAX_TIMEOUT_DURATION,
+                    max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                    max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                    max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                    max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                    timeout_handled_externally: false,
+                    active_input_leases: false,
+                    directory_cache: None,
+                    #[cfg(target_os = "linux")]
+                    use_namespaces: use_namespaces(),
+                },
+                Callbacks {
+                    now_fn: test_monotonic_clock,
+                    sleep_fn: |duration| {
+                        SENT_TIMEOUT.store(
+                            i64::try_from(duration.as_millis()).unwrap_or(i64::MAX),
+                            Ordering::Relaxed,
+                        );
+                        Box::pin(future::pending())
+                    },
+                },
+            )?);
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: Some(make_system_time(1000).into()),
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .and_then(|action| {
+                    action
+                        .clone()
+                        .prepare_action()
+                        .and_then(RunningAction::execute)
+                        .then(|result| async move {
+                            if let Err(e) = action.cleanup().await {
+                                return Result::<ActionResult, Error>::Err(e).merge(result);
+                            }
+                            result
+                        })
+                })
+                .await?;
+            assert_eq!(
+                SENT_TIMEOUT.load(Ordering::Relaxed),
+                i64::try_from(MAX_TIMEOUT_DURATION.as_millis())
+                    .expect("MAX_TIMEOUT_DURATION.as_millis() exceeds i64::MAX")
+            );
+        }
+        {
+            // A timeout over the maximum is clamped to it, not rejected.
+            static SENT_TIMEOUT: AtomicI64 = AtomicI64::new(-1);
+            const MAX_TIMEOUT_DURATION: Duration = Duration::from_secs(100);
+            const TASK_TIMEOUT: Duration = Duration::from_secs(200);
+
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                timeout: Some(prost_types::Duration {
+                    seconds: TASK_TIMEOUT.as_secs().try_into().unwrap_or(i64::MAX),
+                    nanos: 0,
+                }),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+                RunningActionsManagerArgs {
+                    root_action_directory: root_action_directory.clone(),
+                    execution_configuration: ExecutionConfiguration::default(),
+                    cas_store: cas_store.clone(),
+                    ac_store: Some(Store::new(ac_store.clone())),
+                    historical_store: Store::new(cas_store.clone()),
+                    upload_action_result_config: &UploadActionResultConfig {
+                        upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                        ..Default::default()
+                    },
+                    max_action_timeout: MAX_TIMEOUT_DURATION,
+                    max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                    max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                    max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                    max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                    timeout_handled_externally: false,
+                    active_input_leases: false,
+                    directory_cache: None,
+                    #[cfg(target_os = "linux")]
+                    use_namespaces: use_namespaces(),
+                },
+                Callbacks {
+                    now_fn: test_monotonic_clock,
+                    sleep_fn: |duration| {
+                        SENT_TIMEOUT.store(
+                            i64::try_from(duration.as_millis()).unwrap_or(i64::MAX),
+                            Ordering::Relaxed,
+                        );
+                        Box::pin(future::pending())
+                    },
+                },
+            )?);
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let result = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: Some(make_system_time(1000).into()),
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .and_then(|action| {
+                    action
+                        .clone()
+                        .prepare_action()
+                        .and_then(RunningAction::execute)
+                        .then(|result| async move {
+                            if let Err(e) = action.cleanup().await {
+                                return Result::<ActionResult, Error>::Err(e).merge(result);
+                            }
+                            result
+                        })
+                })
+                .await;
+            assert!(result.is_ok(), "{result:?}");
+            assert_eq!(
+                SENT_TIMEOUT.load(Ordering::Relaxed),
+                i64::try_from(MAX_TIMEOUT_DURATION.as_millis())
+                    .expect("MAX_TIMEOUT_DURATION.as_millis() exceeds i64::MAX")
+            );
+        }
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn worker_times_out() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        type StaticOneshotTuple =
+            Mutex<(Option<oneshot::Sender<()>>, Option<oneshot::Receiver<()>>)>;
+        static TIMEOUT_ONESHOT: LazyLock<StaticOneshotTuple> = LazyLock::new(|| {
+            let (tx, rx) = oneshot::channel();
+            Mutex::new((Some(tx), Some(rx)))
+        });
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| {
+                    Box::pin(async move {
+                        let rx = TIMEOUT_ONESHOT.lock().unwrap().1.take().unwrap();
+                        rx.await.expect("Could not receive timeout signal");
+                    })
+                },
+            },
+        )?);
+
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["sh".to_string(), "-c".to_string(), "sleep 24h".to_string()];
+        #[cfg(target_family = "windows")]
+        // Windows is weird with timeout, so we use ping. See:
+        // https://www.ibm.com/support/pages/timeout-command-run-batch-job-exits-immediately-and-returns-error-input-redirection-not-supported-exiting-process-immediately
+        let arguments = vec![
+            "cmd".to_string(),
+            "/C".to_string(),
+            "ping -n 99999 127.0.0.1".to_string(),
+        ];
+
+        let command = Command {
+            arguments,
+            output_paths: vec![],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let execute_results_fut = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .and_then(|action| {
+                action
+                    .clone()
+                    .prepare_action()
+                    .and_then(RunningAction::execute)
+                    .and_then(RunningAction::upload_results)
+                    .and_then(RunningAction::get_finished_result)
+                    .then(|result| async move {
+                        if let Err(e) = action.cleanup().await {
+                            return Result::<ActionResult, Error>::Err(e).merge(result);
+                        }
+                        result
+                    })
+            });
+
+        let (results, ()) = tokio::join!(execute_results_fut, async move {
+            tokio::task::yield_now().await;
+            let tx = TIMEOUT_ONESHOT.lock().unwrap().0.take().unwrap();
+            tx.send(()).expect("Could not send timeout signal");
+        });
+        assert_eq!(results?.error.unwrap().code, Code::DeadlineExceeded);
+
+        #[cfg(target_family = "unix")]
+        let command = "[\"sh\", \"-c\", \"sleep 24h\"]";
+        #[cfg(target_family = "windows")]
+        let command = "[\"cmd\", \"/C\", \"ping -n 99999 127.0.0.1\"]";
+
+        #[cfg(target_family = "unix")]
+        assert!(logs_contain(&format!(
+            "Executing command args={command} command_directory=/"
+        )));
+        #[cfg(target_family = "windows")]
+        assert!(logs_contain(&format!(
+            "Executing command args={command} command_directory="
+        )));
+        assert!(logs_contain("Command complete exit_code="));
+
+        assert!(!logs_contain(
+            "Child process was not cleaned up before dropping the call to execute(), killing in background spawn"
+        ));
+        #[cfg(target_family = "unix")]
+        assert!(logs_contain(
+            "Command timed out seconds=0.0 command=sh -c sleep 24h command_directory=/"
+        ));
+        #[cfg(target_family = "windows")]
+        assert!(logs_contain(
+            "Command timed out seconds=0.0 command=cmd /C ping -n 99999 127.0.0.1 command_directory="
+        ));
+
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn kill_all_waits_for_all_tasks_to_finish() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["sh".to_string(), "-c".to_string(), "sleep 24h".to_string()];
+        #[cfg(target_family = "windows")]
+        // Windows is weird with timeout, so we use ping. See:
+        // https://www.ibm.com/support/pages/timeout-command-run-batch-job-exits-immediately-and-returns-error-input-redirection-not-supported-exiting-process-immediately
+        let arguments = vec![
+            "cmd".to_string(),
+            "/C".to_string(),
+            "ping -n 99999 127.0.0.1".to_string(),
+        ];
+
+        let command = Command {
+            arguments,
+            output_paths: vec![],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let (cleanup_tx, cleanup_rx) = oneshot::channel();
+        let cleanup_was_requested = AtomicBool::new(false);
+        let action = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+        let execute_results_fut = action
+            .clone()
+            .prepare_action()
+            .and_then(RunningAction::execute)
+            .and_then(RunningAction::upload_results)
+            .and_then(RunningAction::get_finished_result)
+            .then(|result| async {
+                cleanup_was_requested.store(true, Ordering::Release);
+                cleanup_rx.await.expect("Could not receive cleanup signal");
+                if let Err(e) = action.cleanup().await {
+                    return Result::<ActionResult, Error>::Err(e).merge(result);
+                }
+                result
+            });
+
+        tokio::pin!(execute_results_fut);
+        {
+            // Advance the action as far as possible and ensure we are not waiting on cleanup.
+            for _ in 0..100 {
+                assert!(futures::poll!(&mut execute_results_fut).is_pending());
+                tokio::task::yield_now().await;
+            }
+            assert_eq!(cleanup_was_requested.load(Ordering::Acquire), false);
+        }
+
+        let kill_all_fut = running_actions_manager.kill_all();
+        tokio::pin!(kill_all_fut);
+
+        {
+            // * Advance the action as far as possible.
+            // * Ensure we are now waiting on cleanup.
+            // * Ensure our kill_action is still pending.
+            while !cleanup_was_requested.load(Ordering::Acquire) {
+                // Wait for cleanup to be triggered.
+                tokio::task::yield_now().await;
+                assert!(futures::poll!(&mut execute_results_fut).is_pending());
+                assert!(futures::poll!(&mut kill_all_fut).is_pending());
+            }
+        }
+        // Allow cleanup, which allows execute_results_fut to advance.
+        cleanup_tx.send(()).expect("Could not send cleanup signal");
+        // Advance our two futures to completion now.
+        let result = execute_results_fut.await;
+        kill_all_fut.await;
+        {
+            // Ensure our results are correct. The kill lands on the command
+            // or, when the fetch has not finished yet, on the fetch; either
+            // way the action ends as aborted.
+            let err = match result {
+                Ok(action_result) => action_result
+                    .error
+                    .clone()
+                    .err_tip(|| format!("No error exists in result : {action_result:?}"))?,
+                Err(err) => err,
+            };
+            assert_eq!(err.code, Code::Aborted, "Expected Aborted : {err:?}");
+        }
+
+        Ok(())
+    }
+
+    /// Regression test for issue #2672: `cleanup_action` used to notify the
+    /// action-done watch channel while holding the `running_actions` mutex,
+    /// and `kill_all` used to take that mutex inside a `wait_for` closure,
+    /// which runs while the channel's internal lock is held. On a
+    /// multi-threaded runtime the two parked each other's threads forever.
+    /// This races many concurrent cleanups against `kill_all`; a
+    /// reintroduction shows up as the timeout firing rather than a wedge.
+    #[forge_test(flavor = "multi_thread", worker_threads = 4)]
+    async fn kill_all_does_not_deadlock_with_concurrent_cleanups()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+
+        let command = Command {
+            arguments: vec!["true".to_string()],
+            output_paths: vec![],
+            working_directory: ".".to_string(),
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        for iteration in 0..50 {
+            let mut actions = Vec::new();
+            for i in 0..4 {
+                let execute_request = ExecuteRequest {
+                    action_digest: Some(action_digest.into()),
+                    digest_function: ProtoDigestFunction::Sha256.into(),
+                    ..Default::default()
+                };
+                let running_action = running_actions_manager
+                    .create_and_add_action(
+                        WORKER_ID.to_string(),
+                        StartExecute {
+                            request_metadata: None,
+                            execute_request: Some(execute_request),
+                            operation_id: format!("kill-race-{iteration}-{i}"),
+                            queued_timestamp: Some(make_system_time(1000).into()),
+                            platform: action.platform.clone(),
+                            worker_id: WORKER_ID.to_string(),
+                        },
+                    )
+                    .await?;
+                actions.push(running_action);
+            }
+            // Cleanups notify the action-done channel while kill_all waits
+            // on it; running them concurrently is the racing window.
+            let cleanups: Vec<_> = actions
+                .into_iter()
+                .map(|running_action| tokio::spawn(running_action.cleanup()))
+                .collect();
+            tokio::time::timeout(Duration::from_mins(1), running_actions_manager.kill_all())
+                .await
+                .expect("kill_all deadlocked against concurrent cleanup_action (issue #2672)");
+            for cleanup in cleanups {
+                drop(cleanup.await??);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Regression Test for Issue #675
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn unix_executable_file_test() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        const FILE_1_NAME: &str = "file1";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                execution_configuration: ExecutionConfiguration::default(),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        // Create and run an action which
+        // creates a file with owner executable permissions.
+        let action_result = {
+            let command = Command {
+                arguments: vec![
+                    "sh".to_string(),
+                    "-c".to_string(),
+                    format!("touch {FILE_1_NAME} && chmod 700 {FILE_1_NAME}"),
+                ],
+                output_paths: vec![FILE_1_NAME.to_string()],
+                working_directory: ".".to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory::default(),
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        ..Default::default()
+                    },
+                )
+                .await?;
+
+            run_action(running_action_impl.clone()).await?
+        };
+        // Ensure the file copied from worker to CAS is executable.
+        assert!(
+            action_result.output_files[0].is_executable,
+            "Expected output file to be executable"
+        );
+        Ok(())
+    }
+
+    /// Regression for skipping the `pre_exec` hook when namespaces are off.
+    /// With namespaces disabled (the default) the action spawn goes through
+    /// `posix_spawn` instead of `fork`, and `process_group(0)` must still make
+    /// the child its own process-group leader (pgid == pid).
+    #[cfg(target_os = "linux")]
+    #[forge_test]
+    async fn no_namespace_action_is_process_group_leader() -> Result<(), Box<dyn core::error::Error>>
+    {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                execution_configuration: ExecutionConfiguration::default(),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                // Pin namespaces off so this exercises the no-pre_exec/posix_spawn
+                // path regardless of what the host kernel supports.
+                use_namespaces: forge_worker::running_actions_manager::UseNamespaces::No,
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+
+        // Print the shell's own pid (field 1) and process-group id (field 5)
+        // from its /proc stat line; process_group(0) makes them equal.
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "read -r pid _ _ _ pgrp _ < /proc/$$/stat; printf '%s %s' \"$pid\" \"$pgrp\""
+                    .to_string(),
+            ],
+            output_paths: vec![],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        let action_result = run_action(running_action_impl.clone()).await?;
+        assert_eq!(
+            action_result.exit_code, 0,
+            "action should run to completion via posix_spawn"
+        );
+
+        let stdout = cas_store
+            .as_ref()
+            .get_part_unchunked(action_result.stdout_digest, 0, None)
+            .await?;
+        let stdout = from_utf8(&stdout)?;
+        let (pid, pgrp) = stdout.split_once(' ').expect("expected 'pid pgrp' output");
+        assert_eq!(
+            pid, pgrp,
+            "spawned process should be its own process-group leader (pid={pid} pgrp={pgrp})"
+        );
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[forge_test]
+    async fn isolate_tmp_gives_action_a_private_tmp() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        if !namespace_utils::namespaces_supported(true, true) {
+            return Ok(());
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory,
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                execution_configuration: ExecutionConfiguration::default(),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                use_namespaces:
+                    forge_worker::running_actions_manager::UseNamespaces::YesAndMount {
+                        isolate_tmp: true,
+                    },
+            })?);
+
+        // A file in the host's /tmp must be invisible to the action, and the
+        // action's own scratch file in /tmp must never reach the host, while
+        // outputs in the work directory still get uploaded.
+        let unique = format!(
+            "{}_{}",
+            std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+        );
+        let host_tmp_file = format!("/tmp/forge_test_host_{unique}");
+        let scratch_file = format!("/tmp/forge_test_scratch_{unique}");
+        tokio::fs::write(&host_tmp_file, "host").await?;
+
+        let command = Command {
+            arguments: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                format!(
+                    "test ! -e {host_tmp_file} && echo scratch > {scratch_file} && test -f {scratch_file} && echo ok > out.txt"
+                ),
+            ],
+            output_paths: vec!["out.txt".to_string()],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        let action_result = run_action(running_action_impl.clone()).await;
+        tokio::fs::remove_file(&host_tmp_file).await?;
+        let action_result = action_result?;
+        assert_eq!(
+            action_result.exit_code, 0,
+            "action should neither see the host's /tmp nor fail to write its own"
+        );
+        assert_eq!(
+            action_result.output_files.len(),
+            1,
+            "out.txt should have been uploaded from the work directory"
+        );
+        assert_eq!(
+            action_result.output_files[0].name_or_path,
+            NameOrPath::Path("out.txt".to_string())
+        );
+        assert!(
+            tokio::fs::metadata(&scratch_file).await.is_err(),
+            "the action's /tmp scratch file leaked to the host"
+        );
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn action_directory_contents_are_cleaned() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let temp_action_directory = make_temp_path("root_action_directory/temp");
+        fs::create_dir_all(&temp_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let queued_timestamp = make_system_time(1000);
+
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["sh".to_string(), "-c".to_string(), "exit 0".to_string()];
+        #[cfg(target_family = "windows")]
+        let arguments = vec!["cmd".to_string(), "/C".to_string(), "exit 0".to_string()];
+
+        let command = Command {
+            arguments,
+            output_paths: vec![],
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(queued_timestamp.into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        run_action(running_action_impl.clone()).await?;
+
+        let mut dir_stream = fs::read_dir(&root_action_directory).await?;
+        assert!(
+            dir_stream.as_mut().next_entry().await?.is_none(),
+            "Expected empty directory at {root_action_directory}"
+        );
+        Ok(())
+    }
+
+    // Run real subprocesses and hold their archive acknowledgement open. Files
+    // must survive until acknowledgement on success, failure, kill and timeout.
+    #[cfg(target_family = "unix")]
+    #[forge_test]
+    async fn buck2_capture_finishes_before_cleanup_on_every_action_outcome()
+    -> Result<(), Box<dyn core::error::Error>> {
+        use forge_config::cas_server::Buck2FileCaptureConfig;
+        use forge_proto::build::bazel::remote::execution::v2::{RequestMetadata, ToolDetails};
+
+        async fn wait_for_file(path: &Path) -> Result<(), tokio::time::error::Elapsed> {
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while !path.exists() {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await
+        }
+
+        // Resolve tools in the test environment: Nix has no /bin/coreutils,
+        // and the collector deliberately receives an empty environment.
+        let shell = which::which("sh")?;
+        let cat = which::which("cat")?;
+        let copy = which::which("cp")?;
+        let sleep = which::which("sleep")?;
+
+        for outcome in ["success", "failure", "cancel", "timeout", "bazel"] {
+            let (_, _, cas_store, _) = setup_stores().await?;
+            let root = PathBuf::from(make_temp_path("buck2_capture"));
+            let actions = root.join("actions");
+            let helper = root.join("helper");
+            let control = root.join("helper.d");
+            std::fs::create_dir_all(&actions)?;
+            std::fs::create_dir_all(&control)?;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o700)
+                .open(&helper)?
+                .write_all(
+                    format!(
+                        r#"#!{shell}
+set -eu
+IFS= read -r config
+printf '%s\n' "$config" >"$0.d/config"
+printf 'ready\n'
+"{cat}" >/dev/null
+IFS= read -r source <"$0.d/source"
+"{copy}" "$source" "$0.d/archive"
+: >"$0.d/finalizing"
+while [ ! -f "$0.d/release" ]; do "{sleep}" 0.01; done
+"#,
+                        shell = shell.display(),
+                        cat = cat.display(),
+                        copy = copy.display(),
+                        sleep = sleep.display(),
+                    )
+                    .as_bytes(),
+                )?;
+            let manager = Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: actions.to_string_lossy().into_owned(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    resource_enforcement: None,
+                    buck2_file_capture: Some(Buck2FileCaptureConfig {
+                        executable: helper.to_string_lossy().into_owned(),
+                        gateway: "http://unused-test-gateway".to_string(),
+                        token_file: control.join("token").to_string_lossy().into_owned(),
+                        state_directory: control.join("state").to_string_lossy().into_owned(),
+                        container_id: "execution-container".to_string(),
+                        protected_paths: vec![],
+                        internal_paths: vec![],
+                        finalize_timeout_s: 1,
+                    }),
+                    ..Default::default()
+                },
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::from_mins(1),
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: forge_worker::running_actions_manager::UseNamespaces::No,
+            })?);
+            let exit = match outcome {
+                "cancel" | "timeout" => format!("exec \"{}\" 30", sleep.display()),
+                "failure" => "exit 7".to_string(),
+                _ => "exit 0".to_string(),
+            };
+            let command_digest = serialize_and_upload_message(
+                &Command {
+                    arguments: vec![
+                        shell.to_string_lossy().into_owned(),
+                        "-c".to_string(),
+                        format!("printf 'final bytes' >tail.log; : >running; {exit}"),
+                    ],
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory::default(),
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action_digest = serialize_and_upload_message(
+                &Action {
+                    command_digest: Some(command_digest.into()),
+                    input_root_digest: Some(input_root_digest.into()),
+                    timeout: (outcome == "timeout").then_some(prost_types::Duration {
+                        seconds: 1,
+                        nanos: 0,
+                    }),
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let operation_id = OperationId::default();
+            let action = manager
+                .create_and_add_action(
+                    "worker".to_string(),
+                    StartExecute {
+                        execute_request: Some(ExecuteRequest {
+                            action_digest: Some(action_digest.into()),
+                            digest_function: ProtoDigestFunction::Sha256.into(),
+                            ..Default::default()
+                        }),
+                        request_metadata: Some(RequestMetadata {
+                            tool_details: Some(ToolDetails {
+                                tool_name: if outcome == "bazel" { "bazel" } else { "buck2" }
+                                    .to_string(),
+                                ..Default::default()
+                            }),
+                            tool_invocation_id: "test-invocation".to_string(),
+                            ..Default::default()
+                        }),
+                        operation_id: operation_id.to_string(),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+            let work = PathBuf::from(action.get_work_directory());
+            std::fs::write(
+                control.join("source"),
+                format!("{}\n", work.join("tail.log").display()),
+            )?;
+            let run = tokio::spawn(run_action(action));
+            if outcome == "cancel" {
+                wait_for_file(&work.join("running")).await?;
+                manager.kill_operation(&operation_id).await?;
+            }
+            if outcome == "bazel" {
+                assert!(
+                    !control.join("config").exists(),
+                    "Bazel launched the collector"
+                );
+            } else {
+                wait_for_file(&control.join("finalizing")).await?;
+                assert!(!run.is_finished(), "cleanup bypassed capture for {outcome}");
+                assert_eq!(std::fs::read(work.join("tail.log"))?, b"final bytes");
+                // Disconnect cleanup must also wait on the archive, then drain.
+                let draining_manager = manager.clone();
+                let drain = tokio::spawn(async move { draining_manager.kill_all().await });
+                tokio::task::yield_now().await;
+                assert!(!drain.is_finished());
+                std::fs::write(control.join("release"), b"")?;
+                tokio::time::timeout(Duration::from_secs(10), drain).await??;
+                assert_eq!(std::fs::read(control.join("archive"))?, b"final bytes");
+            }
+            let result = tokio::time::timeout(Duration::from_secs(10), run).await???;
+            match outcome {
+                "success" | "bazel" => assert_eq!(result.exit_code, 0),
+                "failure" => assert_eq!(result.exit_code, 7),
+                _ => assert_ne!(result.exit_code, 0),
+            }
+            assert!(
+                !work.exists(),
+                "action directory was not cleaned for {outcome}"
+            );
+            std::fs::remove_dir_all(&root)?;
+        }
+        Ok(())
+    }
+
+    #[forge_test]
+    #[cfg(target_family = "unix")]
+    async fn persistent_worker_reuses_json_worker_between_actions()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+        const WORKER_SCRIPT_NAME: &str = "worker.sh";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        async fn create_action(
+            cas_store: &Arc<FastSlowStore>,
+            worker_script_digest: DigestInfo,
+        ) -> Result<(Action, DigestInfo), Error> {
+            let command = Command {
+                arguments: vec![format!("./{WORKER_SCRIPT_NAME}"), "@args.txt".to_string()],
+                // The worker process gets the action's environment and no
+                // more, as Bazel sends it; the script needs PATH for sed.
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap_or_default(),
+                }],
+                output_paths: vec!["count.txt".to_string()],
+                platform: Some(Platform {
+                    properties: vec![
+                        Property {
+                            name: "supports-workers".to_string(),
+                            value: "1".to_string(),
+                        },
+                        Property {
+                            name: "requires-worker-protocol".to_string(),
+                            value: "json".to_string(),
+                        },
+                    ],
+                }),
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let args_digest = DigestInfo::new([9u8; 32], 0);
+            cas_store.update_oneshot(args_digest, Bytes::new()).await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory {
+                    files: vec![
+                        FileNode {
+                            name: WORKER_SCRIPT_NAME.to_string(),
+                            digest: Some(worker_script_digest.into()),
+                            is_executable: true,
+                            node_properties: None,
+                        },
+                        FileNode {
+                            name: "args.txt".to_string(),
+                            digest: Some(args_digest.into()),
+                            is_executable: false,
+                            node_properties: None,
+                        },
+                    ],
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                platform: command.platform.clone(),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            Ok((action, action_digest))
+        }
+
+        async fn run_persistent_action(
+            running_actions_manager: &Arc<RunningActionsManagerImpl>,
+            slow_store: &Arc<MemoryStore>,
+            action: &Action,
+            action_digest: DigestInfo,
+            operation_id: &str,
+        ) -> Result<String, Error> {
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(ExecuteRequest {
+                            action_digest: Some(action_digest.into()),
+                            digest_function: ProtoDigestFunction::Sha256.into(),
+                            ..Default::default()
+                        }),
+                        operation_id: operation_id.to_string(),
+                        queued_timestamp: None,
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+            let action_result = run_action(running_action_impl).await?;
+            slow_store
+                .as_ref()
+                .get_part_unchunked(action_result.output_files[0].digest, 0, None)
+                .await
+                .and_then(|content| {
+                    String::from_utf8(content.to_vec()).map_err(|err| {
+                        Error::from_std_err(Code::Internal, &err)
+                            .append("Decoding persistent worker count.txt")
+                    })
+                })
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::from_secs(30),
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+
+        let worker_script = r#"#!/bin/sh
+count=0
+while IFS= read -r request; do
+  if ! pwd -P >/dev/null 2>&1; then
+    printf '{"exitCode":1,"output":"worker cwd was removed"}\n'
+    continue
+  fi
+  count=$((count + 1))
+  sandbox_dir=$(printf '%s' "$request" | sed -n 's/.*"sandboxDir":"\([^"]*\)".*/\1/p')
+  printf '%s' "$count" > "$sandbox_dir/count.txt"
+  printf '{"exitCode":0,"output":"count=%s"}\n' "$count"
+done
+"#;
+        let worker_script_bytes = Bytes::from(worker_script);
+        let worker_script_digest =
+            compute_buf_digest(&worker_script_bytes, &mut DigestHasherFunc::Sha256.hasher());
+        cas_store
+            .update_oneshot(worker_script_digest, worker_script_bytes)
+            .await?;
+        let (action, action_digest) = create_action(&cas_store, worker_script_digest).await?;
+
+        let first = run_persistent_action(
+            &running_actions_manager,
+            &slow_store,
+            &action,
+            action_digest,
+            "persistent_worker_first",
+        )
+        .await?;
+        let second = run_persistent_action(
+            &running_actions_manager,
+            &slow_store,
+            &action,
+            action_digest,
+            "persistent_worker_second",
+        )
+        .await?;
+
+        assert_eq!(first, "1");
+        assert_eq!(
+            second, "2",
+            "second action must reuse the already-running persistent worker"
+        );
+        Ok(())
+    }
+
+    // We've experienced deadlocks when uploading, so make only a single permit available and
+    // check it's able to handle uploading some directories with some files in.
+
+    // TODO(palfrey) This is unix only only because I was lazy and didn't spend the time to
+    // build the bash-like commands in windows as well.
+
+    #[forge_test]
+    #[cfg(target_family = "unix")]
+    async fn upload_with_single_permit() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        // Take all but one FD permit away.
+        let _permits = stream::iter(1..fs::OPEN_FILE_SEMAPHORE.available_permits())
+            .then(|_| fs::OPEN_FILE_SEMAPHORE.acquire())
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(1, fs::OPEN_FILE_SEMAPHORE.available_permits());
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+        let action_result = {
+            let arguments = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "printf '123 ' > ./test.txt; mkdir ./tst; printf '456 ' > ./tst/tst.txt; printf 'foo-stdout '; >&2 printf 'bar-stderr  '"
+                .to_string(),
+        ];
+            let working_directory = "some_cwd";
+            let command = Command {
+                arguments,
+                output_paths: vec!["test.txt".to_string(), "tst".to_string()],
+                working_directory: working_directory.to_string(),
+                environment_variables: vec![EnvironmentVariable {
+                    name: "PATH".to_string(),
+                    value: env::var("PATH").unwrap(),
+                }],
+                ..Default::default()
+            };
+            let command_digest = serialize_and_upload_message(
+                &command,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let input_root_digest = serialize_and_upload_message(
+                &Directory {
+                    directories: vec![DirectoryNode {
+                        name: working_directory.to_string(),
+                        digest: Some(
+                            serialize_and_upload_message(
+                                &Directory::default(),
+                                cas_store.as_pin(),
+                                &mut DigestHasherFunc::Sha256.hasher(),
+                            )
+                            .await?
+                            .into(),
+                        ),
+                    }],
+                    ..Default::default()
+                },
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+            let action = Action {
+                command_digest: Some(command_digest.into()),
+                input_root_digest: Some(input_root_digest.into()),
+                ..Default::default()
+            };
+            let action_digest = serialize_and_upload_message(
+                &action,
+                cas_store.as_pin(),
+                &mut DigestHasherFunc::Sha256.hasher(),
+            )
+            .await?;
+
+            let execute_request = ExecuteRequest {
+                action_digest: Some(action_digest.into()),
+                digest_function: ProtoDigestFunction::Sha256.into(),
+                ..Default::default()
+            };
+            let operation_id = OperationId::default().to_string();
+
+            let running_action_impl = running_actions_manager
+                .create_and_add_action(
+                    WORKER_ID.to_string(),
+                    StartExecute {
+                        request_metadata: None,
+                        execute_request: Some(execute_request),
+                        operation_id,
+                        queued_timestamp: None,
+                        platform: action.platform.clone(),
+                        worker_id: WORKER_ID.to_string(),
+                    },
+                )
+                .await?;
+
+            run_action(running_action_impl.clone()).await?
+        };
+        let file_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.output_files[0].digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&file_content)?, "123 ");
+        let stdout_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.stdout_digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&stdout_content)?, "foo-stdout ");
+        let stderr_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.stderr_digest, 0, None)
+            .await?;
+        assert_eq!(from_utf8(&stderr_content)?, "bar-stderr  ");
+        let mut clock_time = make_system_time(0);
+        assert_eq!(
+            action_result,
+            ActionResult {
+                output_files: vec![FileInfo {
+                    name_or_path: NameOrPath::Path("test.txt".to_string()),
+                    digest: DigestInfo::try_new(
+                        "c69e10a5f54f4e28e33897fbd4f8701595443fa8c3004aeaa20dd4d9a463483b",
+                        4
+                    )?,
+                    is_executable: false,
+                }],
+                stdout_digest: DigestInfo::try_new(
+                    "15019a676f057d97d1ad3af86f3cc1e623cb33b18ff28422bbe3248d2471cc94",
+                    11
+                )?,
+                stderr_digest: DigestInfo::try_new(
+                    "2375ab8a01ca11e1ea7606dfb58756c153d49733cde1dbfb5a1e00f39afacf06",
+                    12
+                )?,
+                exit_code: 0,
+                output_folders: vec![DirectoryInfo {
+                    path: "tst".to_string(),
+                    tree_digest: DigestInfo::try_new(
+                        "95711c1905d4898a70209dd6e98241dcafb479c00241a1ea4ed8415710d706f3",
+                        166,
+                    )?,
+                },],
+                output_file_symlinks: vec![],
+                output_directory_symlinks: vec![],
+                server_logs: HashMap::new(),
+                execution_metadata: ExecutionMetadata {
+                    worker: WORKER_ID.to_string(),
+                    queued_timestamp: SystemTime::UNIX_EPOCH,
+                    worker_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_start_timestamp: increment_clock(&mut clock_time),
+                    input_fetch_completed_timestamp: increment_clock(&mut clock_time),
+                    execution_start_timestamp: increment_clock(&mut clock_time),
+                    execution_completed_timestamp: increment_clock(&mut clock_time),
+                    output_upload_start_timestamp: increment_clock(&mut clock_time),
+                    output_upload_completed_timestamp: increment_clock(&mut clock_time),
+                    worker_completed_timestamp: increment_clock(&mut clock_time),
+                },
+                error: None,
+                message: String::new(),
+            }
+        );
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn running_actions_manager_respects_action_timeout()
+    -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        // Ignore the sleep and immediately timeout.
+        static ACTION_TIMEOUT: i64 = 1;
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_work_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                // If action_timeout is the passed duration then return immediately,
+                // which will cause the action to be killed and pass the test,
+                // otherwise return pending and fail the test.
+                sleep_fn: |duration| {
+                    assert_eq!(duration.as_secs(), ACTION_TIMEOUT as u64);
+                    Box::pin(future::ready(()))
+                },
+            },
+        )?);
+        #[cfg(target_family = "unix")]
+        let arguments = vec!["sh".to_string(), "-c".to_string(), "sleep 2".to_string()];
+        #[cfg(target_family = "windows")]
+        let arguments = vec![
+            "cmd".to_string(),
+            "/C".to_string(),
+            "ping -n 99999 127.0.0.1".to_string(),
+        ];
+        let command = Command {
+            arguments,
+            working_directory: ".".to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            platform: Some(Platform {
+                properties: vec![Property {
+                    name: "property_name".into(),
+                    value: "property_value".into(),
+                }],
+            }),
+            timeout: Some(prost_types::Duration {
+                seconds: ACTION_TIMEOUT,
+                nanos: 0,
+            }),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let running_action_impl = running_actions_manager
+            .clone()
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let result = run_action(running_action_impl).await?;
+
+        #[cfg(target_family = "unix")]
+        assert_eq!(result.exit_code, 9, "Action process should be been killed");
+        #[cfg(target_family = "windows")]
+        assert_eq!(result.exit_code, 1, "Action process should be been killed");
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn test_handles_stale_directory_on_retry() -> Result<(), Error> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, ac_store, cas_store, _) = setup_stores().await?;
+        let root_action_directory = make_temp_path("retry_work_directory");
+
+        // Ensure root directory exists
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    max_captured_output_bytes: 0,
+                    resource_enforcement: None,
+                    kill_grace: Duration::ZERO,
+                    set_tmpdir: false,
+                    buck2_file_capture: None,
+                    entrypoint: None,
+                    additional_environment: None,
+                },
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        // Create a simple action
+        let command = Command {
+            arguments: vec!["echo".to_string(), "test".to_string()],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+
+        // Use a fixed operation ID to simulate retry with same ID
+        let operation_id = "test-retry-operation-fixed-id".to_string();
+
+        // Create the directory manually to simulate a previous failed action
+        let action_directory = format!("{root_action_directory}/{operation_id}");
+        eprintln!("Creating directory: {action_directory}");
+        fs::create_dir_all(&action_directory).await?;
+
+        // Also create the work subdirectory to ensure conflict
+        let work_directory = format!("{action_directory}/work");
+        fs::create_dir_all(&work_directory).await?;
+
+        // Add a marker file to detect if directory is deleted and recreated
+        let marker_file = format!("{action_directory}/marker.txt");
+        tokio::fs::write(&marker_file, "test").await?;
+
+        // Verify the directory was created
+        assert!(
+            tokio::fs::metadata(&action_directory).await.is_ok(),
+            "Directory should exist"
+        );
+        assert!(
+            tokio::fs::metadata(&work_directory).await.is_ok(),
+            "Work directory should exist"
+        );
+        assert!(
+            tokio::fs::metadata(&marker_file).await.is_ok(),
+            "Marker file should exist"
+        );
+
+        // Now try to create an action with the same operation ID
+        // This should fail with "File exists" error
+        eprintln!("Attempting to create action with existing directory...");
+        let result = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id: operation_id.clone(),
+                    queued_timestamp: Some(SystemTime::now().into()),
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await;
+
+        // Verify the behavior - with the fix, it should succeed after removing stale directory
+        match result {
+            Ok(_) => {
+                // Check if the directory still exists and if marker file is gone
+                let dir_exists = tokio::fs::metadata(&action_directory).await.is_ok();
+                let marker_exists = tokio::fs::metadata(&marker_file).await.is_ok();
+                eprintln!(
+                    "SUCCESS: Directory collision handled gracefully. Directory exists: {dir_exists}, Marker exists: {marker_exists}"
+                );
+                assert!(
+                    dir_exists,
+                    "Directory should exist after successful creation"
+                );
+                assert!(
+                    !marker_exists,
+                    "Marker file should be gone - stale directory was cleaned up"
+                );
+                eprintln!(
+                    "PASSED: The fix is working - stale directory was removed and action proceeded"
+                );
+            }
+            Err(err) => {
+                panic!("Expected success after fix, but got error: {err}");
+            }
+        }
+
+        // Clean up
+        fs::remove_dir_all(&root_action_directory).await?;
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn test_retry_after_cleanup_succeeds() -> Result<(), Error> {
+        const WORKER_ID: &str = "foo_worker_id";
+        let (_, ac_store, cas_store, _) = setup_stores().await?;
+        let root_action_directory = make_temp_path("retry_after_cleanup_work_directory");
+
+        // Ensure root directory exists
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration {
+                    persistent_workers: PersistentWorkersSettings::default(),
+                    max_captured_output_bytes: 0,
+                    resource_enforcement: None,
+                    kill_grace: Duration::ZERO,
+                    set_tmpdir: false,
+                    buck2_file_capture: None,
+                    entrypoint: None,
+                    additional_environment: None,
+                },
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+
+        // Create a simple action
+        let command = Command {
+            arguments: vec!["echo".to_string(), "test".to_string()],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+
+        let operation_id = "test-retry-after-cleanup-fixed-id".to_string();
+
+        // First, create and execute an action
+        let action1 = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request.clone()),
+                    operation_id: operation_id.clone(),
+                    queued_timestamp: Some(SystemTime::now().into()),
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        // Clean up the action
+        action1.cleanup().await?;
+
+        // Give cleanup a moment to complete
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Now try to create another action with the same operation ID
+        // This should succeed because the directory has been cleaned up
+        let result = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id: operation_id.clone(),
+                    queued_timestamp: Some(SystemTime::now().into()),
+                    platform: None,
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "Expected success when creating action after cleanup, got: {:?}",
+            result.err()
+        );
+
+        // Clean up
+        if let Ok(action2) = result {
+            action2.cleanup().await?;
+        }
+        fs::remove_dir_all(&root_action_directory).await?;
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn test_canonical_path() -> Result<(), Error> {
+        let (_fast_store, slow_store, cas_store, _ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+        let running_actions_manager =
+            Arc::new(RunningActionsManagerImpl::new(RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: None,
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            })?);
+        let operation_id = OperationId::default().to_string();
+        let file_content_digest = DigestInfo::new([2u8; 32], 32);
+        slow_store
+            .as_ref()
+            .update_oneshot(file_content_digest, "hello".into())
+            .await?;
+        let command = Command {
+            arguments: vec!["touch".to_string(), "./some/path/test.txt".to_string()],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory {
+                directories: vec![DirectoryNode {
+                    name: "some_cwd".to_string(),
+                    digest: Some(
+                        serialize_and_upload_message(
+                            &Directory::default(),
+                            cas_store.as_pin(),
+                            &mut DigestHasherFunc::Sha256.hasher(),
+                        )
+                        .await?
+                        .into(),
+                    ),
+                }],
+                ..Default::default()
+            },
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                "foo_worker_id".to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id,
+                    queued_timestamp: None,
+                    platform: action.platform.clone(),
+                    worker_id: "foo_worker_id".to_string(),
+                },
+            )
+            .await?;
+
+        let mut bash_path = which::which("bash")
+            .map_err(|e| Error::from_std_err(Code::Internal, &e))
+            .err_tip(|| "Getting bash path")?;
+        while let Ok(ref new_path) = std::fs::read_link(&bash_path) {
+            bash_path = new_path
+                .to_owned()
+                .canonicalize()
+                .err_tip(|| format!("Canonicalising {}", new_path.display()))?;
+        }
+        let cwd: PathBuf = env::current_dir()?;
+        let relative_bash = pathdiff::diff_paths(&bash_path, &cwd).ok_or_else(|| {
+            Error::new(
+                Code::Internal,
+                format!(
+                    "Getting diff for {} and {}",
+                    bash_path.display(),
+                    cwd.display()
+                ),
+            )
+        })?;
+        info!(?relative_bash, ?cwd, "Canonicalise input");
+        let canonical_path = running_action_impl
+            .canonicalise_path(relative_bash.as_os_str(), &cwd.to_string_lossy().into())
+            .err_tip(|| {
+                format!(
+                    "Canonicalising with {} and {}",
+                    relative_bash.display(),
+                    cwd.display()
+                )
+            })?;
+
+        // Because of how pathdiff works, we get a relative_bash starting with
+        // ../../../bin/bash in many test cases, so /usr/bin/bash is a good answer
+        // But the initial bash path may well be /bin/bash, so permit this case
+        // Note the canonicalisation like this only happens if both paths exist
+        if canonical_path.to_str().unwrap() != "/usr/bin/bash"
+            || bash_path.to_str().unwrap() != "/bin/bash"
+        {
+            // If it's anything else, check
+            assert_eq!(canonical_path, bash_path);
+        }
+        Ok(())
+    }
+
+    #[forge_test]
+    #[cfg(target_family = "unix")]
+    async fn test_arg0_is_relative_path() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, slow_store, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+
+        // Can't just use /bin/sh because of Nix paths
+        let sh_path = which::which("sh")
+            .map_err(|e| Error::from_std_err(Code::Internal, &e))
+            .err_tip(|| "Getting sh_path path")?
+            .to_string_lossy()
+            .to_string();
+
+        let input_root_digest = serialize_and_upload_message(
+            &Directory {
+                symlinks: vec![SymlinkNode {
+                    name: "my_sh".to_string(),
+                    target: sh_path,
+                    node_properties: None,
+                }],
+                ..Default::default()
+            },
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let command = Command {
+            arguments: vec![
+                "./my_sh".to_string(),
+                "-c".to_string(),
+                "printf \"%s\" \"$0\" > out.txt".to_string(),
+            ],
+            output_paths: vec!["out.txt".to_string()],
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(ExecuteRequest {
+                        action_digest: Some(action_digest.into()),
+                        digest_function: ProtoDigestFunction::Sha256.into(),
+                        ..Default::default()
+                    }),
+                    operation_id: OperationId::default().to_string(),
+                    queued_timestamp: None,
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        let action_result = run_action(running_action_impl).await?;
+
+        let stderr_content = slow_store
+            .as_ref()
+            .get_part_unchunked(action_result.stderr_digest, 0, None)
+            .await?;
+        assert_eq!(
+            action_result.exit_code,
+            0,
+            "Action should succeed. stderr: {}",
+            from_utf8(&stderr_content).unwrap_or("unreadable stderr")
+        );
+
+        assert_eq!(action_result.output_files.len(), 1);
+        assert_eq!(
+            action_result.output_files[0].name_or_path,
+            NameOrPath::Path("out.txt".to_string())
+        );
+
+        let out_digest = action_result.output_files[0].digest;
+        let out_content = slow_store
+            .as_ref()
+            .get_part_unchunked(out_digest, 0, None)
+            .await?;
+
+        assert_eq!(from_utf8(&out_content)?, "./my_sh");
+
+        Ok(())
+    }
+
+    #[forge_test]
+    async fn canonicalisation_failure() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+
+        let arguments = vec![
+            "garbage/to-canonicalise".to_string(),
+            "arguments".to_string(),
+            "to test".to_string(),
+        ];
+        let command = Command {
+            arguments,
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory::default(),
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory: root_action_directory.clone(),
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::MAX,
+                max_download_timeout: Duration::MAX,
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let res = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: Some(make_system_time(1000).into()),
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .and_then(|action| action.prepare_action().and_then(RunningAction::execute))
+            .await;
+        assert!(res.is_err(), "{res:#?}");
+        assert_eq!(res.unwrap_err(), Error::new_with_messages(Code::NotFound, vec![
+            if cfg!(target_family = "windows") { "The system cannot find the path specified. (os error 3)" } else { "No such file or directory (os error 2)" },
+            "Could not canonicalize path for command root garbage/to-canonicalise.",
+            "Canonicalisation failure. Command=[\n    \"garbage/to-canonicalise\",\n    \"arguments\",\n    \"to test\",\n]"
+            ].into_iter().map(String::from).collect()
+
+        ));
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_pgid_from_stat_extracts_field_after_comm() {
+        use forge_worker::running_actions_manager::parse_pgid_from_stat;
+        // /proc/<pid>/stat layout: pid (comm) state ppid pgrp ...
+        assert_eq!(
+            parse_pgid_from_stat("315 (perl) S 1 60 60 0 -1 0"),
+            Some(60)
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_pgid_from_stat_handles_comm_with_spaces_and_parens() {
+        use forge_worker::running_actions_manager::parse_pgid_from_stat;
+        // `comm` may contain spaces and parentheses; parsing must be relative
+        // to the final ')'. Here pgrp == 777.
+        assert_eq!(
+            parse_pgid_from_stat("1234 (weird )( name) R 1 777 777 0 -1 0"),
+            Some(777)
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_cpu_ticks_from_stat_sums_user_and_system_time() {
+        use forge_worker::running_actions_manager::parse_cpu_ticks_from_stat;
+        // Fields after the final ')': state ppid pgrp session tty tpgid flags
+        // minflt cminflt majflt cmajflt utime stime ...
+        // utime = 120, stime = 34, so 154 ticks.
+        assert_eq!(
+            parse_cpu_ticks_from_stat(
+                "315 (perl) S 1 60 60 0 -1 0 100 0 200 0 120 34 7 9 20 0 1 0"
+            ),
+            Some(154)
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_cpu_ticks_from_stat_handles_comm_with_spaces_and_parens() {
+        use forge_worker::running_actions_manager::parse_cpu_ticks_from_stat;
+        // Same trap as the pgid parser: a `comm` containing ')' would shift
+        // every field if parsed from the left.
+        assert_eq!(
+            parse_cpu_ticks_from_stat(
+                "1234 (weird )( name) R 1 777 777 0 -1 0 1 2 3 4 11 22 0 0 0 0"
+            ),
+            Some(33)
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_cpu_ticks_from_stat_rejects_malformed_input() {
+        use forge_worker::running_actions_manager::parse_cpu_ticks_from_stat;
+        assert_eq!(parse_cpu_ticks_from_stat("no parenthesis here"), None);
+        // Truncated before utime.
+        assert_eq!(
+            parse_cpu_ticks_from_stat("123 (only) S 1 60 60 0 -1 0"),
+            None
+        );
+        assert_eq!(parse_cpu_ticks_from_stat(""), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_pgid_from_stat_rejects_malformed_input() {
+        use forge_worker::running_actions_manager::parse_pgid_from_stat;
+        assert_eq!(parse_pgid_from_stat("no parenthesis here"), None);
+        assert_eq!(parse_pgid_from_stat("123 (only) S"), None); // too few fields
+        assert_eq!(parse_pgid_from_stat(""), None);
+    }
+
+    // Regression test for #2636: deeply nested directories with a single
+    // semaphore permit previously deadlocked because dir_futures and
+    // file_futures competed for the same permit inside try_join3.
+    // The fix awaits dir_futures first so permits are released before
+    // file/symlink uploads begin.
+
+    #[forge_test]
+    #[cfg(target_family = "unix")]
+    async fn upload_with_single_permit_nested_dirs() -> Result<(), Box<dyn core::error::Error>> {
+        const WORKER_ID: &str = "foo_worker_id";
+
+        fn test_monotonic_clock() -> SystemTime {
+            static CLOCK: AtomicU64 = AtomicU64::new(0);
+            monotonic_clock(&CLOCK)
+        }
+
+        let (_, _, cas_store, ac_store) = setup_stores().await?;
+        let root_action_directory = make_temp_path("root_action_directory");
+        fs::create_dir_all(&root_action_directory).await?;
+
+        // Take all but one FD permit away to trigger the deadlock scenario.
+        let _permits = stream::iter(1..fs::OPEN_FILE_SEMAPHORE.available_permits())
+            .then(|_| fs::OPEN_FILE_SEMAPHORE.acquire())
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(1, fs::OPEN_FILE_SEMAPHORE.available_permits());
+
+        let running_actions_manager = Arc::new(RunningActionsManagerImpl::new_with_callbacks(
+            RunningActionsManagerArgs {
+                root_action_directory,
+                execution_configuration: ExecutionConfiguration::default(),
+                cas_store: cas_store.clone(),
+                ac_store: Some(Store::new(ac_store.clone())),
+                historical_store: Store::new(cas_store.clone()),
+                upload_action_result_config: &UploadActionResultConfig {
+                    upload_ac_results_strategy: UploadCacheResultsStrategy::Never,
+                    ..Default::default()
+                },
+                max_action_timeout: Duration::MAX,
+                max_upload_timeout: Duration::from_secs(DEFAULT_MAX_UPLOAD_TIMEOUT),
+                max_download_timeout: Duration::from_secs(DEFAULT_MAX_DOWNLOAD_TIMEOUT),
+                max_cleanup_wait: Duration::from_secs(DEFAULT_MAX_CLEANUP_WAIT),
+                max_cleanup_backoff: Duration::from_millis(DEFAULT_MAX_CLEANUP_BACKOFF),
+                timeout_handled_externally: false,
+                active_input_leases: false,
+                directory_cache: None,
+                #[cfg(target_os = "linux")]
+                use_namespaces: use_namespaces(),
+            },
+            Callbacks {
+                now_fn: test_monotonic_clock,
+                sleep_fn: |_duration| Box::pin(future::pending()),
+            },
+        )?);
+
+        // Create 3-level nested dirs: out/a/b/ with files at each level.
+        // This exercises recursive upload_directory under permit starvation.
+        let arguments = vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            concat!(
+                "mkdir -p ./out/a/b && ",
+                "printf 'root ' > ./out/root.txt && ",
+                "printf 'mid ' > ./out/a/mid.txt && ",
+                "printf 'leaf ' > ./out/a/b/leaf.txt && ",
+                "printf 'ok-stdout '; >&2 printf 'ok-stderr '"
+            )
+            .to_string(),
+        ];
+        let working_directory = "some_cwd";
+        let command = Command {
+            arguments,
+            output_paths: vec!["out".to_string()],
+            working_directory: working_directory.to_string(),
+            environment_variables: vec![EnvironmentVariable {
+                name: "PATH".to_string(),
+                value: env::var("PATH").unwrap(),
+            }],
+            ..Default::default()
+        };
+        let command_digest = serialize_and_upload_message(
+            &command,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let input_root_digest = serialize_and_upload_message(
+            &Directory {
+                directories: vec![DirectoryNode {
+                    name: working_directory.to_string(),
+                    digest: Some(
+                        serialize_and_upload_message(
+                            &Directory::default(),
+                            cas_store.as_pin(),
+                            &mut DigestHasherFunc::Sha256.hasher(),
+                        )
+                        .await?
+                        .into(),
+                    ),
+                }],
+                ..Default::default()
+            },
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+        let action = Action {
+            command_digest: Some(command_digest.into()),
+            input_root_digest: Some(input_root_digest.into()),
+            ..Default::default()
+        };
+        let action_digest = serialize_and_upload_message(
+            &action,
+            cas_store.as_pin(),
+            &mut DigestHasherFunc::Sha256.hasher(),
+        )
+        .await?;
+
+        let execute_request = ExecuteRequest {
+            action_digest: Some(action_digest.into()),
+            digest_function: ProtoDigestFunction::Sha256.into(),
+            ..Default::default()
+        };
+        let operation_id = OperationId::default().to_string();
+
+        let running_action_impl = running_actions_manager
+            .create_and_add_action(
+                WORKER_ID.to_string(),
+                StartExecute {
+                    request_metadata: None,
+                    execute_request: Some(execute_request),
+                    operation_id,
+                    queued_timestamp: None,
+                    platform: action.platform.clone(),
+                    worker_id: WORKER_ID.to_string(),
+                },
+            )
+            .await?;
+
+        // This would deadlock before the fix in #2636 because nested
+        // dir_futures and file_futures would compete for the single permit.
+        let action_result = run_action(running_action_impl.clone()).await?;
+
+        assert_eq!(action_result.exit_code, 0, "action should succeed");
+        // Verify the nested directory tree was uploaded.
+        assert_eq!(
+            action_result.output_folders.len(),
+            1,
+            "expected one output directory"
+        );
+        assert_eq!(action_result.output_folders[0].path, "out");
+        Ok(())
+    }
+}

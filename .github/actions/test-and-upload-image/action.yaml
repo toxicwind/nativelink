@@ -37,7 +37,7 @@ runs:
         shell: bash -euo pipefail {0}
 
       # FIXME: after we've merged this and made sure it all works _then_ remove the 2457 ref
-      # See https://github.com/TraceMachina/nativelink/pull/2457
+      # See https://github.com/toxicwind/forge/pull/2457
       - name: Upload multi-arch image
         if: ${{ inputs.multi-arch == 'true' && (inputs.force-push == 'true' || contains(fromJson('["refs/heads/main"]'), github.ref)) }}
         run: |

@@ -2,25 +2,25 @@
   description = "name";
   inputs = {
     flake-parts = {
-      follows = "nativelink/flake-parts";
+      follows = "forge/flake-parts";
     };
     git-hooks = {
-      follows = "nativelink/git-hooks";
+      follows = "forge/git-hooks";
     };
-    nativelink = {
-      url = "github:TraceMachina/nativelink/f9ff630e09a3c22d6a3abea68d1bacc775eac6bb";
+    forge = {
+      url = "github:toxicwind/forge/f9ff630e09a3c22d6a3abea68d1bacc775eac6bb";
     };
     nixpkgs = {
-      follows = "nativelink/nixpkgs";
+      follows = "forge/nixpkgs";
     };
     rust-overlay = {
-      follows = "nativelink/rust-overlay";
+      follows = "forge/rust-overlay";
     };
   };
   outputs = inputs @ {
     flake-parts,
     git-hooks,
-    nativelink,
+    forge,
     nixpkgs,
     rust-overlay,
     ...
@@ -35,7 +35,7 @@
 
       imports = [
         git-hooks.flakeModule
-        nativelink.flakeModules.lre
+        forge.flakeModules.lre
       ];
 
       perSystem = {
@@ -47,15 +47,15 @@
         _module.args.pkgs = import nixpkgs {
           inherit system;
           overlays = [
-            # Add `pkgs.lre` from NativeLink.
-            nativelink.overlays.lre
+            # Add `pkgs.lre` from Forge.
+            forge.overlays.lre
             rust-overlay.overlays.default
           ];
         };
 
-        # Option from the NativeLink flake module.
+        # Option from the Forge flake module.
         lre = {
-          # Use the lre-cc environment from NativeLink locally.
+          # Use the lre-cc environment from Forge locally.
           inherit (pkgs.lre.lre-cc.meta) Env;
         };
 

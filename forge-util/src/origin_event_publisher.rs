@@ -1,0 +1,164 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::time::Duration;
+
+use bytes::BytesMut;
+use futures::{FutureExt, future};
+use forge_proto::com::github::trace_machina::forge::events::{OriginEvent, OriginEvents};
+use prost::Message;
+use tokio::sync::{broadcast, mpsc};
+use tokio::time::sleep;
+use tracing::{error, warn};
+use uuid::{Timestamp, Uuid};
+
+use crate::shutdown_guard::{Priority, ShutdownGuard};
+use crate::store_trait::{Store, StoreLike};
+
+/// Publishes origin events to the store.
+#[derive(Debug)]
+pub struct OriginEventPublisher {
+    store: Store,
+    rx: mpsc::Receiver<OriginEvent>,
+    shutdown_tx: broadcast::Sender<ShutdownGuard>,
+    node_id: [u8; 6],
+}
+
+impl OriginEventPublisher {
+    pub fn new(
+        store: Store,
+        rx: mpsc::Receiver<OriginEvent>,
+        shutdown_tx: broadcast::Sender<ShutdownGuard>,
+    ) -> Self {
+        // Generate a random node_id for this instance
+        use rand::Rng;
+        let mut rng = rand::rng();
+        let mut node_id = [0u8; 6];
+        rng.fill(&mut node_id);
+
+        Self {
+            store,
+            rx,
+            shutdown_tx,
+            node_id,
+        }
+    }
+
+    /// Runs the origin event publisher.
+    pub async fn run(mut self) {
+        const MAX_EVENTS_PER_BATCH: usize = 1024;
+        let mut batch: Vec<OriginEvent> = Vec::with_capacity(MAX_EVENTS_PER_BATCH);
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+        let shutdown_fut = shutdown_rx.recv().fuse();
+        tokio::pin!(shutdown_fut);
+        let shutdown_guard = future::pending().left_future();
+        tokio::pin!(shutdown_guard);
+        loop {
+            tokio::select! {
+                biased;
+                _ = self.rx.recv_many(&mut batch, MAX_EVENTS_PER_BATCH) => {
+                    self.handle_batch(&mut batch).await;
+                }
+                shutdown_guard_res = &mut shutdown_fut => {
+                    tracing::info!("Received shutdown down in origin event publisher");
+                    let Ok(mut local_shutdown_guard) = shutdown_guard_res else {
+                        tracing::error!("Received shutdown down in origin event publisher but failed to get shutdown guard");
+                        return;
+                    };
+                    shutdown_guard.set(async move {
+                        local_shutdown_guard.wait_for(Priority::P0).await;
+                    }
+                    .right_future());
+                }
+                () = &mut shutdown_guard => {
+                    // All other services with less priority have completed.
+                    // We may still need to process any remaining events.
+                    while !self.rx.is_empty() {
+                        self.rx.recv_many(&mut batch, MAX_EVENTS_PER_BATCH).await;
+                        self.handle_batch(&mut batch).await;
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
+    async fn handle_batch(&self, batch: &mut Vec<OriginEvent>) {
+        // Bounded so a sustained store outage can't block the publisher (and
+        // thus the schedulers feeding it) forever; enough to ride out a
+        // Sentinel failover.
+        const MAX_UPLOAD_ATTEMPTS: u32 = 5;
+        // UUID v6 requires a timestamp and node ID
+        // Create timestamp from current system time with nanosecond precision
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        let ts = Timestamp::from_unix(
+            uuid::timestamp::context::NoContext,
+            now.as_secs(),
+            now.subsec_nanos(),
+        );
+        let uuid = Uuid::new_v6(ts, &self.node_id);
+        let events = OriginEvents {
+            #[expect(
+                clippy::drain_collect,
+                reason = "Clippy wants us to use use `mem::take`, but this would move all capacity \
+                    as well to the new vector. Since it is much more likely that we will have a \
+                    small number of events in the batch, we prefer to use `drain` and `collect` \
+                    here, so we only need to allocate the exact amount of memory needed and let \
+                    the batch vector's capacity be reused."
+            )]
+            events: batch.drain(..).collect(),
+        };
+        let mut data = BytesMut::new();
+        if let Err(e) = events.encode(&mut data) {
+            error!("Failed to encode origin events: {}", e);
+            return;
+        }
+        // The batch has already been drained out of `batch`, so a failed store
+        // write would silently lose these events (the source of the recurring
+        // "No action-level resource sizing records" — origin events dropped
+        // during a transient Redis disruption such as a Sentinel failover).
+        // Retry the upload, re-resolving the master each time, so a transient
+        // failure doesn't drop the events.
+        let key = format!("OriginEvents:{}", uuid.hyphenated());
+        let data = data.freeze();
+        for attempt in 1..=MAX_UPLOAD_ATTEMPTS {
+            match self
+                .store
+                .as_store_driver_pin()
+                .update_oneshot(key.clone().into(), data.clone())
+                .await
+            {
+                Ok(()) => return,
+                Err(err) if attempt < MAX_UPLOAD_ATTEMPTS => {
+                    warn!(
+                        attempt,
+                        max = MAX_UPLOAD_ATTEMPTS,
+                        ?err,
+                        "Failed to upload origin events, retrying"
+                    );
+                    sleep(Duration::from_secs_f32(0.1 * attempt as f32)).await;
+                }
+                Err(err) => {
+                    error!(
+                        attempts = MAX_UPLOAD_ATTEMPTS,
+                        ?err,
+                        "Failed to upload origin events after retries"
+                    );
+                }
+            }
+        }
+    }
+}

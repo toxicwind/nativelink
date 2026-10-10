@@ -1,6 +1,6 @@
 # Persistent Worker Examples
 
-These examples show the NativeLink-facing part of Bazel actions that opt in to
+These examples show the Forge-facing part of Bazel actions that opt in to
 remote persistent worker execution.
 
 Persistent workers are useful for JVM-heavy tools such as `javac`, `scalac`, and

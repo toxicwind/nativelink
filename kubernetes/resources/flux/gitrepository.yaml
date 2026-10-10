@@ -2,10 +2,10 @@
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
-  name: nativelink-infra
+  name: forge-infra
   namespace: flux-system
 spec:
   interval: 2m
-  url: https://github.com/TraceMachina/nativelink
+  url: https://github.com/toxicwind/forge
   ref:
     branch: main

@@ -1,4 +1,4 @@
-# Prometheus Configuration for NativeLink Metrics
+# Prometheus Configuration for Forge Metrics
 # This configuration sets up Prometheus to receive metrics via OTLP and scrape format
 #
 # NOTE: This configuration uses `translation_strategy: NoUTF8EscapingWithSuffixes` which
@@ -10,12 +10,12 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'nativelink-cluster'
+    cluster: 'forge-cluster'
     environment: 'production'
 
 # Enable OTLP receiver (requires --web.enable-otlp-receiver flag)
 otlp:
-  # Promote NativeLink-specific resource attributes to labels
+  # Promote Forge-specific resource attributes to labels
   promote_resource_attributes:
     - service.instance.id
     - service.name
@@ -38,10 +38,10 @@ otlp:
     - k8s.pod.name
     - k8s.replicaset.name
     - k8s.statefulset.name
-    # NativeLink-specific attributes
-    - nativelink.instance_name
-    - nativelink.worker_id
-    - nativelink.scheduler_name
+    # Forge-specific attributes
+    - forge.instance_name
+    - forge.worker_id
+    - forge.scheduler_name
 
   # Use NoTranslation to preserve metric names with UTF-8 support
   # This keeps OpenTelemetry semantic convention names intact
@@ -54,9 +54,9 @@ scrape_configs:
     static_configs:
       - targets: ['otel-collector:9090']
     metric_relabel_configs:
-      # Add nativelink prefix to all metrics from collector
+      # Add forge prefix to all metrics from collector
       - source_labels: [__name__]
-        regex: '(nativelink_.*)'
+        regex: '(forge_.*)'
         target_label: __name__
         replacement: '${1}'
 
@@ -65,13 +65,13 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Optional: Direct scrape of NativeLink instances (if metrics endpoint is exposed)
-  # - job_name: 'nativelink-direct'
+  # Optional: Direct scrape of Forge instances (if metrics endpoint is exposed)
+  # - job_name: 'forge-direct'
   #   static_configs:
-  #     - targets: ['nativelink-cas:8080', 'nativelink-scheduler:8080']
+  #     - targets: ['forge-cas:8080', 'forge-scheduler:8080']
   #   metrics_path: '/metrics'
 
-# Recording rules for common NativeLink queries
+# Recording rules for common Forge queries
 rule_files:
   - /etc/prometheus/rules/*.yml
 
@@ -81,81 +81,81 @@ alerting:
     - static_configs:
         - targets: ['alertmanager:9093']
 
-# Example recording rules for NativeLink metrics
-# Save this as a separate file: rules/nativelink-recording-rules.yml
+# Example recording rules for Forge metrics
+# Save this as a separate file: rules/forge-recording-rules.yml
 # rule_files content example:
 ---
-# Recording Rules for NativeLink Metrics
+# Recording Rules for Forge Metrics
 groups:
-  - name: nativelink_execution
+  - name: forge_execution
     interval: 30s
     rules:
       # Execution success rate
-      - record: nativelink:execution_success_rate
+      - record: forge:execution_success_rate
         expr: |
-          sum(rate(nativelink_execution_completed_count_total{execution_result="success"}[5m])) /
-          sum(rate(nativelink_execution_completed_count_total[5m]))
+          sum(rate(forge_execution_completed_count_total{execution_result="success"}[5m])) /
+          sum(rate(forge_execution_completed_count_total[5m]))
 
       # Average queue time
-      - record: nativelink:execution_queue_time_avg
+      - record: forge:execution_queue_time_avg
         expr: |
           histogram_quantile(0.5,
-            sum(rate(nativelink_execution_queue_time_bucket[5m])) by (le, instance_name)
+            sum(rate(forge_execution_queue_time_bucket[5m])) by (le, instance_name)
           )
 
       # Actions per stage
-      - record: nativelink:execution_active_by_stage
+      - record: forge:execution_active_by_stage
         expr: |
-          sum(nativelink_execution_active_count) by (execution_stage, instance_name)
+          sum(forge_execution_active_count) by (execution_stage, instance_name)
 
       # Stage transition rate
-      - record: nativelink:stage_transition_rate
+      - record: forge:stage_transition_rate
         expr: |
-          sum(rate(nativelink_execution_stage_transitions_total[5m])) by (instance_name)
+          sum(rate(forge_execution_stage_transitions_total[5m])) by (instance_name)
 
-  - name: nativelink_cache
+  - name: forge_cache
     interval: 30s
     rules:
       # Cache hit rate
-      - record: nativelink:cache_hit_rate
+      - record: forge:cache_hit_rate
         expr: |
-          sum(rate(nativelink_cache_operations_total{cache_operation_result="hit"}[5m])) by (cache_type) /
-          sum(rate(nativelink_cache_operations_total{cache_operation_name="read"}[5m])) by (cache_type)
+          sum(rate(forge_cache_operations_total{cache_operation_result="hit"}[5m])) by (cache_type) /
+          sum(rate(forge_cache_operations_total{cache_operation_name="read"}[5m])) by (cache_type)
 
       # Cache operation latency p95
-      - record: nativelink:cache_operation_latency_p95
+      - record: forge:cache_operation_latency_p95
         expr: |
           histogram_quantile(0.95,
-            sum(rate(nativelink_cache_operation_duration_bucket[5m])) by (le, cache_type, cache_operation_name)
+            sum(rate(forge_cache_operation_duration_bucket[5m])) by (le, cache_type, cache_operation_name)
           )
 
       # Cache size utilization
-      - record: nativelink:cache_size_bytes
+      - record: forge:cache_size_bytes
         expr: |
-          sum(nativelink_cache_size) by (cache_type, instance_name)
+          sum(forge_cache_size) by (cache_type, instance_name)
 
       # Cache eviction rate
-      - record: nativelink:cache_eviction_rate
+      - record: forge:cache_eviction_rate
         expr: |
-          sum(rate(nativelink_cache_operations_total{cache_operation_name="evict"}[5m])) by (cache_type)
+          sum(rate(forge_cache_operations_total{cache_operation_name="evict"}[5m])) by (cache_type)
 
-  - name: nativelink_performance
+  - name: forge_performance
     interval: 60s
     rules:
       # Overall system throughput
-      - record: nativelink:system_throughput
+      - record: forge:system_throughput
         expr: |
-          sum(rate(nativelink_execution_completed_count_total[5m]))
+          sum(rate(forge_execution_completed_count_total[5m]))
 
       # Worker utilization
-      - record: nativelink:worker_utilization
+      - record: forge:worker_utilization
         expr: |
-          sum(nativelink_execution_active_count{execution_stage="executing"}) by (execution_worker_id) /
-          count(count by (execution_worker_id) (nativelink_execution_active_count))
+          sum(forge_execution_active_count{execution_stage="executing"}) by (execution_worker_id) /
+          count(count by (execution_worker_id) (forge_execution_active_count))
 
       # Action completion time (from queued to completed)
-      - record: nativelink:action_total_duration_p99
+      - record: forge:action_total_duration_p99
         expr: |
           histogram_quantile(0.99,
-            sum(rate(nativelink_execution_total_duration_bucket[5m])) by (le, instance_name)
+            sum(rate(forge_execution_total_duration_bucket[5m])) by (le, instance_name)
           )

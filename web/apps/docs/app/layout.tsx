@@ -11,11 +11,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "NativeLink Docs",
-    template: "%s | NativeLink Docs",
+    default: "Forge Docs",
+    template: "%s | Forge Docs",
   },
-  description: "Documentation for NativeLink, a high-performance remote build cache and execution service.",
-  metadataBase: new URL("https://docs.nativelink.com"),
+  description: "Documentation for Forge, a high-performance remote build cache and execution service.",
+  metadataBase: new URL("https://docs.forge.com"),
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
          * "class" and "data-theme" attributes is intentional:
          *   - .dark class drives Fumadocs's built-in Shiki dual-theme code
          *     blocks (the CSS keys off html.dark, not data-theme)
-         *   - data-theme="dark" drives our @nativelink/tokens brand vars
+         *   - data-theme="dark" drives our @forge/tokens brand vars
          *     used everywhere else in the UI.
          * Same localStorage key as marketing so the toggle persists across
          * both apps. */}

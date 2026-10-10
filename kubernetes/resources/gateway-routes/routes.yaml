@@ -2,12 +2,12 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: GRPCRoute
 metadata:
-  name: nativelink-route
+  name: forge-route
 spec:
   parentRefs:
-    - name: nativelink-gateway
-      sectionName: nativelink-gateway
+    - name: forge-gateway
+      sectionName: forge-gateway
   rules:
     - backendRefs:
-        - name: nativelink
+        - name: forge
           port: 50051

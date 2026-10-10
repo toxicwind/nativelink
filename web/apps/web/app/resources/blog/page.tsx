@@ -1,4 +1,4 @@
-import { Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Eyebrow, Reveal, Section } from "@forge/ui";
 import { getAllPosts } from "../../../lib/posts";
 import { PostSection, postToCard } from "../post-sections";
 
@@ -26,7 +26,7 @@ export default function BlogIndexPage() {
                 Writing from the team
               </h1>
               <p className="mx-auto mt-5 max-w-[640px] text-[17px] leading-relaxed text-muted-foreground">
-                Tutorials, case studies, and announcements from the people building NativeLink.
+                Tutorials, case studies, and announcements from the people building Forge.
               </p>
             </div>
           </Reveal>

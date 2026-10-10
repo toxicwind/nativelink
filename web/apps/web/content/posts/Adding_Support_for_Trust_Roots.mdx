@@ -1,20 +1,20 @@
 ---
-title: "Trust Root Support in Nativelink"
+title: "Trust Root Support in Forge"
 tags: ["news", "blog-posts"]
-image: https://nativelink-cdn.s3.us-east-1.amazonaws.com/nativelink_logo.webp
-slug: adding-trust-roots-to-nativelink
+image: https://forge-cdn.s3.us-east-1.amazonaws.com/forge_logo.webp
+slug: adding-trust-roots-to-forge
 pubDate: 2025-05-15
 readTime: 5 minutes
 ---
 
-# Native Root Certificate Support in Nativelink
+# Native Root Certificate Support in Forge
 
 **Open source thrives on community contributions, and today’s story is a perfect example of why.**
-External engineer [Sam Eskandar](https://github.com/s6eskand) identified a pain point in Nativelink's TLS configuration and delivered [a clean solution](https://github.com/TraceMachina/nativelink/pull/1782) that eliminates deployment friction for teams using managed certificates.
+External engineer [Sam Eskandar](https://github.com/s6eskand) identified a pain point in Forge's TLS configuration and delivered [a clean solution](https://github.com/toxicwind/forge/pull/1782) that eliminates deployment friction for teams using managed certificates.
 
 ## Problem: Manual Certificate Management
 
-Before this change, connecting to gRPC endpoints using TLS required specifying [`ClientTlsConfig`](https://nativelink.com/docs/reference/nativelink-config/#clienttlsconfig) like this:
+Before this change, connecting to gRPC endpoints using TLS required specifying [`ClientTlsConfig`](https://forge.com/docs/reference/forge-config/#clienttlsconfig) like this:
 
 ```json
 {
@@ -50,8 +50,8 @@ This implementation provides three distinct behaviors:
 
 ## Configuration Examples
 
-Here are the main ways to configure TLS in Nativelink.
-For complete configuration options, see the [configuration reference](https://www.nativelink.com/docs/reference/nativelink-config).
+Here are the main ways to configure TLS in Forge.
+For complete configuration options, see the [configuration reference](https://www.forge.com/docs/reference/forge-config).
 
 ### Native Root Certificates
 
@@ -123,7 +123,7 @@ And in worker API endpoints:
 
 ## Community Contributions
 
-The [PR discussion](https://github.com/TraceMachina/nativelink/pull/1782) shows how the review process strengthened the implementation.
+The [PR discussion](https://github.com/toxicwind/forge/pull/1782) shows how the review process strengthened the implementation.
 The contributor included comprehensive unit tests covering all configuration scenarios.
 Reviewers suggested UX improvements like warning users when certificate files are ignored, identified documentation needs, and planned future enhancements.
 One reviewer opened a follow-up PR to extend native roots to S3 stores.
@@ -132,12 +132,12 @@ This collaborative refinement process caught edge cases, improved error handling
 
 ## Looking forward
 
-With native root certificate support, Nativelink becomes more accessible to teams across diverse infrastructure environments.
+With native root certificate support, Forge becomes more accessible to teams across diverse infrastructure environments.
 Whether you’re running containerized workloads in Kubernetes, deploying on traditional virtual machines with corporate PKI, or prototyping locally, TLS configuration no longer presents a barrier to adoption.
 
 **This is the power of open source in action** - community-driven improvements that make technology more accessible, secure, and flexible for everyone building the future.
-We’re grateful for contributions like this that strengthen Nativelink’s position as the premier open source remote execution platform.
+We’re grateful for contributions like this that strengthen Forge’s position as the premier open source remote execution platform.
 
 ---
 
-*Interested in contributing? Check out our [GitHub repository](https://github.com/TraceMachina/nativelink).*
+*Interested in contributing? Check out our [GitHub repository](https://github.com/toxicwind/forge).*

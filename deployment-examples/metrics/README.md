@@ -1,10 +1,10 @@
-# NativeLink Metrics with OpenTelemetry
+# Forge Metrics with OpenTelemetry
 
-This directory contains configurations and examples for collecting, processing, and visualizing NativeLink metrics using OpenTelemetry (OTEL) and various server systems.
+This directory contains configurations and examples for collecting, processing, and visualizing Forge metrics using OpenTelemetry (OTEL) and various server systems.
 
 ## Overview
 
-NativeLink exposes remote execution metrics through OpenTelemetry. Cache
+Forge exposes remote execution metrics through OpenTelemetry. Cache
 operation metrics are available when the store is explicitly wrapped with the
 opt-in `cache_metrics` store wrapper. These metrics provide insights into:
 
@@ -14,12 +14,12 @@ opt-in `cache_metrics` store wrapper. These metrics provide insights into:
 
 ## Quick Start
 
-NativeLink doesn't expose a Prometheus scrape endpoint directly. It emits OTLP
+Forge doesn't expose a Prometheus scrape endpoint directly. It emits OTLP
 metrics. To view those metrics in Prometheus, use one of these paths:
 
-1. NativeLink sends OTLP to an OpenTelemetry Collector, and Prometheus scrapes
+1. Forge sends OTLP to an OpenTelemetry Collector, and Prometheus scrapes
    the Collector's Prometheus exporter endpoint.
-2. NativeLink sends OTLP/HTTP metrics directly to Prometheus with Prometheus'
+2. Forge sends OTLP/HTTP metrics directly to Prometheus with Prometheus'
    OTLP receiver enabled.
 
 ### Using Docker Compose (Recommended for Development)
@@ -30,20 +30,20 @@ cd deployment-examples/metrics
 docker-compose up -d
 ```
 
-2. Configure NativeLink to send metrics to the collector:
+2. Configure Forge to send metrics to the collector:
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-export OTEL_SERVICE_NAME=nativelink
-export OTEL_RESOURCE_ATTRIBUTES="deployment.environment=dev,nativelink.instance_name=main"
+export OTEL_SERVICE_NAME=forge
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment=dev,forge.instance_name=main"
 ```
 
-3. Start NativeLink with your configuration:
+3. Start Forge with your configuration:
 ```bash
-nativelink /path/to/config.json
+forge /path/to/config.json
 ```
 
-To emit `nativelink_cache_*` metrics, wrap the CAS and/or AC store you want to
+To emit `forge_cache_*` metrics, wrap the CAS and/or AC store you want to
 measure:
 
 ```json5
@@ -53,15 +53,15 @@ measure:
     "cache_type": "cas",
     "backend": {
       "filesystem": {
-        "content_path": "~/.cache/nativelink/content_path-cas",
-        "temp_path": "~/.cache/nativelink/tmp_path-cas"
+        "content_path": "~/.cache/forge/content_path-cas",
+        "temp_path": "~/.cache/forge/tmp_path-cas"
       }
     }
   }
 }
 ```
 
-If `cache_metrics` is absent, NativeLink constructs the same store graph as it
+If `cache_metrics` is absent, Forge constructs the same store graph as it
 would without cache metrics. The disabled path doesn't add a wrapper, timer,
 attribute allocation, or OpenTelemetry recording call to cache operations.
 
@@ -70,7 +70,7 @@ attribute allocation, or OpenTelemetry recording call to cache operations.
 - Grafana: http://localhost:3000 (if included)
 - OTEL Collector metrics: http://localhost:8888/metrics
 
-In this flow, NativeLink sends OTLP to the Collector on `:4317`. The Collector
+In this flow, Forge sends OTLP to the Collector on `:4317`. The Collector
 serves Prometheus-format metrics on its Prometheus exporter endpoint, and
 Prometheus scrapes that endpoint.
 
@@ -86,7 +86,7 @@ kubectl apply -f kubernetes/otel-collector.yaml
 kubectl apply -f kubernetes/prometheus.yaml
 ```
 
-3. Configure NativeLink deployment to send metrics:
+3. Configure Forge deployment to send metrics:
 ```yaml
 env:
   - name: OTEL_EXPORTER_OTLP_ENDPOINT
@@ -106,12 +106,12 @@ wrapped with `cache_metrics`; configuring OTEL alone doesn't enable them.
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `nativelink_cache_operations_total` | Counter | Total cache operations | `cache_type`, `cache_operation_name`, `cache_operation_result` |
-| `nativelink_cache_operation_duration` | Histogram | Operation latency in milliseconds | `cache_type`, `cache_operation_name` |
-| `nativelink_cache_io_total` | Counter | Bytes read/written | `cache_type`, `cache_operation_name` |
-| `nativelink_cache_size` | Gauge | Current cache size in bytes | `cache_type` |
-| `nativelink_cache_entries` | Gauge | Number of cached entries | `cache_type` |
-| `nativelink_cache_item_size` | Histogram | Size distribution of cache entries | `cache_type` |
+| `forge_cache_operations_total` | Counter | Total cache operations | `cache_type`, `cache_operation_name`, `cache_operation_result` |
+| `forge_cache_operation_duration` | Histogram | Operation latency in milliseconds | `cache_type`, `cache_operation_name` |
+| `forge_cache_io_total` | Counter | Bytes read/written | `cache_type`, `cache_operation_name` |
+| `forge_cache_size` | Gauge | Current cache size in bytes | `cache_type` |
+| `forge_cache_entries` | Gauge | Number of cached entries | `cache_type` |
+| `forge_cache_item_size` | Histogram | Size distribution of cache entries | `cache_type` |
 
 **Cache Operation Names:**
 - `read`: Data retrieval operations
@@ -130,14 +130,14 @@ wrapped with `cache_metrics`; configuring OTEL alone doesn't enable them.
 
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `nativelink_execution_stage_duration` | Histogram | Time spent in each execution stage | `execution_stage` |
-| `nativelink_execution_total_duration` | Histogram | Total execution time from submission to completion | `execution_instance` |
-| `nativelink_execution_queue_time` | Histogram | Time spent waiting in queue | `execution_priority` |
-| `nativelink_execution_active_count` | Gauge | Current actions in each stage | `execution_stage` |
-| `nativelink_execution_completed_count_total` | Counter | Completed executions | `execution_result`, `execution_action_digest` |
-| `nativelink_execution_stage_transitions_total` | Counter | Stage transition events | `execution_instance`, `execution_priority` |
-| `nativelink_execution_output_size` | Histogram | Size of execution outputs | - |
-| `nativelink_execution_retry_count_total` | Counter | Number of retries | - |
+| `forge_execution_stage_duration` | Histogram | Time spent in each execution stage | `execution_stage` |
+| `forge_execution_total_duration` | Histogram | Total execution time from submission to completion | `execution_instance` |
+| `forge_execution_queue_time` | Histogram | Time spent waiting in queue | `execution_priority` |
+| `forge_execution_active_count` | Gauge | Current actions in each stage | `execution_stage` |
+| `forge_execution_completed_count_total` | Counter | Completed executions | `execution_result`, `execution_action_digest` |
+| `forge_execution_stage_transitions_total` | Counter | Stage transition events | `execution_instance`, `execution_priority` |
+| `forge_execution_output_size` | Histogram | Size of execution outputs | - |
+| `forge_execution_retry_count_total` | Counter | Number of retries | - |
 
 **Execution Stages:**
 - `unknown`: Initial state
@@ -154,14 +154,14 @@ wrapped with `cache_metrics`; configuring OTEL alone doesn't enable them.
 - `cache_hit`: Result found in cache
 
 > **Note on Counter Names in Prometheus:** Counter metrics are exposed with a `_total` suffix
-> (for example, `nativelink_execution_completed_count_total`). The Docker Compose quickstart,
+> (for example, `forge_execution_completed_count_total`). The Docker Compose quickstart,
 > recording rules, and included dashboards assume `_total` counter names.
 
 ## Configuration
 
 ### Environment Variables
 
-NativeLink uses standard OpenTelemetry environment variables:
+Forge uses standard OpenTelemetry environment variables:
 
 ```bash
 # OTLP Exporter Configuration
@@ -171,7 +171,7 @@ OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer token"  # Optional auth headers
 OTEL_EXPORTER_OTLP_COMPRESSION=gzip                # Compression (none, gzip)
 
 # Resource Attributes
-OTEL_SERVICE_NAME=nativelink                       # Service name (fixed)
+OTEL_SERVICE_NAME=forge                       # Service name (fixed)
 OTEL_RESOURCE_ATTRIBUTES="key1=value1,key2=value2" # Custom attributes
 
 # Metric Export Configuration
@@ -199,13 +199,13 @@ See `otel-collector-config.yaml` for a complete example.
 
 Prometheus offers native OTLP support and excellent query capabilities.
 
-**Direct OTLP Ingestion from NativeLink:**
+**Direct OTLP Ingestion from Forge:**
 ```bash
 prometheus --web.enable-otlp-receiver \
           --storage.tsdb.out-of-order-time-window=30m
 ```
 
-Then point NativeLink at Prometheus' OTLP metrics endpoint:
+Then point Forge at Prometheus' OTLP metrics endpoint:
 
 ```bash
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
@@ -270,7 +270,7 @@ exporters:
   otlp:
     endpoint: quickwit:7281
     headers:
-      "x-quickwit-index": "nativelink-metrics"
+      "x-quickwit-index": "forge-metrics"
 ```
 
 ## Example Queries
@@ -279,39 +279,39 @@ exporters:
 
 **Cache hit rate:**
 ```promql
-sum(rate(nativelink_cache_operations_total{cache_operation_result="hit"}[5m])) by (cache_type) /
-sum(rate(nativelink_cache_operations_total{cache_operation_name="read"}[5m])) by (cache_type)
+sum(rate(forge_cache_operations_total{cache_operation_result="hit"}[5m])) by (cache_type) /
+sum(rate(forge_cache_operations_total{cache_operation_name="read"}[5m])) by (cache_type)
 ```
 
 **Execution success rate:**
 ```promql
-sum(rate(nativelink_execution_completed_count_total{execution_result="success"}[5m])) /
-sum(rate(nativelink_execution_completed_count_total[5m]))
+sum(rate(forge_execution_completed_count_total{execution_result="success"}[5m])) /
+sum(rate(forge_execution_completed_count_total[5m]))
 ```
 
 **Queue depth by priority:**
 ```promql
-sum(nativelink_execution_active_count{execution_stage="queued"}) by (execution_priority)
+sum(forge_execution_active_count{execution_stage="queued"}) by (execution_priority)
 ```
 
 **P95 cache operation latency:**
 ```promql
 histogram_quantile(0.95,
-  sum(rate(nativelink_cache_operation_duration_bucket[5m])) by (le, cache_type)
+  sum(rate(forge_cache_operation_duration_bucket[5m])) by (le, cache_type)
 )
 ```
 
 **Worker utilization:**
 ```promql
-count(nativelink_execution_active_count{execution_stage="executing"} > 0) /
-count(count by (execution_worker_id) (nativelink_execution_active_count))
+count(forge_execution_active_count{execution_stage="executing"} > 0) /
+count(count by (execution_worker_id) (forge_execution_active_count))
 ```
 
 ### Joining with Resource Attributes
 
 Use `target_info` to join resource attributes:
 ```promql
-rate(nativelink_execution_completed_count_total[5m])
+rate(forge_execution_completed_count_total[5m])
 * on (job, instance) group_left (k8s_cluster_name, deployment_environment)
 target_info
 ```
@@ -344,13 +344,13 @@ Key panels include:
 
 ```yaml
 groups:
-  - name: nativelink_alerts
+  - name: forge_alerts
     rules:
       - alert: HighErrorRate
         expr: |
           (1 - (
-            sum(rate(nativelink_execution_completed_count_total{execution_result="success"}[5m])) /
-            sum(rate(nativelink_execution_completed_count_total[5m]))
+            sum(rate(forge_execution_completed_count_total{execution_result="success"}[5m])) /
+            sum(rate(forge_execution_completed_count_total[5m]))
           )) > 0.05
         for: 5m
         labels:
@@ -360,7 +360,7 @@ groups:
 
       - alert: CacheMissRateHigh
         expr: |
-          (1 - nativelink:cache_hit_rate) > 0.5
+          (1 - forge:cache_hit_rate) > 0.5
         for: 10m
         labels:
           severity: info
@@ -369,7 +369,7 @@ groups:
 
       - alert: QueueBacklog
         expr: |
-          sum(nativelink_execution_active_count{execution_stage="queued"}) > 100
+          sum(forge_execution_active_count{execution_stage="queued"}) > 100
         for: 15m
         labels:
           severity: warning
@@ -378,7 +378,7 @@ groups:
 
       - alert: WorkerUtilizationLow
         expr: |
-          nativelink:worker_utilization < 0.3
+          forge:worker_utilization < 0.3
         for: 30m
         labels:
           severity: info
@@ -390,9 +390,9 @@ groups:
 
 ### No Metrics Appearing
 
-1. Check NativeLink is configured with OTEL environment variables:
+1. Check Forge is configured with OTEL environment variables:
 ```bash
-ps aux | grep nativelink | grep OTEL
+ps aux | grep forge | grep OTEL
 ```
 
 2. Verify collector is receiving data:
@@ -410,7 +410,7 @@ kubectl logs -l app=otel-collector
 
 ### Cache Metrics Missing
 
-If you see `nativelink_execution_*` metrics but no `nativelink_cache_*` metrics, your NativeLink build may not be emitting store-level cache operation metrics yet. In that case, cache recording rules like `nativelink:cache_hit_rate` won't produce any series.
+If you see `forge_execution_*` metrics but no `forge_cache_*` metrics, your Forge build may not be emitting store-level cache operation metrics yet. In that case, cache recording rules like `forge:cache_hit_rate` won't produce any series.
 
 ### High Memory Usage
 
@@ -470,7 +470,7 @@ otlp:
 3. **Downsampling**: Use Thanos or Cortex for long-term storage
 4. **Federation**: Split metrics across multiple Prometheus instances
 
-### NativeLink Optimization
+### Forge Optimization
 
 1. **Export Interval**: Increase `OTEL_METRIC_EXPORT_INTERVAL` to reduce overhead
 2. **Resource Attributes**: Minimize cardinality of custom attributes
@@ -481,12 +481,12 @@ otlp:
 - [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
 - [Prometheus Best Practices](https://prometheus.io/docs/practices/)
 - [OTEL Collector Configuration](https://opentelemetry.io/docs/collector/configuration/)
-- [NativeLink Documentation](https://nativelink.com/docs)
+- [Forge Documentation](https://forge.com/docs)
 - [Grafana Dashboard Examples](https://grafana.com/grafana/dashboards/)
 
 ## Support
 
 For issues or questions:
-- File an issue: https://github.com/TraceMachina/nativelink/issues
+- File an issue: https://github.com/toxicwind/forge/issues
 - Join our Slack: https://forms.gle/LtaWSixEC6bYi5xF7
-- Check documentation: https://nativelink.com/docs
+- Check documentation: https://forge.com/docs

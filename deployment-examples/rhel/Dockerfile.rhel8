@@ -1,4 +1,4 @@
-# Copyright 2024 The NativeLink Authors. All rights reserved.
+# Copyright 2024 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,21 +38,21 @@ RUN yum update --assumeyes && \
 
 # Build the binary.
 FROM dependencies AS builder
-WORKDIR /root/nativelink
+WORKDIR /root/forge
 COPY . .
 ARG OPT_LEVEL
 ARG ADDITIONAL_BAZEL_FLAGS
-RUN bazel build -c ${OPT_LEVEL} ${ADDITIONAL_BAZEL_FLAGS} nativelink && \
-    cp ./bazel-bin/nativelink /root/nativelink-bin
+RUN bazel build -c ${OPT_LEVEL} ${ADDITIONAL_BAZEL_FLAGS} forge && \
+    cp ./bazel-bin/forge /root/forge-bin
 
 # Go back to a fresh redhat container and copy only the compiled binary.
 FROM redhat/ubi8:8.10-1756195303@sha256:534c2c0efa4150ede18e3f9d7480d3b9ec2a52e62bc91cd54e08ee7336819619 AS final
-COPY --from=builder /root/nativelink-bin /usr/local/bin/nativelink
+COPY --from=builder /root/forge-bin /usr/local/bin/forge
 
 ARG ADDITIONAL_SETUP_WORKER_CMD
 
 RUN bash -ueo pipefail -c "${ADDITIONAL_SETUP_WORKER_CMD}" \
-    && mkdir -p /root/.cache/nativelink
+    && mkdir -p /root/.cache/forge
 
 EXPOSE 50051/tcp 50052/tcp
-CMD ["nativelink"]
+CMD ["forge"]

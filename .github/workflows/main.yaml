@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   # TODO(palfrey): Flaky. Fix.
-  # docker-compose-compiles-nativelink:
+  # docker-compose-compiles-forge:
   #   # The type of runner that the job will run on.
   #   runs-on: ubuntu-24.04
   #   strategy:
@@ -37,7 +37,7 @@ jobs:
   #     uses: >- # v3.9.0
   #       docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca
 
-  #   - name: Build Nativelink image
+  #   - name: Build Forge image
   #     uses: >- # v6.13.0
   #       docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991
   #     with:
@@ -48,7 +48,7 @@ jobs:
   #         OS_VERSION=${{ matrix.os_version }}
   #         ADDITIONAL_SETUP_WORKER_CMD=apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y gcc g++ lld pkg-config python3
   #       load: true # This brings the build into `docker images` from buildx.
-  #       tags: trace_machina/nativelink:latest
+  #       tags: trace_machina/forge:latest
 
   #   - name: Build builder image
   #     uses: >- # v6.13.0
@@ -60,16 +60,16 @@ jobs:
   #         OPT_LEVEL=opt
   #         OS_VERSION=${{ matrix.os_version }}
   #       load: true # This brings the build into `docker images` from buildx.
-  #       tags: trace_machina/nativelink:builder
+  #       tags: trace_machina/forge:builder
   #       target: builder
 
-  #   - name: Compile NativeLink with NativeLink
+  #   - name: Compile Forge with Forge
   #     run: |
   #       mkdir -p ~/.cache && \
   #       cd deployment-examples/docker-compose && \
   #       (docker-compose up -d || docker compose up -d) && \
   #       cd ../../ && \
-  #       docker run --rm --net=host -w /root/nativelink -v $PWD:/root/nativelink trace_machina/nativelink:builder sh -c ' \
+  #       docker run --rm --net=host -w /root/forge -v $PWD:/root/forge trace_machina/forge:builder sh -c ' \
   #         bazel clean && \
   #         bazel test //... \
   #         --extra_toolchains=@rust_toolchains//:all \
@@ -77,7 +77,7 @@ jobs:
   #         --remote_executor=grpc://127.0.0.1:50052 \
   #         --remote_default_exec_properties=cpu_count=2 \
   #       ' && \
-  #       docker run --rm --net=host -w /root/nativelink -v $PWD:/root/nativelink trace_machina/nativelink:builder sh -c ' \
+  #       docker run --rm --net=host -w /root/forge -v $PWD:/root/forge trace_machina/forge:builder sh -c ' \
   #         bazel clean && \
   #         bazel test //... \
   #         --extra_toolchains=@rust_toolchains//:all \
@@ -94,16 +94,16 @@ jobs:
       uses: >- # v6.0.2
         actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-    - name: Setup NativeLink Cloud
-      uses: ./.github/actions/setup-nativelink-cloud
+    - name: Setup Forge Cloud
+      uses: ./.github/actions/setup-forge-cloud
       with:
-        ci-mode: ${{ vars.NATIVELINK_CI_MODE }}
-        claim-base: ${{ secrets.NATIVELINK_STAGING_CLAIM_BASE }}
-        bes-results-url: ${{ secrets.NATIVELINK_STAGING_BES_RESULTS_URL }}
+        ci-mode: ${{ vars.FORGE_CI_MODE }}
+        claim-base: ${{ secrets.FORGE_STAGING_CLAIM_BASE }}
+        bes-results-url: ${{ secrets.FORGE_STAGING_BES_RESULTS_URL }}
         api-key: >-
           ${{ github.event_name == 'push'
-              && secrets.NATIVELINK_STAGING_API_KEY_RW
-              || secrets.NATIVELINK_STAGING_API_KEY_RO }}
+              && secrets.FORGE_STAGING_API_KEY_RW
+              || secrets.FORGE_STAGING_API_KEY_RO }}
         mode: ${{ github.event_name == 'push' && 'write' || 'read' }}
         exec: ${{ runner.os == 'Linux' && 'on' || 'off' }}
 
@@ -121,9 +121,9 @@ jobs:
           OPT_LEVEL=fastbuild
           ADDITIONAL_BAZEL_FLAGS=--extra_toolchains=@rust_toolchains//:all
         secret-files: |
-          nativelink-bazelrc=user.bazelrc
+          forge-bazelrc=user.bazelrc
         load: true # This brings the build into `docker images` from buildx.
-        tags: trace_machina/nativelink:latest
+        tags: trace_machina/forge:latest
 
     - name: Run tests
       env:

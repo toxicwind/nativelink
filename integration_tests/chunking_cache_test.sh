@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2026 The NativeLink Authors. All rights reserved.
+# Copyright 2026 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ fi
 # --remote_upload_local_results=false disables. To keep that anti-poisoning
 # default intact for PR/developer lanes, this test runs only where local
 # uploads are explicitly enabled: merges to main and the scheduled canary set
-# NL_LOCAL_UPLOADS=1 (see main.yaml / nativelink-cloud-canary.yaml).
+# NL_LOCAL_UPLOADS=1 (see main.yaml / forge-cloud-canary.yaml).
 if [[ ${NL_LOCAL_UPLOADS:-0} != "1" ]]; then
     echo "Skipping $(basename "$0"): requires local cache uploads (main/canary lanes only)."
     exit 0
@@ -40,8 +40,8 @@ set -x
 # chunked upload and SpliceBlob complete. Force synchronous uploads so the
 # chunk-index assertions below cannot race the upload.
 #
-# nativelink.bazelrc sets `build --remote_upload_local_results=false`
-# repo-wide, and CI's setup-nativelink-cloud action writes the same into
+# forge.bazelrc sets `build --remote_upload_local_results=false`
+# repo-wide, and CI's setup-forge-cloud action writes the same into
 # user.bazelrc for read-mode lanes. That suppresses the upload of this
 # locally-built genrule output, so the server never registers a chunk layout
 # and the index assertion below fails. Re-enable uploads for this test only
@@ -65,14 +65,14 @@ fi
 
 # The server must have registered a chunk layout for the spliced blob. The
 # index store is mounted from the host by docker-compose.
-CHUNK_INDEX_DIR="${NATIVELINK_DIR:-$HOME/.cache/nativelink}/content_path-chunk-index"
+CHUNK_INDEX_DIR="${FORGE_DIR:-$HOME/.cache/forge}/content_path-chunk-index"
 if [[ -z $(find "$CHUNK_INDEX_DIR" -type f 2> /dev/null) ]]; then
     echo "Expected a chunk layout in $CHUNK_INDEX_DIR after a chunked upload."
     echo "SpliceBlob was likely not used; check that the server advertises"
     echo "chunking support and that bazel supports the chunking flag."
     echo "Diagnostics: contents of the mounted cache dir and root's default:"
-    sudo find "${NATIVELINK_DIR:-$HOME/.cache/nativelink}" -maxdepth 1 2> /dev/null || true
-    sudo find /root/.cache/nativelink -maxdepth 1 2> /dev/null || true
+    sudo find "${FORGE_DIR:-$HOME/.cache/forge}" -maxdepth 1 2> /dev/null || true
+    sudo find /root/.cache/forge -maxdepth 1 2> /dev/null || true
     exit 1
 fi
 

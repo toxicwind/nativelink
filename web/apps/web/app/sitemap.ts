@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const BASE_URL = "https://nativelink.com";
+const BASE_URL = "https://forge.com";
 
 const routes: {
   path: string;

@@ -5,7 +5,7 @@ description: "Back the cache with an Azure Blob container: account and container
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone running NativeLink on Azure who wants the durable
+**Who this is for:** anyone running Forge on Azure who wants the durable
 tier to be a Blob Storage container. **What you'll have at the end:** a
 container-backed CAS behind a local fast tier. **Time:** twenty minutes, most
 of it access configuration.
@@ -29,8 +29,8 @@ stores: [
     fast_slow: {
       fast: {
         filesystem: {
-          content_path: "/var/lib/nativelink/cas/content",
-          temp_path: "/var/lib/nativelink/cas/tmp",
+          content_path: "/var/lib/forge/cas/content",
+          temp_path: "/var/lib/forge/cas/tmp",
           eviction_policy: { max_bytes: "50gb" },
         },
       },
@@ -38,7 +38,7 @@ stores: [
         experimental_cloud_object_store: {
           provider: "azure",
           account_name: "mystorageaccount",
-          container: "nativelink-cas",
+          container: "forge-cas",
           key_prefix: "cas/",
           retry: { max_retries: 6, delay: 0.3, jitter: 0.5 },
         },
@@ -51,9 +51,9 @@ stores: [
 `account_name` and `container` are the pair you have to set. From them the store
 builds the endpoint `https://{account_name}.blob.core.windows.net/{container}`.
 The container is a blob container inside the storage account. Create it before
-starting NativeLink; the store does not create it for you.
+starting Forge; the store does not create it for you.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ExperimentalAzureSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ExperimentalAzureSpec" />
 
 ## Three ways to point at a container [#three-ways-to-point-at-a-container]
 
@@ -64,7 +64,7 @@ reads `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_FEDERATED_TOKEN_FILE`
 if they are missing. A VM managed identity, a storage account key or an
 `az login` session are not tried. Nothing secret is in the config.
 
-<SourceLink file="nativelink-store/src/azure_blob_store.rs" symbol="AzureBlobStore" />
+<SourceLink file="forge-store/src/azure_blob_store.rs" symbol="AzureBlobStore" />
 
 **An endpoint override.** `endpoint` replaces the host portion only; the
 container is still appended to whatever you give. This is how you point the
@@ -76,7 +76,7 @@ store at an emulator such as Azurite:
   experimental_cloud_object_store: {
     provider: "azure",
     account_name: "devstoreaccount1",
-    container: "nativelink-cas",
+    container: "forge-cas",
     endpoint: "http://127.0.0.1:10000/devstoreaccount1",
   },
 },
@@ -98,7 +98,7 @@ construction and no credential is attached, because the signature in the URL
   experimental_cloud_object_store: {
     provider: "azure",
     account_name: "mystorageaccount",
-    container: "nativelink-cas",
+    container: "forge-cas",
     sas_url: "${AZURE_CAS_SAS_URL}",
   },
 },
@@ -224,7 +224,7 @@ the resulting token; a `sas_url` minted for the emulator avoids both.
 
 </Accordion>
 
-<Accordion title="Blobs exist in the container but NativeLink reports them missing" id="blobs-exist-in-the-container-but-nativelink-reports-them-missing">
+<Accordion title="Blobs exist in the container but Forge reports them missing" id="blobs-exist-in-the-container-but-forge-reports-them-missing">
 
 Check `consider_expired_after_s`. A non-zero value makes blobs older than that
 window invisible on purpose, so they pair with a matching lifecycle rule. If

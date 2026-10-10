@@ -2,7 +2,7 @@
   inherit (nix2container.packages.${final.stdenv.hostPlatform.system}) nix2container;
 
   # Note: Only put tools here that should be usable from external flakes.
-  nativelink-tools = let
+  forge-tools = let
     trivy-report = final.callPackage ./trivy-report.nix {};
   in {
     local-image-test = final.callPackage ./local-image-test.nix {

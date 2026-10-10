@@ -1,11 +1,11 @@
 {
-  "name": "@nativelink/web",
+  "name": "@forge/web",
   "type": "module",
   "dependencies": {
     "@mdx-js/loader": "^3.1.0",
     "@mdx-js/react": "^3.1.0",
-    "@nativelink/tokens": "workspace:*",
-    "@nativelink/ui": "workspace:*",
+    "@forge/tokens": "workspace:*",
+    "@forge/ui": "workspace:*",
     "@next/mdx": "~16.2.11",
     "@next/third-parties": "~16.2.11",
     "geist": "^1.5.1",
@@ -16,7 +16,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@nativelink/config": "workspace:*",
+    "@forge/config": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/mdx": "^2.0.13",
     "@types/node": "^26.0.0",

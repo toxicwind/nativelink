@@ -1,22 +1,22 @@
 ---
-title: "Supercharge Your C/C++ Builds without Migrating to Bazel: A Tutorial for CMake, Nativelink and BuildStream"
+title: "Supercharge Your C/C++ Builds without Migrating to Bazel: A Tutorial for CMake, Forge and BuildStream"
 tags: ["tutorial", "cmake", "build-acceleration", "blog-posts"]
-image: https://nativelink-cdn.s3.us-east-1.amazonaws.com/nativelink_logo.webp
-slug: accelerating-cmake-with-nativelink
+image: https://forge-cdn.s3.us-east-1.amazonaws.com/forge_logo.webp
+slug: accelerating-cmake-with-forge
 pubDate: 2025-08-12
 readTime: 8 minutes
 ---
 
-## Supercharge Your C/C++ Builds without Migrating to Bazel: A Tutorial for CMake Acceleration with Nativelink and BuildStream
+## Supercharge Your C/C++ Builds without Migrating to Bazel: A Tutorial for CMake Acceleration with Forge and BuildStream
 
-Slow build times can be a major drag on developer productivity. Waiting for your code to compile and build can interrupt your flow and waste valuable time. Lots of companies have moved to Bazel and Buck2 to deal with this issue. But for many companies that investment in migrating to Bazel is too risky or too costly. What if you could accelerate your C/C++ projects using CMake? This tutorial will guide you through setting up a blazing-fast build environment using [Nativelink](https://github.com/TraceMachina/nativelink) and [Apache BuildStream](https://buildstream.build/) for remote caching and execution. We'll walk through a "hello, world" example to get you up and running in under 15 minutes.
+Slow build times can be a major drag on developer productivity. Waiting for your code to compile and build can interrupt your flow and waste valuable time. Lots of companies have moved to Bazel and Buck2 to deal with this issue. But for many companies that investment in migrating to Bazel is too risky or too costly. What if you could accelerate your C/C++ projects using CMake? This tutorial will guide you through setting up a blazing-fast build environment using [Forge](https://github.com/toxicwind/forge) and [Apache BuildStream](https://buildstream.build/) for remote caching and execution. We'll walk through a "hello, world" example to get you up and running in under 15 minutes.
 
 -----
 
-### What are Nativelink and Apache BuildStream?
+### What are Forge and Apache BuildStream?
 
   * **BuildStream** is a flexible and extensible tool for building and integrating software stacks. It creates a sandbox environment for your builds, ensuring they're reproducible and isolated.
-  * **Nativelink** is a high-performance remote execution and caching service that's compatible with the Remote Execution API (REAPI). It acts as a server to store and retrieve build artifacts, and to execute build tasks on remote workers.
+  * **Forge** is a high-performance remote execution and caching service that's compatible with the Remote Execution API (REAPI). It acts as a server to store and retrieve build artifacts, and to execute build tasks on remote workers.
 
 By using them together, you can distribute your build jobs and cache their results, leading to significant speedups, especially in large projects.
 
@@ -161,9 +161,9 @@ config:
 
 -----
 
-### Configuring Nativelink for Remote Caching & Execution
+### Configuring Forge for Remote Caching & Execution
 
-With our project set up, it's time to bring in Nativelink to accelerate the build.
+With our project set up, it's time to bring in Forge to accelerate the build.
 
 #### `buildstream.conf`
 
@@ -185,26 +185,26 @@ remote-execution:
     url: http://localhost:50051
 ```
 
-This configuration tells BuildStream to connect to a Nativelink instance running on `localhost:50051` for artifact caching and remote execution.
+This configuration tells BuildStream to connect to a Forge instance running on `localhost:50051` for artifact caching and remote execution.
 
 -----
 
 ### Running the Build
 
-We'll use a script to launch the Nativelink service and then run the BuildStream build. The example below uses Nix to manage the dependencies, but you can adapt it to your environment.
+We'll use a script to launch the Forge service and then run the BuildStream build. The example below uses Nix to manage the dependencies, but you can adapt it to your environment.
 
 #### Launch Script
 
-Here is an example script, similar to `buildstream-with-nativelink-test.nix`, that shows how to run the build.
+Here is an example script, similar to `buildstream-with-forge-test.nix`, that shows how to run the build.
 
 ```nix
 {
-  nativelink,
+  forge,
   buildstream,
   buildbox,
   writeShellScriptBin,
 }:
-writeShellScriptBin "buildstream-with-nativelink-test" ''
+writeShellScriptBin "buildstream-with-forge-test" ''
   set -uo pipefail
 
   cleanup() {
@@ -213,7 +213,7 @@ writeShellScriptBin "buildstream-with-nativelink-test" ''
   }
   trap "cleanup" INT QUIT TERM EXIT
 
-  ${nativelink}/bin/nativelink -- integration_tests/buildstream/buildstream_cas.json5 | tee -i integration_tests/buildstream/nativelink.log &
+  ${forge}/bin/forge -- integration_tests/buildstream/buildstream_cas.json5 | tee -i integration_tests/buildstream/forge.log &
 
   # TODO(palfrey): PATH is workaround for https://github.com/NixOS/nixpkgs/issues/248000#issuecomment-2934704963
   bst_output=$(cd integration_tests/buildstream && PATH=${buildbox}/bin:$PATH ${buildstream}/bin/bst -c buildstream.conf build hello.bst 2>&1 | tee -i buildstream.log)
@@ -229,28 +229,28 @@ writeShellScriptBin "buildstream-with-nativelink-test" ''
     ;;
   esac
 
-  nativelink_output=$(cat integration_tests/buildstream/nativelink.log)
+  forge_output=$(cat integration_tests/buildstream/forge.log)
 
-  case $nativelink_output in
+  case $forge_output in
     *"ERROR"* )
-      echo "Error in nativelink build"
+      echo "Error in forge build"
       exit 1
     ;;
     *)
-      echo 'Successful nativelink build'
+      echo 'Successful forge build'
     ;;
   esac
 ''
 ```
 
-To run the build, you would execute this script. It first starts the `nativelink` service in the background, then runs `bst build`.
+To run the build, you would execute this script. It first starts the `forge` service in the background, then runs `bst build`.
 
-The first time you run the build, it will compile the code and store the result in the Nativelink cache. Subsequent builds will be significantly faster as the results will be fetched directly from the cache, skipping the compilation step entirely.
+The first time you run the build, it will compile the code and store the result in the Forge cache. Subsequent builds will be significantly faster as the results will be fetched directly from the cache, skipping the compilation step entirely.
 
 -----
 
 ### Conclusion
 
-You have now successfully set up a project with BuildStream and Nativelink for accelerated builds with code pulled directly from Nativelink's production [integration tests](https://github.com/TraceMachina/nativelink/tree/main/integration_tests/buildstream). By leveraging remote caching and execution, you can dramatically reduce build times, especially for larger and more complex projects. This allows you to iterate faster and stay in the creative flow. Finally, developers and managers alike can appreciate a developer productivity tool!
+You have now successfully set up a project with BuildStream and Forge for accelerated builds with code pulled directly from Forge's production [integration tests](https://github.com/toxicwind/forge/tree/main/integration_tests/buildstream). By leveraging remote caching and execution, you can dramatically reduce build times, especially for larger and more complex projects. This allows you to iterate faster and stay in the creative flow. Finally, developers and managers alike can appreciate a developer productivity tool!
 
-If you have any questions or want to learn more, feel free to reach out to **contact@nativelink.com**. Happy building\! 🚀
+If you have any questions or want to learn more, feel free to reach out to **contact@forge.com**. Happy building\! 🚀

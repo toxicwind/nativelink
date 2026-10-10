@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@nativelink/config/tailwind/preset.css";
+@import "@forge/config/tailwind/preset.css";
 
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 

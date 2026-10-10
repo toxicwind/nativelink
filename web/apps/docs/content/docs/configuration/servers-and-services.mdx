@@ -5,7 +5,7 @@ description: Listeners, the eleven services, instance names, and the port split 
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone deciding what a NativeLink process should expose,
+**Who this is for:** anyone deciding what a Forge process should expose,
 and on which port. **What you'll know at the end:** what a listener is, what
 each of the eleven services does, how `instance_name` partitions a cache, and
 why the worker API must not share a port with anything else. **Time:** thirty
@@ -17,7 +17,7 @@ minutes.
 
 ## A server is a listener plus a set of services [#a-server-is-a-listener-plus-a-set-of-services]
 
-The `servers` array is the only entry point into a NativeLink process.
+The `servers` array is the only entry point into a Forge process.
 Each entry binds one socket and decides what is reachable on it:
 
 ```json5
@@ -57,13 +57,13 @@ services.
 server without it (`'services' must be configured`), so in practice every
 server entry carries one.
 
-<SourceLink file="src/bin/nativelink.rs" symbol="inner_main" />
+<SourceLink file="src/bin/forge.rs" symbol="inner_main" />
 
 Each service entry names a store or a scheduler as a **string**, the name
 from the `stores` or `schedulers` array. This is where the wiring described in
 [the section overview](/configuration) actually happens.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="ServerConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="ServerConfig" />
 
 ## The eleven services [#the-eleven-services]
 
@@ -102,7 +102,7 @@ capabilities: [
 ],
 ```
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="ServicesConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="ServicesConfig" />
 
 ## Instance names [#instance-names]
 
@@ -138,7 +138,7 @@ client targeting a given cache must use the same one.
   that's demonstrably working, compare instance names before anything else.
 </Callout>
 
-<SourceLink file="nativelink-service/src/cas_server.rs" symbol="CasServer" />
+<SourceLink file="forge-service/src/cas_server.rs" symbol="CasServer" />
 
 ## The port split [#the-port-split]
 
@@ -213,8 +213,8 @@ listener: {
   http: {
     socket_address: "0.0.0.0:50071",
     tls: {
-      cert_file: "/etc/nativelink/tls/server.crt",
-      key_file: "/etc/nativelink/tls/server.key",
+      cert_file: "/etc/forge/tls/server.crt",
+      key_file: "/etc/forge/tls/server.key",
     },
   },
 },
@@ -222,7 +222,7 @@ listener: {
 
 Adding `client_ca_file` turns that into mutual TLS (clients must present a
 certificate signed by that CA) and `client_crl_file` lets you revoke one.
-That's the closest thing NativeLink has to built-in client authentication, and
+That's the closest thing Forge has to built-in client authentication, and
 it is a reasonable answer for a cache exposed beyond a trusted network.
 
 <Callout type="info" title="The docker-compose example ships example certs">

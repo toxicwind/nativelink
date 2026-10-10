@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 import sys
 
-fsl_license = re.compile(r"""// Copyright \d{4}(?:-\d{4})? The NativeLink Authors. All rights reserved.
+fsl_license = re.compile(r"""// Copyright \d{4}(?:-\d{4})? The Forge Authors. All rights reserved.
 //
 // Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@ bsl_license = re.compile(r"""// Copyright \d{4} Trace Machina, Inc. All rights r
 //
 // Licensed under the Business Source License, Version 1.1 \(the "License"\);
 // you may not use this file except in compliance with the License.
-// You may request a copy of the License by emailing contact@nativelink.com.
+// You may request a copy of the License by emailing contact@forge.com.
 //
 // Use of this module requires an enterprise license agreement, which can be
-// attained by emailing contact@nativelink.com or signing up for Nativelink
-// Cloud at app.nativelink.com.
+// attained by emailing contact@forge.com or signing up for Forge
+// Cloud at app.forge.com.
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -46,7 +46,7 @@ for dirstr, dirnames, filenames in os.walk(root):
         continue
     for filename in sorted(filenames):
         fullpath = dirpath.joinpath(filename)
-        if fullpath.match("nativelink-util/src/fastcdc.rs"):
+        if fullpath.match("forge-util/src/fastcdc.rs"):
             # Different license
             continue
         rest, ext = os.path.splitext(filename)

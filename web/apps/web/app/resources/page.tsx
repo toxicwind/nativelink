@@ -1,4 +1,4 @@
-import { Badge, Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Badge, Eyebrow, Reveal, Section } from "@forge/ui";
 import { getAllPosts } from "../../lib/posts";
 import { type PostCardData, PostSection, postToCard } from "./post-sections";
 
@@ -6,12 +6,12 @@ export const metadata = { title: "Resources" };
 
 const featuredPost = {
   tag: "Case study",
-  title: "How LLVM cut clang compile time from 17 minutes to 4 with NativeLink + recc.",
+  title: "How LLVM cut clang compile time from 17 minutes to 4 with Forge + recc.",
   excerpt:
-    "LLVM contributors needed faster iteration without rewriting their CMake setup. They pointed recc at a NativeLink cluster and saw 4× speedups on first try.",
+    "LLVM contributors needed faster iteration without rewriting their CMake setup. They pointed recc at a Forge cluster and saw 4× speedups on first try.",
   date: "March 14, 2026",
   readingTime: "8 min read",
-  href: "https://reidkleckner.dev/posts/llvm-recc-nativelink/",
+  href: "https://reidkleckner.dev/posts/llvm-recc-forge/",
 };
 
 // The BazelCon talk lives among the post cards rather than as an
@@ -55,7 +55,7 @@ export default function ResourcesPage() {
                 .
               </h1>
               <p className="mx-auto mt-6 max-w-[640px] text-[17px] leading-relaxed text-muted-foreground md:text-lg">
-                Case studies, conference talks, and write-ups from the team building NativeLink —
+                Case studies, conference talks, and write-ups from the team building Forge —
                 plus highlights from the broader community.
               </p>
             </div>
@@ -117,7 +117,7 @@ export default function ResourcesPage() {
                         <div className="bg-gradient-to-br from-brand to-brand-strong bg-clip-text font-mono text-5xl font-semibold text-transparent md:text-6xl">
                           4m
                         </div>
-                        <div className="mt-1 text-xs text-brand">With NativeLink</div>
+                        <div className="mt-1 text-xs text-brand">With Forge</div>
                       </div>
                     </div>
                   </div>

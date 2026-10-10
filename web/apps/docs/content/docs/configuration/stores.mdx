@@ -5,7 +5,7 @@ description: "Declaring stores, naming them, and the idea that unlocks the rest 
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone who has seen a NativeLink config with a store
+**Who this is for:** anyone who has seen a Forge config with a store
 nested five levels deep and wanted to know why. **What you'll know at the
 end:** how to declare a store, how to name one, how composition works, and
 which layers are worth reaching for. **Time:** thirty minutes.
@@ -54,16 +54,16 @@ stores: [
   {
     name: "CAS_MAIN_STORE",
     filesystem: {
-      content_path: "/var/lib/nativelink/cas",
-      temp_path: "/var/lib/nativelink/tmp",
+      content_path: "/var/lib/forge/cas",
+      temp_path: "/var/lib/forge/tmp",
       eviction_policy: { max_bytes: 50000000000 }, // 50 GB
     },
   },
   {
     name: "AC_MAIN_STORE",
     filesystem: {
-      content_path: "/var/lib/nativelink/ac",
-      temp_path: "/var/lib/nativelink/tmp",
+      content_path: "/var/lib/forge/ac",
+      temp_path: "/var/lib/forge/tmp",
       eviction_policy: { max_bytes: 500000000 }, // 500 MB
     },
   },
@@ -92,7 +92,7 @@ cache; that scan is what makes the store durable across restarts.
   degrades more gracefully under load.
 </Callout>
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="FilesystemSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="FilesystemSpec" />
 
 ## Stores compose [#stores-compose]
 
@@ -107,8 +107,8 @@ store they wrap is written inline, as a full store spec:
     compression_algorithm: { lz4: {} },
     backend: {
       filesystem: {
-        content_path: "/var/lib/nativelink/cas",
-        temp_path: "/var/lib/nativelink/tmp",
+        content_path: "/var/lib/forge/cas",
+        temp_path: "/var/lib/forge/tmp",
         eviction_policy: { max_bytes: 100000000000 }, // 100 GB
       },
     },
@@ -125,7 +125,7 @@ fast and gives up early on data that won't compress.
 Because the wrapped store is a full spec rather than a reference to a type,
 wrappers nest arbitrarily. A `verify` around a `size_partitioning` whose upper
 half is a `dedup` whose index is a `fast_slow` of memory-over-disk is not an
-exotic config; it's `nativelink-config/examples/filesystem_cas.json5`, and
+exotic config; it's `forge-config/examples/filesystem_cas.json5`, and
 each layer is doing one comprehensible job.
 
 ## `ref_store`: naming instead of nesting [#ref_store-naming-instead-of-nesting]
@@ -142,8 +142,8 @@ stores: [
   {
     name: "FS_CONTENT_STORE",
     filesystem: {
-      content_path: "/var/lib/nativelink/content",
-      temp_path: "/var/lib/nativelink/tmp",
+      content_path: "/var/lib/forge/content",
+      temp_path: "/var/lib/forge/tmp",
       eviction_policy: { max_bytes: 2000000000 },
     },
   },
@@ -161,12 +161,12 @@ stores: [
 Both halves now land in the same physical store. Swap either `ref_store` for
 an inline spec and they diverge.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="RefSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="RefSpec" />
 
 Two properties of `ref_store` are worth knowing before you use it:
 
 **Order doesn't matter.** A store can reference a name declared later in the
-array. `nativelink-config/examples/redis.json5` has `AC_MAIN_STORE` referring
+array. `forge-config/examples/redis.json5` has `AC_MAIN_STORE` referring
 to `CAS_MAIN_STORE`, which is declared below it. References are resolved in a
 post-init pass after every store has been constructed.
 
@@ -176,7 +176,7 @@ the failure surfaces in that post-init pass (`Failed to find store
 'CAS_MAIN_STROE' in StoreManager in RefStore`), still at startup and still
 before any socket is bound, but after the parse itself has succeeded.
 
-<SourceLink file="nativelink-store/src/ref_store.rs" symbol="post_init" />
+<SourceLink file="forge-store/src/ref_store.rs" symbol="post_init" />
 
 ## The layers worth knowing [#the-layers-worth-knowing]
 
@@ -211,7 +211,7 @@ wrap the CAS in `verify`, why `redis.json5` wraps the AC in
 `completeness_checking`, and why you should do both.
 
 The full list, with every field and default, is in the
-[store reference](/reference/nativelink-config/store-overview). Recipes for
+[store reference](/reference/forge-config/store-overview). Recipes for
 specific backends (object storage, Redis, OCI registries) live in
 [How-to guides](/how-to).
 
@@ -230,7 +230,7 @@ same way. SHA-256 and BLAKE3 produce different keys for identical bytes, so
 uploads made under one function are cache *misses* for clients using the
 other.
 
-NativeLink defaults to SHA-256. Declare it explicitly anyway, in the `global`
+Forge defaults to SHA-256. Declare it explicitly anyway, in the `global`
 block, so the file says what it depends on:
 
 ```json5
@@ -249,29 +249,29 @@ Then match it on the client. For Bazel, in `.bazelrc`:
 startup --digest_function=sha256
 ```
 
-NativeLink accepts uploads whose client-declared digest function differs from
+Forge accepts uploads whose client-declared digest function differs from
 the server default, but logs a warning the first time it sees each mismatch:
 mixed digest functions divide the cache and reduce shared hits.
 
-<SourceLink file="nativelink-service/src/bytestream_server.rs" symbol="reported_digest_function_mismatches" />
+<SourceLink file="forge-service/src/bytestream_server.rs" symbol="reported_digest_function_mismatches" />
 
 `max_open_files` is in that block for a related reason: a `filesystem` store
-holds file descriptors. At startup NativeLink tries to raise its own soft
+holds file descriptors. At startup Forge tries to raise its own soft
 `nofile` limit to this value (default 24576) and sizes an internal semaphore
 from whatever the kernel actually granted, so if the hard limit is lower the
 effective value is lower too, and a warning is logged.
 
-<SourceLink file="nativelink-util/src/fs.rs" symbol="set_open_file_limit" />
+<SourceLink file="forge-util/src/fs.rs" symbol="set_open_file_limit" />
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="GlobalConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="GlobalConfig" />
 
 ### Which function to pick [#which-function-to-pick]
 
 We compared both algorithms on an Apple M2 Max with 12 CPU cores and 32 GB of
 memory, running macOS 15.6 and Bazel 9.1.1. Each of two alternating runs built
-`//:nativelink` against a fresh local NativeLink filesystem cache with hash and
+`//:forge` against a fresh local Forge filesystem cache with hash and
 size verification enabled. Uploads were synchronous, and the Bazel output and
-NativeLink cache directories were isolated by algorithm.
+Forge cache directories were isolated by algorithm.
 
 | Phase | SHA-256 runs | SHA-256 mean | BLAKE3 runs | BLAKE3 mean |
 | --- | --- | ---: | --- | ---: |
@@ -311,7 +311,7 @@ different shapes. The CAS holds many large-ish blobs and wants compression and
 deduplication; the AC holds small metadata records, wants none of that, and
 wants `completeness_checking`.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="check_store_conflict" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="check_store_conflict" />
 
 </Accordion>
 
@@ -325,7 +325,7 @@ takes the second option.
 
 </Accordion>
 
-<Accordion title="Can two NativeLink processes share one filesystem store?" id="can-two-nativelink-processes-share-one-filesystem-store">
+<Accordion title="Can two Forge processes share one filesystem store?" id="can-two-forge-processes-share-one-filesystem-store">
 
 No. A `filesystem` store owns its directories: it scans them at boot and
 manages eviction against its own view of what's there. Two processes pointed
@@ -342,6 +342,6 @@ CAS over gRPC to the others.
   off your public interface.
 </NextStep>
 
-<NextStep href="/reference/nativelink-config/store-overview" kind="aside" title="Store reference">
+<NextStep href="/reference/forge-config/store-overview" kind="aside" title="Store reference">
   All eighteen store types, every field, every default.
 </NextStep>

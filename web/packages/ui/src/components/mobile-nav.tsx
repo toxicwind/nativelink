@@ -28,7 +28,7 @@ export function MobileNav({
   links,
   ctaLabel,
   ctaHref,
-  githubHref = "https://github.com/TraceMachina/nativelink",
+  githubHref = "https://github.com/toxicwind/forge",
   currentPath,
 }: MobileNavProps) {
   const [open, setOpen] = React.useState(false);
@@ -129,7 +129,7 @@ export function MobileNav({
                   <a
                     href="/"
                     onClick={() => setOpen(false)}
-                    aria-label="NativeLink — home"
+                    aria-label="Forge — home"
                     aria-current={isCurrentNavHref("/", currentPath) ? "page" : undefined}
                     className="inline-flex items-center"
                   >

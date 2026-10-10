@@ -1,13 +1,13 @@
 # Deploying `web`
 
 Two Vercel projects, one repo. The marketing app at the apex
-(`nativelink.com`) proxies `/docs/*` to the docs app via a Next.js
+(`forge.com`) proxies `/docs/*` to the docs app via a Next.js
 rewrite. This page walks through the setup end-to-end.
 
 ## Topology
 
 ```
-                  nativelink.com
+                  forge.com
                        │
         ┌──────────────┴──────────────┐
         │                             │
@@ -33,10 +33,10 @@ first.
 3. **Framework Preset**: Next.js (auto-detected).
 4. **Build Command**: leave as default. Vercel runs the project's `build`
    script in the workspace root with `bun install` and `bun --filter
-   @nativelink/docs build` automatically.
+   @forge/docs build` automatically.
 5. **Install Command**: `bun install` (auto-detected from `bun.lock`).
 6. **Environment Variables**: none required.
-7. Deploy. Note the assigned URL — e.g. `nativelink-docs.vercel.app`.
+7. Deploy. Note the assigned URL — e.g. `forge-docs.vercel.app`.
 
 Verify: open `https://<docs-url>/docs` — should show the docs index.
 
@@ -60,8 +60,8 @@ proxied from the docs deployment, including all assets (`/docs/_next/...`).
 
 ### 3. Custom domain
 
-On the marketing project's **Settings → Domains**, add `nativelink.com`
-(and `www.nativelink.com`). Point your DNS as Vercel instructs.
+On the marketing project's **Settings → Domains**, add `forge.com`
+(and `www.forge.com`). Point your DNS as Vercel instructs.
 
 The docs project keeps its `*.vercel.app` URL — users never hit it
 directly; they reach docs via the marketing rewrite.
@@ -134,14 +134,14 @@ change.
 
 ## Skipping the proxy
 
-If you'd rather host docs on a subdomain (`docs.nativelink.com`) instead
+If you'd rather host docs on a subdomain (`docs.forge.com`) instead
 of proxying through marketing:
 
 1. Drop the rewrite block from `apps/web/next.config.mjs`.
 2. Set `apps/docs/next.config.mjs` `basePath` to `""`.
 3. Move the catch-all from `app/[[...slug]]` to whatever URL shape you
    want.
-4. Point `docs.nativelink.com` at the docs Vercel project.
+4. Point `docs.forge.com` at the docs Vercel project.
 
 We chose the apex-with-rewrite approach because it keeps every page
 under one origin (better for SEO, cookies, analytics, search-console

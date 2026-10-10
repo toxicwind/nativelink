@@ -1,5 +1,5 @@
 ---
-# Builds the NativeLink binaries for every supported target, signs each release
+# Builds the Forge binaries for every supported target, signs each release
 # asset with keyless Sigstore cosign, generates an SBOM, and produces SLSA Build
 # Level 3 provenance that is attached to the GitHub Release.
 #
@@ -62,18 +62,18 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-24.04
-            attr: nativelink-x86_64-linux
+            attr: forge-x86_64-linux
             # The runner shares this target's architecture, so the packaged
             # binary can be executed to prove it actually starts.
             smoke_test: true
           - target: aarch64-unknown-linux-musl
             os: ubuntu-24.04
-            attr: nativelink-aarch64-linux
+            attr: forge-aarch64-linux
             # Cross-built from x86_64, so the runner cannot execute it.
             smoke_test: false
           - target: aarch64-apple-darwin
             os: macos-26
-            attr: nativelink-aarch64-darwin
+            attr: forge-aarch64-darwin
             smoke_test: true
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -90,7 +90,7 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Install Cosign
         uses: >- # v4.1.2
@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ needs.setup.outputs.version }}"
-          ASSET="nativelink-${VERSION}-${{ matrix.target }}"
+          ASSET="forge-${VERSION}-${{ matrix.target }}"
 
           # macOS runners ship `shasum` rather than coreutils `sha256sum`; both
           # emit the "<hash>  <name>" format the SLSA generator expects.
@@ -123,10 +123,10 @@ jobs:
           }
 
           STAGE="$(mktemp -d)"
-          install -m 0755 result/bin/nativelink "${STAGE}/nativelink"
+          install -m 0755 result/bin/forge "${STAGE}/forge"
           install -m 0644 LICENSE "${STAGE}/LICENSE"
           install -m 0644 README.md "${STAGE}/README.md"
-          tar -C "${STAGE}" -czf "${ASSET}.tar.gz" nativelink LICENSE README.md
+          tar -C "${STAGE}" -czf "${ASSET}.tar.gz" forge LICENSE README.md
 
           sha256 "${ASSET}.tar.gz" | tee "${ASSET}.tar.gz.sha256"
           echo "asset=${ASSET}" >> "${GITHUB_OUTPUT}"
@@ -145,20 +145,20 @@ jobs:
           tar -C "${CHECK}" -xzf "${ASSET}.tar.gz"
 
           if [[ "${{ runner.os }}" == "macOS" ]]; then
-            otool -L "${CHECK}/nativelink"
-            if otool -L "${CHECK}/nativelink" | tail -n +2 | grep '/nix/store'; then
+            otool -L "${CHECK}/forge"
+            if otool -L "${CHECK}/forge" | tail -n +2 | grep '/nix/store'; then
               echo "::error::Packaged macOS binary links against /nix/store paths that do not exist on user machines."
               exit 1
             fi
-            codesign --verify --verbose "${CHECK}/nativelink"
+            codesign --verify --verbose "${CHECK}/forge"
           fi
 
-          # nativelink exits non-zero with a usage message when handed no
+          # forge exits non-zero with a usage message when handed no
           # config file. Reaching that message proves dyld loaded the binary
           # and it ran, which is all this check needs to establish.
-          output="$("${CHECK}/nativelink" 2>&1 || true)"
+          output="$("${CHECK}/forge" 2>&1 || true)"
           echo "${output}"
-          if ! echo "${output}" | grep -q 'Usage: nativelink'; then
+          if ! echo "${output}" | grep -q 'Usage: forge'; then
             echo "::error::Packaged binary for ${{ matrix.target }} did not start."
             exit 1
           fi
@@ -167,7 +167,7 @@ jobs:
         uses: >- # v0.24.0
           anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
-          file: result/bin/nativelink
+          file: result/bin/forge
           format: spdx-json
           output-file: ${{ steps.package.outputs.asset }}.spdx.json
           upload-artifact: false
@@ -249,4 +249,4 @@ jobs:
       base64-subjects: ${{ needs.combine-hashes.outputs.subjects }}
       upload-assets: true
       upload-tag-name: ${{ needs.setup.outputs.tag }}
-      provenance-name: nativelink-${{ needs.setup.outputs.version }}.intoto.jsonl
+      provenance-name: forge-${{ needs.setup.outputs.version }}.intoto.jsonl

@@ -14,7 +14,7 @@ you can explain line by line, and the vocabulary to read anyone else's config.
   A config file with at least one backend in it. See [Storage backends](/how-to/stores).
 </Prerequisites>
 
-Most store types in NativeLink are not places to put bytes. They are wrappers:
+Most store types in Forge are not places to put bytes. They are wrappers:
 each one takes another store and changes something about how it behaves. A real
 CAS store is four or five of these nested inside each other, and the nesting
 order is the design.
@@ -39,8 +39,8 @@ A wrapper can hold its inner store inline:
     verify_hash: true,
     backend: {
       filesystem: {
-        content_path: "/var/lib/nativelink/cas/content",
-        temp_path: "/var/lib/nativelink/cas/tmp",
+        content_path: "/var/lib/forge/cas/content",
+        temp_path: "/var/lib/forge/cas/tmp",
         eviction_policy: { max_bytes: "50gb" },
       },
     },
@@ -64,8 +64,8 @@ stores: [
   {
     name: "CAS_DISK",
     filesystem: {
-      content_path: "/var/lib/nativelink/cas/content",
-      temp_path: "/var/lib/nativelink/cas/tmp",
+      content_path: "/var/lib/forge/cas/content",
+      temp_path: "/var/lib/forge/cas/tmp",
       eviction_policy: { max_bytes: "50gb" },
     },
   },
@@ -77,7 +77,7 @@ Both configs describe the same thing. Order in the array does not matter, becaus
 defined below it. Reach for `ref_store` when two stores genuinely share one
 backend, or when nesting has got deep enough to be unreadable.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="StoreSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="StoreSpec" />
 
 ## The wrappers [#the-wrappers]
 
@@ -92,8 +92,8 @@ The single most important wrapper. Reads try `fast` first and fall through to
   fast_slow: {
     fast: {
       filesystem: {
-        content_path: "/var/lib/nativelink/cas/content",
-        temp_path: "/var/lib/nativelink/cas/tmp",
+        content_path: "/var/lib/forge/cas/content",
+        temp_path: "/var/lib/forge/cas/tmp",
         eviction_policy: { max_bytes: "50gb", evict_bytes: "5gb" },
       },
     },
@@ -101,7 +101,7 @@ The single most important wrapper. Reads try `fast` first and fall through to
       experimental_cloud_object_store: {
         provider: "aws",
         region: "us-east-1",
-        bucket: "my-nativelink-cas",
+        bucket: "my-forge-cas",
         key_prefix: "cas/",
       },
     },
@@ -126,7 +126,7 @@ and rejects the write on a mismatch. Reads pass straight through to the
 backend unchecked, so this protects what enters the store, not what a backend
 later hands back.
 
-<SourceLink file="nativelink-store/src/verify_store.rs" symbol="VerifyStore" />
+<SourceLink file="forge-store/src/verify_store.rs" symbol="VerifyStore" />
 
 ```json5
 {
@@ -208,7 +208,7 @@ malformed block can ask the decoder to allocate, so raise it only alongside
 
 This is store-level compression, on the way to the backend. It is a different
 thing from [remote cache compression](/how-to/stores/compression), which
-compresses on the wire between the client and NativeLink. The two are
+compresses on the wire between the client and Forge. The two are
 independent and can both be on.
 
 ### `dedup`: store the changed parts only [#dedup--store-the-changed-parts-only]
@@ -235,7 +235,7 @@ The three size fields bound the chunker: `normal_size` is the target average,
 and 512 KiB. Every blob gets an index entry, even one small enough to be a
 single chunk; there is no size below which the store skips the index.
 
-<SourceLink file="nativelink-store/src/dedup_store.rs" symbol="DedupStore" />
+<SourceLink file="forge-store/src/dedup_store.rs" symbol="DedupStore" />
 
 `max_concurrent_fetch_per_get` (default 10) bounds parallel chunk fetches.
 Worst-case memory per `get()` is about
@@ -326,7 +326,7 @@ The resource hash identifies the event key, while the size describes the event
 bytes. Configure it only as an event publisher's store: reads, existence checks,
 and digest-key writes are rejected. A normal CAS endpoint cannot receive these
 writes. The receiver must acknowledge the full payload size only after its
-durable append completes; NativeLink rejects a different committed size, and
+durable append completes; Forge rejects a different committed size, and
 its BEP response waits for that acknowledgement. A lost acknowledgement can
 cause a retry after the receiver has already persisted an event. The receiver
 must use the stable event key to detect and ignore duplicate events, including
@@ -334,7 +334,7 @@ retries that start a new upload; the upload UUID alone is not an event identity.
 Origin publishing retains its existing bounded retry policy. This transport
 provides neither exactly-once processing nor a durable publisher recovery ledger.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="StoreType" />
+<SourceLink file="forge-config/src/stores.rs" symbol="StoreType" />
 
 `noop` takes nothing at all and discards everything written to it, reporting
 every read as a miss. It is how you deliberately turn a half of something off.
@@ -397,7 +397,7 @@ stores: [
               slow: {
                 experimental_cloud_object_store: {
                   provider: "gcs",
-                  bucket: "my-nativelink-cas",
+                  bucket: "my-forge-cas",
                   key_prefix: "index/",
                 },
               },
@@ -418,7 +418,7 @@ stores: [
                   slow: {
                     experimental_cloud_object_store: {
                       provider: "gcs",
-                      bucket: "my-nativelink-cas",
+                      bucket: "my-forge-cas",
                       key_prefix: "cas/",
                     },
                   },
@@ -556,7 +556,7 @@ where blobs are looked for. Nothing rebalances, so treat it as a flush.
 
 <NextStep href="/how-to/stores/compression" title="Remote cache compression">
   The other kind of compression: on the wire, between the client and
-  NativeLink.
+  Forge.
 </NextStep>
 
 <NextStep href="/operate/production-config" kind="aside" title="Production configuration">

@@ -1,5 +1,5 @@
 ---
-name: Build local project against NativeLink
+name: Build local project against Forge
 
 on:
   pull_request:

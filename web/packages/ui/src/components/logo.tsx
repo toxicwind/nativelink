@@ -26,7 +26,7 @@ export function Logo({
   const w = Math.round(h * 6.105);
   return (
     <span
-      aria-label="NativeLink"
+      aria-label="Forge"
       role="img"
       className={cn("inline-flex shrink-0 items-center", className)}
       style={{ height: h, width: w }}
@@ -34,7 +34,7 @@ export function Logo({
     >
       <img
         src={`${basePath}/logo-light.svg`}
-        alt="NativeLink"
+        alt="Forge"
         width={w}
         height={h}
         className="block h-full w-full dark:hidden"
@@ -42,7 +42,7 @@ export function Logo({
       />
       <img
         src={`${basePath}/logo-dark.svg`}
-        alt="NativeLink"
+        alt="Forge"
         width={w}
         height={h}
         className="hidden h-full w-full dark:block"

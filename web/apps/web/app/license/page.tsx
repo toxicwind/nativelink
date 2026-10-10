@@ -1,9 +1,9 @@
-import { Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Eyebrow, Reveal, Section } from "@forge/ui";
 
 export const metadata = {
   title: "License",
   description:
-    "How NativeLink's source-available, FSL-Apache, and Business Source License modules fit together.",
+    "How Forge's source-available, FSL-Apache, and Business Source License modules fit together.",
 };
 
 const toc = [
@@ -24,10 +24,10 @@ export default function LicensePage() {
             <div className="mx-auto max-w-[820px] text-center">
               <Eyebrow className="mb-5">License</Eyebrow>
               <h1 className="text-balance text-[44px] font-semibold leading-[1.05] tracking-[-0.035em] md:text-[60px]">
-                NativeLink Licensing
+                Forge Licensing
               </h1>
               <p className="mx-auto mt-5 max-w-[650px] text-base leading-relaxed text-muted-foreground md:text-lg">
-                NativeLink is a monorepo with module-aware licensing. Most code is
+                Forge is a monorepo with module-aware licensing. Most code is
                 FSL-Apache; selected commercial modules use the Business Source
                 License.
               </p>
@@ -64,14 +64,14 @@ export default function LicensePage() {
                 Overview
               </h2>
               <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-                Most NativeLink modules are licensed under
+                Most Forge modules are licensed under
                 FSL-1.1-Apache-2.0. That license allows internal use,
                 modification, and redistribution for non-competing purposes, then
                 grants an Apache 2.0 future license on the schedule described in
                 the repository license.
               </p>
               <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-                NativeLink is not a single-license repository. Some files and
+                Forge is not a single-license repository. Some files and
                 modules carry their own source headers, and those headers control
                 the license for that code.
               </p>
@@ -80,7 +80,7 @@ export default function LicensePage() {
                 Individual Cache Use
               </h3>
               <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-                Developers using NativeLink for an individual cache do not need a
+                Developers using Forge for an individual cache do not need a
                 commercial license. That path is meant to stay simple: run the
                 cache locally or on infrastructure you control, point your build
                 tool at it, and keep your loop fast.
@@ -92,7 +92,7 @@ export default function LicensePage() {
               <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
                 Metrics and remote persistent workers are licensed under the
                 Business Source License. Teams using those modules in shared,
-                production, or commercial settings should use NativeLink
+                production, or commercial settings should use Forge
                 Enterprise or a separate commercial license.
               </p>
               <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
@@ -116,7 +116,7 @@ export default function LicensePage() {
               <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
                 The repository
                 {" "}
-                <a href="https://github.com/TraceMachina/nativelink/blob/main/LICENSE">LICENSE</a>
+                <a href="https://github.com/toxicwind/forge/blob/main/LICENSE">LICENSE</a>
                 {" "}
                 file and source headers are the authoritative licensing text. For
                 commercial terms, contact

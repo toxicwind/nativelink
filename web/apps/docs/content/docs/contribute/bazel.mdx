@@ -1,6 +1,6 @@
 ---
 title: Develop with Bazel
-description: Build, test, and run NativeLink with Bazel, the same dev loop CI uses.
+description: Build, test, and run Forge with Bazel, the same dev loop CI uses.
 ---
 
 The Bazel-based dev loop is the one our CI runs. Use this if you want
@@ -19,8 +19,8 @@ Bazel.
 ## First build [#first-build]
 
 ```bash
-git clone https://github.com/TraceMachina/nativelink
-cd nativelink
+git clone https://github.com/toxicwind/forge
+cd forge
 bazel test //...
 ```
 
@@ -30,7 +30,7 @@ toolchain and dependencies. Subsequent builds finish in seconds.
 <Callout type="info" title="Hooking up your own cache">
   `.bazelrc` already defines `--config=self_test` (remote cache at
   `grpc://127.0.0.1:50051`) and `--config=self_execute` (remote executor at
-  `grpc://127.0.0.1:50052`) for a NativeLink running locally. For any other
+  `grpc://127.0.0.1:50052`) for a Forge running locally. For any other
   endpoint, put the flags in `user.bazelrc` at the repository root, which
   `.bazelrc` pulls in with `try-import` and git ignores:
 
@@ -39,7 +39,7 @@ toolchain and dependencies. Subsequent builds finish in seconds.
   build --remote_executor=grpc://localhost:50051
   ```
 
-  With a NativeLink cluster running, subsequent builds will hit the cache
+  With a Forge cluster running, subsequent builds will hit the cache
   for any action your team has already produced.
 </Callout>
 
@@ -50,18 +50,18 @@ toolchain and dependencies. Subsequent builds finish in seconds.
 bazel test //...
 
 # Run one crate's tests/ directory.
-bazel test //nativelink-store:integration
+bazel test //forge-store:integration
 
 # Run the in-file `mod tests` suites, or the doc examples.
 bazel test //:unit_tests
 bazel test doctests
 
 # Build the server binary. The binary is defined in the root BUILD.bazel,
-# so its label is `//:nativelink`; there is no `//nativelink` package.
-bazel build //:nativelink
+# so its label is `//:forge`; there is no `//forge` package.
+bazel build //:forge
 
 # Run the built binary against a config.
-bazel run //:nativelink -- /path/to/config.json5
+bazel run //:forge -- /path/to/config.json5
 
 # Format Rust code. The formatting config uses nightly-only options, so
 # stable `cargo fmt` produces different output than CI expects.
@@ -86,12 +86,12 @@ editor of choice will pick up.
 ## Common pitfalls [#common-pitfalls]
 
 - **LRE flags are missing**: `.bazelrc` pulls in `lre.bazelrc`,
-  `nativelink.bazelrc`, `nixos.bazelrc` and `darwin.bazelrc` with
+  `forge.bazelrc`, `nixos.bazelrc` and `darwin.bazelrc` with
   `try-import`, and the Nix dev shell is what generates them. Without
   `nix develop` they do not exist, and the `try-` means Bazel
   says nothing about it. See [Develop with Nix](/contribute/nix).
 - **Slow first build with no cache**: expected. Subsequent builds
-  reuse Bazel's local cache; pointing at a remote NativeLink cluster
+  reuse Bazel's local cache; pointing at a remote Forge cluster
   makes a fresh clone fast for everyone.
 - **A new source file builds with Cargo and fails under Bazel**: Bazel
   enumerates `srcs` rather than globbing. Add the file to the crate's
@@ -103,11 +103,11 @@ editor of choice will pick up.
   <Accordion title="Why does the first build take 10-20 minutes?" id="why-does-the-first-build-take-10-20-minutes">
     It bootstraps the toolchain and builds every dependency from source.
     Subsequent builds are seconds, and pointing `--remote_cache` at a
-    NativeLink cluster (above) makes even a fresh clone fast.
+    Forge cluster (above) makes even a fresh clone fast.
   </Accordion>
   <Accordion title="Do I have to run the whole test suite every time?" id="do-i-have-to-run-the-whole-test-suite-every-time">
     No. Target what you touched
-    (`bazel test //nativelink-store:integration`), then run the
+    (`bazel test //forge-store:integration`), then run the
     full `bazel test //...` once before submitting.
 
     For non-Bazel workflows, see

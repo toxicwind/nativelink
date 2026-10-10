@@ -1,6 +1,6 @@
 ---
 title: Deploy on bare metal
-description: "Run NativeLink as systemd services on hosts you own: writing the units, sizing the machines, placing the disks, and rolling an upgrade without dropping in-flight actions."
+description: "Run Forge as systemd services on hosts you own: writing the units, sizing the machines, placing the disks, and rolling an upgrade without dropping in-flight actions."
 ---
 
 {/* archetype: how-to (deployment), see /web/apps/docs/templates/how-to.mdx */}
@@ -14,7 +14,7 @@ sizing you can defend, and a restart procedure. **Time:** an afternoon.
   A config you wrote (see [Your first full config](/configuration/your-first-full-config)), and hosts you can install a systemd unit on.
 </Prerequisites>
 
-No systemd unit exists in the NativeLink repository. That is the honest
+No systemd unit exists in the Forge repository. That is the honest
 starting point for this page: unlike Compose and Kubernetes, where you can
 point at shipped files, here you write everything. The good news is that there
 is very little to write: the binary takes one positional argument and reads
@@ -32,28 +32,28 @@ config file and, for the worker, the security posture.
 ### The service account and directories [#the-service-account-and-directories]
 
 ```sh
-sudo useradd --system --home-dir /var/lib/nativelink --shell /usr/sbin/nologin nativelink
-sudo install -d -o nativelink -g nativelink /var/lib/nativelink
-sudo install -d -o nativelink -g nativelink /etc/nativelink
-sudo install -m 0755 nativelink /usr/local/bin/nativelink
+sudo useradd --system --home-dir /var/lib/forge --shell /usr/sbin/nologin forge
+sudo install -d -o forge -g forge /var/lib/forge
+sudo install -d -o forge -g forge /etc/forge
+sudo install -m 0755 forge /usr/local/bin/forge
 ```
 
-Put the configuration files in `/etc/nativelink/{cas,scheduler,worker}.json5`.
+Put the configuration files in `/etc/forge/{cas,scheduler,worker}.json5`.
 
 ### The CAS unit [#the-cas-unit]
 
 ```ini
-# /etc/systemd/system/nativelink-cas.service
+# /etc/systemd/system/forge-cas.service
 [Unit]
-Description=NativeLink CAS and Action Cache
+Description=Forge CAS and Action Cache
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=exec
-User=nativelink
-Group=nativelink
-ExecStart=/usr/local/bin/nativelink /etc/nativelink/cas.json5
+User=forge
+Group=forge
+ExecStart=/usr/local/bin/forge /etc/forge/cas.json5
 Restart=always
 RestartSec=2s
 
@@ -66,8 +66,8 @@ Environment=NL_LOG=json
 Environment=OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317
 
 # The CAS touches only its own data directory.
-StateDirectory=nativelink
-ReadWritePaths=/var/lib/nativelink
+StateDirectory=forge
+ReadWritePaths=/var/lib/forge
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
@@ -83,17 +83,17 @@ Identical apart from the config file and the fact that it needs no writable
 state at all when the scheduler backend is the default in-memory one:
 
 ```ini
-# /etc/systemd/system/nativelink-scheduler.service
+# /etc/systemd/system/forge-scheduler.service
 [Unit]
-Description=NativeLink scheduler
-After=network-online.target nativelink-cas.service
+Description=Forge scheduler
+After=network-online.target forge-cas.service
 Wants=network-online.target
 
 [Service]
 Type=exec
-User=nativelink
-Group=nativelink
-ExecStart=/usr/local/bin/nativelink /etc/nativelink/scheduler.json5
+User=forge
+Group=forge
+ExecStart=/usr/local/bin/forge /etc/forge/scheduler.json5
 Restart=always
 RestartSec=2s
 LimitNOFILE=65536
@@ -116,17 +116,17 @@ WantedBy=multi-user.target
 This one is different, and the differences matter.
 
 ```ini
-# /etc/systemd/system/nativelink-worker.service
+# /etc/systemd/system/forge-worker.service
 [Unit]
-Description=NativeLink worker
+Description=Forge worker
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=exec
-User=nativelink
-Group=nativelink
-ExecStart=/usr/local/bin/nativelink /etc/nativelink/worker.json5
+User=forge
+Group=forge
+ExecStart=/usr/local/bin/forge /etc/forge/worker.json5
 Restart=always
 RestartSec=2s
 
@@ -140,7 +140,7 @@ Environment=OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317
 
 # Actions run as this user, in this unit's cgroup. Everything the unit can
 # reach, an action can reach.
-ReadWritePaths=/var/lib/nativelink
+ReadWritePaths=/var/lib/forge
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
@@ -167,10 +167,10 @@ WantedBy=multi-user.target
   can block depending on kernel and distribution policy. If you are **not**
   using namespaces, add `NoNewPrivileges=true` back; it costs nothing.
 
-  Either way, understand what you are relying on: NativeLink's namespace
+  Either way, understand what you are relying on: Forge's namespace
   support is a hermeticity and process-reaping mechanism, not a sandbox.
   Actions run as the worker's own uid, see the whole filesystem the unit can
-  see, and can reach every NativeLink port on the network.
+  see, and can reach every Forge port on the network.
   [Security hardening](/operate/security-hardening#the-sandbox-is-not-a-security-boundary)
   is the full picture, and it is the reason `MemoryMax` and `ProtectSystem`
   are in this unit rather than left to chance.
@@ -181,16 +181,16 @@ Then:
 
 ```sh
 sudo systemctl daemon-reload
-sudo systemctl enable --now nativelink-cas nativelink-scheduler nativelink-worker
+sudo systemctl enable --now forge-cas forge-scheduler forge-worker
 ```
 
 ## What to change [#what-to-change]
 
 | Setting | Where | Why you'd change it |
 | --- | --- | --- |
-| `LimitNOFILE` | unit | NativeLink raises its own soft limit at startup toward `max_open_files` (default 24,576) but cannot exceed the hard limit systemd grants. Set the unit's limit **above** the config value, or the config value is capped (the startup log line `set_open_file_limit() assigns new open file limit N` shows what it got). |
+| `LimitNOFILE` | unit | Forge raises its own soft limit at startup toward `max_open_files` (default 24,576) but cannot exceed the hard limit systemd grants. Set the unit's limit **above** the config value, or the config value is capped (the startup log line `set_open_file_limit() assigns new open file limit N` shows what it got). |
 | `max_open_files` | `global` in the config | The binary reserves 80% of the *achieved* limit as a concurrency semaphore. Exhausting it does not error; it blocks. |
-| `MemoryMax` | worker unit | NativeLink's configuration has no memory limit anywhere. The cgroup is the only bound that exists. |
+| `MemoryMax` | worker unit | Forge's configuration has no memory limit anywhere. The cgroup is the only bound that exists. |
 | `RestartSec` | worker unit | The worker's own scheduler-reconnect retry is a hard-coded 0.5 s with no backoff. A restart loop plus that retry is a lot of connection attempts; keep `RestartSec` at seconds, not milliseconds. |
 | `TimeoutStopSec` | worker unit | On `SIGTERM` the worker rejects new actions, waits for in-flight ones to finish, then tells the scheduler it is going away and exits. If this timer fires first, systemd `SIGKILL`s it and every in-flight action fails and re-queues. |
 | `NL_LOG` | environment | `json` if anything is ingesting these logs. Any unrecognised value silently falls back to `pretty`; see [CLI and environment](/reference/cli-and-env). |
@@ -206,7 +206,7 @@ The CAS host is the one where placement matters.
 | Worker `work_directory` | Scratch. Purged at worker startup, which means **two workers must never share one.** A second worker starting will delete the first worker's in-flight action trees. |
 
 <Callout type="warn" title="Eviction never looks at free space">
-  NativeLink evicts on the size it has accounted for, not on the size the
+  Forge evicts on the size it has accounted for, not on the size the
   filesystem reports, and it evicts only when the store is mutated, never in
   response to a failed write. An `eviction_policy` is optional and its
   `max_bytes` defaults to zero, which means *never evict*. Leaving it unset on
@@ -216,7 +216,7 @@ The CAS host is the one where placement matters.
 
 ## Host sizing [#host-sizing]
 
-No sizing numbers are published for NativeLink; measure your own workload
+No sizing numbers are published for Forge; measure your own workload
 before buying anything. What the code does fix:
 
 | Resource | Starting point | Notes |
@@ -273,23 +273,23 @@ explains why it must not be routable.
 window of `UNAVAILABLE` responses and nothing more. Its `temp_path` is pruned
 on the way back up, so a crash mid-write reclaims itself.
 
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="CONNECTION_RETRY_DELAY_S" />
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="GoingAwayRequest" />
-<SourceLink file="nativelink-scheduler/src/simple_scheduler_state_manager.rs" symbol="UpdateWithDisconnect" />
-<SourceLink file="nativelink-util/src/fs.rs" symbol="set_open_file_limit" />
-<SourceLink file="src/bin/nativelink.rs" symbol="set_drain_worker" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="CONNECTION_RETRY_DELAY_S" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="GoingAwayRequest" />
+<SourceLink file="forge-scheduler/src/simple_scheduler_state_manager.rs" symbol="UpdateWithDisconnect" />
+<SourceLink file="forge-util/src/fs.rs" symbol="set_open_file_limit" />
+<SourceLink file="src/bin/forge.rs" symbol="set_drain_worker" />
 
 <VerifyBlock>
 
-  `systemctl is-active nativelink-cas nativelink-scheduler nativelink-worker`
+  `systemctl is-active forge-cas forge-scheduler forge-worker`
   prints `active` three times.
 
-  `journalctl -u nativelink-worker | grep 'Worker registered with scheduler'`
+  `journalctl -u forge-worker | grep 'Worker registered with scheduler'`
   finds a line. If instead you find `Could not connect to endpoint` repeating
   about twice a second, the worker cannot reach the scheduler's worker API
   port.
 
-  `journalctl -u nativelink-cas | grep 'open file limit'` shows the limit the
+  `journalctl -u forge-cas | grep 'open file limit'` shows the limit the
   process actually achieved, not the one you asked for. A `warn` about the
   limit being below the recommended value means `LimitNOFILE` is too low.
 
@@ -301,7 +301,7 @@ on the way back up, so a crash mid-write reclaims itself.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Unit restarts in a loop, journal says `unknown field` | Config is parsed with `deny_unknown_fields`; one unrecognised key is fatal | Check the key in the [configuration reference](/reference/nativelink-config) |
+| Unit restarts in a loop, journal says `unknown field` | Config is parsed with `deny_unknown_fields`; one unrecognised key is fatal | Check the key in the [configuration reference](/reference/forge-config) |
 | Process exits during startup, no error about ports | `NL_OTEL_ENDPOINT` without a scheme or explicit port panics before binding | Use `http://host:4317`; see [CLI and environment](/reference/cli-and-env) |
 | Everything slows down under load, nothing errors | File-descriptor semaphore exhaustion blocks rather than failing | Raise `LimitNOFILE` **and** `max_open_files` together |
 | Two workers on one host behave erratically | They share a `work_directory`, which is purged at startup | Give each worker its own |

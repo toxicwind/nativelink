@@ -1,0 +1,181 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::cell::UnsafeCell;
+use core::pin::Pin;
+use std::sync::{Arc, Weak};
+
+use async_trait::async_trait;
+use forge_config::stores::RefSpec;
+use forge_error::{Error, ResultExt, make_input_err};
+use forge_metric::MetricsComponent;
+use forge_util::buf_channel::{DropCloserReadHalf, DropCloserWriteHalf};
+use forge_util::health_utils::{HealthStatusIndicator, default_health_status_indicator};
+use forge_util::store_trait::{
+    RemoveCallback, Store, StoreDriver, StoreKey, StoreLike, UploadSizeInfo,
+};
+use parking_lot::Mutex;
+use tracing::{debug, error};
+
+use crate::store_manager::StoreManager;
+
+#[repr(C, align(8))]
+#[derive(Debug)]
+struct AlignedStoreCell(UnsafeCell<Option<Store>>);
+
+#[derive(Debug)]
+struct StoreReference {
+    cell: AlignedStoreCell,
+    mux: Mutex<()>,
+}
+
+unsafe impl Sync for StoreReference {}
+
+#[derive(Debug, MetricsComponent)]
+pub struct RefStore {
+    #[metric(help = "The store we are referencing")]
+    name: String,
+    store_manager: Weak<StoreManager>,
+    inner: StoreReference,
+    remove_callbacks: Mutex<Vec<RemoveCallback>>,
+}
+
+impl RefStore {
+    pub fn new(spec: &RefSpec, store_manager: Weak<StoreManager>) -> Arc<Self> {
+        Arc::new(Self {
+            name: spec.name.clone(),
+            store_manager,
+            inner: StoreReference {
+                mux: Mutex::new(()),
+                cell: AlignedStoreCell(UnsafeCell::new(None)),
+            },
+            remove_callbacks: Mutex::new(vec![]),
+        })
+    }
+
+    #[inline]
+    fn get_store(&self) -> Result<&Store, Error> {
+        let ref_store = self.inner.cell.0.get();
+        unsafe {
+            if let Some(ref store) = *ref_store {
+                return Ok(store);
+            }
+        }
+        Err(make_input_err!(
+            "ref_store cannot get store '{}', was post_init called?",
+            self.name
+        ))
+    }
+}
+
+#[async_trait]
+impl StoreDriver for RefStore {
+    async fn post_init(self: Arc<Self>) -> Result<(), Error> {
+        debug!("Running post_init to get store");
+        let ref_store = self.inner.cell.0.get();
+        unsafe {
+            if (*ref_store).is_some() {
+                return Err(make_input_err!("post_init already called for RefStore"));
+            }
+        }
+        let _lock = self.inner.mux.lock();
+        let store_manager = self
+            .store_manager
+            .upgrade()
+            .err_tip(|| "Store manager is gone")?;
+        if let Some(store) = store_manager.get_store(&self.name) {
+            let remove_callbacks = self.remove_callbacks.lock().clone();
+            for callback in remove_callbacks {
+                debug!(?callback, ?store, "Added callback to store");
+                store.register_remove_callback(callback)?;
+            }
+            unsafe {
+                *ref_store = Some(store);
+            }
+            Ok(())
+        } else {
+            Err(make_input_err!(
+                "Failed to find store '{}' in StoreManager in RefStore",
+                self.name
+            ))
+        }
+    }
+
+    async fn remove(self: Pin<&Self>, key: StoreKey<'_>) -> Result<bool, Error> {
+        self.get_store()?.as_store_driver_pin().remove(key).await
+    }
+
+    async fn has_with_results(
+        self: Pin<&Self>,
+        keys: &[StoreKey<'_>],
+        results: &mut [Option<u64>],
+    ) -> Result<(), Error> {
+        self.get_store()?.has_with_results(keys, results).await
+    }
+
+    async fn update(
+        self: Pin<&Self>,
+        key: StoreKey<'_>,
+        reader: DropCloserReadHalf,
+        size_info: UploadSizeInfo,
+    ) -> Result<u64, Error> {
+        self.get_store()?.update(key, reader, size_info).await
+    }
+
+    async fn get_part(
+        self: Pin<&Self>,
+        key: StoreKey<'_>,
+        writer: &mut DropCloserWriteHalf,
+        offset: u64,
+        length: Option<u64>,
+    ) -> Result<(), Error> {
+        self.get_store()?
+            .get_part(key, writer, offset, length)
+            .await
+    }
+
+    fn inner_store(&self, key: Option<StoreKey>) -> &'_ dyn StoreDriver {
+        match self.get_store() {
+            Ok(store) => store.inner_store(key),
+            Err(err) => {
+                error!(?key, ?err, "Failed to get store for key");
+                self
+            }
+        }
+    }
+
+    fn as_any<'a>(&'a self) -> &'a (dyn core::any::Any + Sync + Send + 'static) {
+        self
+    }
+
+    fn as_any_arc(self: Arc<Self>) -> Arc<dyn core::any::Any + Sync + Send + 'static> {
+        self
+    }
+
+    fn register_remove_callback(self: Arc<Self>, callback: RemoveCallback) -> Result<(), Error> {
+        self.remove_callbacks.lock().push(callback.clone());
+        let ref_store = self.inner.cell.0.get();
+        unsafe {
+            if let Some(ref store) = *ref_store {
+                debug!(?callback, ?store, "New callback");
+                store.register_remove_callback(callback)?;
+            } else {
+                debug!(?callback, "New callback, no store yet");
+            }
+        }
+        Ok(())
+    }
+}
+
+default_health_status_indicator!(RefStore);

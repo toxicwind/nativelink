@@ -1,5 +1,5 @@
 {
-  "name": "@nativelink/config",
+  "name": "@forge/config",
   "type": "module",
   "exports": {
     "./biome/base.json": "./biome/base.json",

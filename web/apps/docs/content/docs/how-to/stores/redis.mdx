@@ -5,7 +5,7 @@ description: Back the cache with Redis (standalone, sentinel or cluster) and the
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone who wants several NativeLink processes to share one
+**Who this is for:** anyone who wants several Forge processes to share one
 low-latency store, or who needs the scheduler's pub/sub subscriptions.
 **What you'll have at the end:** a Redis-backed store with concurrency and
 timeouts set so it survives a burst. **Time:** twenty minutes.
@@ -29,7 +29,7 @@ stores: [
     redis_store: {
       addresses: ["redis://127.0.0.1:6379/"],
       mode: "standard",
-      key_prefix: "nativelink:ac:",
+      key_prefix: "forge:ac:",
     },
   },
 ],
@@ -42,7 +42,7 @@ database 99. Keep credentials out of the file by writing
 `redis://${REDIS_USER}:${REDIS_PASSWORD}@redis:6379/` and exporting the
 variables; see [The config file](/configuration/config-file).
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="RedisSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="RedisSpec" />
 
 ## Standalone, sentinel or cluster [#standalone-sentinel-or-cluster]
 
@@ -59,7 +59,7 @@ re-resolves the master when a write hits a demoted replica or the connection
 drops. Passing more than one address in `standard` or `sentinel` mode is
 rejected at startup.
 
-<SourceLink file="nativelink-store/src/redis_store.rs" symbol="RedisStore" />
+<SourceLink file="forge-store/src/redis_store.rs" symbol="RedisStore" />
 
 `key_prefix` namespaces one Redis instance across several stores, and matters
 more here than with object storage: a Redis instance is much more likely to be
@@ -127,14 +127,14 @@ composition:
     index_store: {
       redis_store: {
         addresses: ["redis://redis:6379/"],
-        key_prefix: "nativelink:index:",
+        key_prefix: "forge:index:",
       },
     },
     content_store: {
       experimental_cloud_object_store: {
         provider: "aws",
         region: "us-east-1",
-        bucket: "my-nativelink-cas",
+        bucket: "my-forge-cas",
         key_prefix: "cas/",
       },
     },
@@ -153,7 +153,7 @@ rest of these shapes.
 <li>
 
 **Provision Redis** with enough memory for what you intend to keep, and decide
-its eviction policy on the Redis side, because NativeLink does not manage it.
+its eviction policy on the Redis side, because Forge does not manage it.
 
 </li>
 
@@ -205,7 +205,7 @@ lower `max_client_permits` before touching anything else.
 
 <Accordion title="Timeouts under load, fine when idle" id="timeouts-under-load-fine-when-idle">
 
-Too much in flight. Lower `max_client_permits` so work queues in NativeLink
+Too much in flight. Lower `max_client_permits` so work queues in Forge
 instead of piling onto a single-threaded Redis. Only after that, consider
 raising `command_timeout_ms`.
 
@@ -221,7 +221,7 @@ size.
 
 <Accordion title="Redis runs out of memory" id="redis-runs-out-of-memory">
 
-NativeLink does not evict from Redis; that's the instance's `maxmemory` and
+Forge does not evict from Redis; that's the instance's `maxmemory` and
 `maxmemory-policy`. The one knob on this side is `key_ttl_s`, which puts an
 expiry on every key the store writes (meant for stores whose consumer can
 stop, not for scheduler state). Set the Redis-side limits, and reconsider

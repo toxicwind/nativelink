@@ -62,7 +62,7 @@ echo "Generating ninja projects"
 gn gen --args="use_remoteexec=true use_siso=true" out/Default
 
 # Fetch cache and schedular IP address for passing to ninja
-NATIVELINK=$(kubectl get gtw nativelink-gateway -o=jsonpath='{.status.addresses[0].value}')
+FORGE=$(kubectl get gtw forge-gateway -o=jsonpath='{.status.addresses[0].value}')
 
 echo "Starting autoninja build"
-SISO_REAPI_ADDRESS=${NATIVELINK}:80 SISO_REAPI_CAS_ADDRESS=${NATIVELINK}:80 SISO_REAPI_INSTANCE='' RBE_service_no_security=true autoninja -v -j 50 -C out/Default cc_unittests
+SISO_REAPI_ADDRESS=${FORGE}:80 SISO_REAPI_CAS_ADDRESS=${FORGE}:80 SISO_REAPI_INSTANCE='' RBE_service_no_security=true autoninja -v -j 50 -C out/Default cc_unittests

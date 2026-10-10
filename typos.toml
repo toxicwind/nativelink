@@ -18,10 +18,10 @@ extend-exclude = [
   ".git/*",
   ".github/styles/*",
   "kubernetes/vendor/olm/*",
-  "nativelink-proto/*",
+  "forge-proto/*",
   "web/*",
   # Contains old wrongly spelt data
-  "nativelink-util/tests/data/*.json",
+  "forge-util/tests/data/*.json",
   # Generated from the site, the blog and the docs corpus (all covered or
   # excluded above); regenerated, never edited.
   "llms-full.txt",

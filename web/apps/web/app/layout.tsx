@@ -1,4 +1,4 @@
-import { FinalCTA, SiteFooter, ThemeProvider, themeInitScript } from "@nativelink/ui";
+import { FinalCTA, SiteFooter, ThemeProvider, themeInitScript } from "@forge/ui";
 import { GoogleTagManager } from "@next/third-parties/google";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
@@ -9,13 +9,13 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "NativeLink — Remote build execution & caching",
-    template: "%s — NativeLink",
+    default: "Forge — Remote build execution & caching",
+    template: "%s — Forge",
   },
   description:
     "When agents write your code, your build system is the bottleneck. " +
-    "NativeLink is the high-performance remote build cache and execution platform for Bazel and beyond.",
-  metadataBase: new URL("https://nativelink.com"),
+    "Forge is the high-performance remote build cache and execution platform for Bazel and beyond.",
+  metadataBase: new URL("https://forge.com"),
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -45,7 +45,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             secondaryLabel="See pricing"
             secondaryHref="/pricing"
           />
-          <SiteFooter askAi={{ siteUrl: "https://nativelink.com" }} />
+          <SiteFooter askAi={{ siteUrl: "https://forge.com" }} />
         </ThemeProvider>
       </body>
     </html>

@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to NativeLink.
+<!-- Thanks for contributing to Forge.
 
 Everything outside an HTML comment becomes part of the permanent record, so
 replace the prompts below with your own words. The comments themselves are

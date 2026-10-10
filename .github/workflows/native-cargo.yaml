@@ -64,4 +64,4 @@ jobs:
         run: cargo test --all --profile=smol
 
       - name: Check schema export
-        run: cargo run --bin build-schema --features dev-schema --package nativelink-config
+        run: cargo run --bin build-schema --features dev-schema --package forge-config

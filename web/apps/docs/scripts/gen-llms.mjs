@@ -22,7 +22,7 @@
 // page does.
 //
 // Usage, from web/:
-//   bun --filter @nativelink/docs gen:llms
+//   bun --filter @forge/docs gen:llms
 // or directly:
 //   node scripts/gen-llms.mjs
 //
@@ -30,7 +30,7 @@
 // changelog page is itself generated.
 //
 // The marketing site's generator (web/apps/web/scripts/gen-llms.ts) imports
-// the builders below to fold this corpus into nativelink.com's own llms files,
+// the builders below to fold this corpus into forge.com's own llms files,
 // which is why they are exported and why `main()` only runs when this file is
 // the entry point.
 
@@ -43,8 +43,8 @@ const docsRoot = join(here, "..");
 const contentDir = join(docsRoot, "content/docs");
 const publicDir = join(docsRoot, "public");
 
-const SITE = "https://docs.nativelink.com";
-const REPO = "https://github.com/TraceMachina/nativelink";
+const SITE = "https://docs.forge.com";
+const REPO = "https://github.com/toxicwind/forge";
 
 /** Pages a machine reader should know about that are not part of the docs nav. */
 const APPENDIX = [
@@ -58,7 +58,7 @@ const APPENDIX = [
   },
   {
     section: "Optional",
-    title: "NativeLink on GitHub",
+    title: "Forge on GitHub",
     url: REPO,
     description: "source, issues, releases.",
   },
@@ -66,7 +66,7 @@ const APPENDIX = [
     section: "Optional",
     title: "Remote Execution API",
     url: "https://github.com/bazelbuild/remote-apis",
-    description: "the protocol NativeLink implements.",
+    description: "the protocol Forge implements.",
   },
 ];
 
@@ -82,7 +82,7 @@ page on the path opens by stating what it assumes. An agent reading this file
 in order learns the same sequence a human learns from the sidebar.
 
 Getting started, then Remote execution, then Configuration, then How-to guides.
-Why NativeLink comes before that path, and Operate comes after it. Concepts,
+Why Forge comes before that path, and Operate comes after it. Concepts,
 Reference and Contribute are outside the ordering: enter them from a search or
 a link at any point.`;
 
@@ -226,7 +226,7 @@ function buildSections() {
 
 function renderIndex(sections) {
   const lines = [
-    "# NativeLink",
+    "# Forge",
     "",
     PREAMBLE,
     "",
@@ -369,7 +369,7 @@ function abridgeBody(body, blocksPerSection = 1, blockChars = 420) {
 
 function renderSmall(sections) {
   const lines = [
-    "# NativeLink: abridged documentation corpus",
+    "# Forge: abridged documentation corpus",
     "",
     PREAMBLE,
     "",
@@ -406,7 +406,7 @@ function renderSmall(sections) {
 
 function renderFull(sections) {
   const lines = [
-    "# NativeLink: full documentation corpus",
+    "# Forge: full documentation corpus",
     "",
     PREAMBLE,
     "",

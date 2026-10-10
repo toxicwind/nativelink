@@ -21,7 +21,7 @@ provision, no hermeticity questions yet; those come next, and they're much
 easier to debug once you know the wiring is sound.
 
 <Callout type="info" title="What you need">
-  A Bazel workspace you can build (any one will do; the NativeLink repo
+  A Bazel workspace you can build (any one will do; the Forge repo
   itself works), and either Docker or Nix. Up to about 4 GB of free disk
   under `/tmp` for the caches this creates (the three filesystem stores in
   the config cap at 2 GB, 200 MB, and 2 GB).
@@ -33,10 +33,10 @@ The repo ships a config that is exactly this tutorial: CAS, action cache,
 scheduler, and one worker, all in a single process on localhost.
 
 ```bash
-curl -O https://raw.githubusercontent.com/TraceMachina/nativelink/refs/tags/v1.6.5/nativelink-config/examples/local_rbe_self_test.json5
+curl -O https://raw.githubusercontent.com/toxicwind/forge/refs/tags/v1.6.5/forge-config/examples/local_rbe_self_test.json5
 ```
 
-<SourceLink file="nativelink-config/examples/local_rbe_self_test.json5" />
+<SourceLink file="forge-config/examples/local_rbe_self_test.json5" />
 
 It is worth reading before you run it: it is short, and every section of it
 maps onto something you already know or are about to learn.
@@ -48,7 +48,7 @@ maps onto something you already know or are about to learn.
 ### Start the cluster [#start-the-cluster]
 
 ```bash
-nix run github:TraceMachina/nativelink ./local_rbe_self_test.json5
+nix run github:toxicwind/forge ./local_rbe_self_test.json5
 ```
 
 Or, if you'd rather use the container image, mount the config in and publish
@@ -58,7 +58,7 @@ both ports:
 docker run \
   -v $(pwd)/local_rbe_self_test.json5:/config \
   -p 50051:50051 -p 50061:50061 \
-  ghcr.io/tracemachina/nativelink:v1.6.5 config
+  ghcr.io/tracemachina/forge:v1.6.5 config
 ```
 
 Leave it running. You'll want its output visible; the scheduler logs here
@@ -78,12 +78,12 @@ run anything, at the default `INFO` level:
 Worker registered with scheduler worker_id=...
 ```
 
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="LocalWorker::run" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="LocalWorker::run" />
 
 If instead the log repeats `Error` with a connection failure every half
 second, the worker cannot reach the `worker_api` listener; check that the
 `servers` block in the config you downloaded still has the `50061` listener.
-NativeLink does not serve gRPC reflection, so `grpcurl ... list` is not a
+Forge does not serve gRPC reflection, so `grpcurl ... list` is not a
 way to check which services are up; the config file is.
 
 </li>
@@ -204,11 +204,11 @@ did not find it, so the store Bazel uploaded to is not the store the
 `execution` service reads. The usual causes are `--remote_cache` and
 `--remote_executor` pointing at different deployments, or an `execution`
 entry whose `cas_store` is not the same store (or a `ref_store` to it) as
-the `cas` and `bytestream` services on the client listener. NativeLink
+the `cas` and `bytestream` services on the client listener. Forge
 returns the error with a `PreconditionFailure` detail so Bazel can re-upload
 the missing blobs and retry; if it keeps repeating, the two stores are not
 the same store.
-<SourceLink file="nativelink-service/src/execution_server.rs" symbol="missing_blobs_failed_precondition" />
+<SourceLink file="forge-service/src/execution_server.rs" symbol="missing_blobs_failed_precondition" />
 </Accordion>
 
 <Accordion title="The action runs but fails with &quot;command not found&quot; or a missing header" id="the-action-runs-but-fails-with-command-not-found">
@@ -271,7 +271,7 @@ tool calls its execution strategy in its own logs.
 
 <Accordion title="Where did my data go, and how do I clean it up?" id="where-did-my-data-go-and-how-do-i-clean-it-up">
 Everything this config writes lives under
-`/tmp/nativelink-local-rbe-test/`: CAS content, action cache, the worker's
+`/tmp/forge-local-rbe-test/`: CAS content, action cache, the worker's
 fast store, and its work directory. Stop the server and delete that tree to
 start clean.
 </Accordion>

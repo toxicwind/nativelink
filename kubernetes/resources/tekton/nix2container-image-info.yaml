@@ -35,7 +35,7 @@ spec:
         Examples:
           - "/mnt/src_root#someoutput" for a flake output in the `output-src`
             directory.
-          - "github:TraceMachina/nativelink#image" for the latest nativelink
+          - "github:toxicwind/forge#image" for the latest forge
             image.
           - "github:<user>/<repo>?ref=pull/<PR_NUMBER>/head#<PACKAGE>" to use
             an image from a pull request of a repository on GitHub.

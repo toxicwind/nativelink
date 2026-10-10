@@ -1,5 +1,5 @@
 {
-  "name": "nativelink-web",
+  "name": "forge-web",
   "type": "module",
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
@@ -22,8 +22,8 @@
     "check": "biome check .",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
     "dev": "turbo run dev",
-    "dev:docs": "turbo run dev --filter=@nativelink/docs",
-    "dev:web": "turbo run dev --filter=@nativelink/web",
+    "dev:docs": "turbo run dev --filter=@forge/docs",
+    "dev:web": "turbo run dev --filter=@forge/web",
     "format": "biome format --write .",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck"

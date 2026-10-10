@@ -7,9 +7,9 @@ on:
       - main
     paths:
       - ".clusterfuzzlite/**"
-      - "nativelink-test/fuzz/**"
-      - "nativelink-config/**"
-      - "nativelink-error/**"
+      - "forge-test/fuzz/**"
+      - "forge-config/**"
+      - "forge-error/**"
       - "Cargo.toml"
       - "Cargo.lock"
   push:
@@ -17,9 +17,9 @@ on:
       - main
     paths:
       - ".clusterfuzzlite/**"
-      - "nativelink-test/fuzz/**"
-      - "nativelink-config/**"
-      - "nativelink-error/**"
+      - "forge-test/fuzz/**"
+      - "forge-config/**"
+      - "forge-error/**"
       - "Cargo.toml"
       - "Cargo.lock"
 

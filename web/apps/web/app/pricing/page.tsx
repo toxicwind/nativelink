@@ -1,14 +1,14 @@
-import { Button, Eyebrow, Reveal, Section, cn } from "@nativelink/ui";
+import { Button, Eyebrow, Reveal, Section, cn } from "@forge/ui";
 import { Fragment } from "react";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "Self-host NativeLink for free, or talk to us about Enterprise. Pricing is a conversation: email contact@tracemachina.com.",
+    "Self-host Forge for free, or talk to us about Enterprise. Pricing is a conversation: email contact@tracemachina.com.",
 };
 
 const PRICING_EMAIL = "contact@tracemachina.com";
-const PRICING_MAILTO = `mailto:${PRICING_EMAIL}?subject=${encodeURIComponent("NativeLink pricing")}`;
+const PRICING_MAILTO = `mailto:${PRICING_EMAIL}?subject=${encodeURIComponent("Forge pricing")}`;
 
 interface Tier {
   name: string;
@@ -25,7 +25,7 @@ const tiers: Tier[] = [
     name: "Open Source",
     price: "Free",
     cadence: "forever",
-    tagline: "Everything you need to self-host NativeLink.",
+    tagline: "Everything you need to self-host Forge.",
     features: [
       "Self-hosted",
       "Community support on Slack",
@@ -51,7 +51,7 @@ const tiers: Tier[] = [
     cta: { label: "Email us about pricing", href: PRICING_MAILTO },
     secondary: {
       label: "Already decided? Subscribe now",
-      href: "https://enterprise.nativelink.com",
+      href: "https://enterprise.forge.com",
     },
   },
 ];
@@ -267,7 +267,7 @@ export default function PricingPage() {
                         <td className="px-6 py-4">
                           {row.label === "Hosting" ? (
                             <a
-                              href="https://enterprise.nativelink.com"
+                              href="https://enterprise.forge.com"
                               target="_blank"
                               rel="noreferrer"
                               className="font-mono text-sm text-brand underline-offset-4 hover:underline"
@@ -297,7 +297,7 @@ export default function PricingPage() {
           <p className="mx-auto mt-5 max-w-[560px] text-base leading-relaxed text-muted-foreground md:text-lg">
             Don't price your build farm off a website. Email{" "}
             <span className="font-mono text-foreground">{PRICING_EMAIL}</span> and the engineers who
-            build NativeLink will walk through pricing for your team and workload.
+            build Forge will walk through pricing for your team and workload.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button size="lg" asChild>

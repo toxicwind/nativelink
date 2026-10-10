@@ -1,15 +1,15 @@
-# `web` — nativelink.com
+# `web` — forge.com
 
 The marketing site, docs, and shared design system that ship to
-[nativelink.com](https://nativelink.com).
+[forge.com](https://forge.com).
 
 ## Layout
 
 ```
 web/
 ├── apps/
-│   ├── web/        Next.js 15 marketing site (nativelink.com)
-│   └── docs/       Next.js + Fumadocs (docs.nativelink.com)
+│   ├── web/        Next.js 15 marketing site (forge.com)
+│   └── docs/       Next.js + Fumadocs (docs.forge.com)
 └── packages/
     ├── tokens/     Design tokens (CSS custom properties)
     ├── ui/         shadcn-based React component library
@@ -19,7 +19,7 @@ web/
 ## Stack
 
 - **Next.js 15** App Router + React 19
-- **Tailwind v4** (CSS-first config, brand tokens in `@nativelink/tokens`)
+- **Tailwind v4** (CSS-first config, brand tokens in `@forge/tokens`)
 - **Fumadocs 15** for the docs (MDX, Orama search, Shiki code blocks)
 - **Geist** Sans + Mono via `next/font`
 - **Biome** for lint/format
@@ -67,8 +67,8 @@ lsof -i :3000 -i :3001 | awk 'NR>1 {print $2}' | sort -u | xargs kill -9
 bun run build
 
 # Or build one app
-bun --filter @nativelink/web build
-bun --filter @nativelink/docs build
+bun --filter @forge/web build
+bun --filter @forge/docs build
 ```
 
 Each build runs its generators first (the docs changelog page and the
@@ -97,8 +97,8 @@ bun install                                    # was: bun setup
 DOCS_URL=http://localhost:3001 bun run build   # was: rm -r dist && bun run build
 
 # Serve the builds
-bun --filter @nativelink/web start             # was: bun preview → http://localhost:3000
-bun --filter @nativelink/docs start            #                    http://localhost:3001
+bun --filter @forge/web start             # was: bun preview → http://localhost:3000
+bun --filter @forge/docs start            #                    http://localhost:3001
 ```
 
 For a live-reloading docs server instead of a build, `bun dev:docs` replaces
@@ -125,8 +125,8 @@ bun dev:web
 # open http://localhost:3000/lab
 ```
 
-Tokens are CSS custom properties exported from `@nativelink/tokens`. The
-shared Tailwind preset (`@nativelink/config/tailwind/preset.css`) maps
+Tokens are CSS custom properties exported from `@forge/tokens`. The
+shared Tailwind preset (`@forge/config/tailwind/preset.css`) maps
 them to Tailwind's theme so both apps inherit the same palette in light
 and dark mode.
 
@@ -145,12 +145,12 @@ Custom MDX components available without import:
 - `<Mermaid>{` …diagram source… `}</Mermaid>` — themed diagrams
 
 Full conventions live at
-[`/docs/contribute/docs`](https://nativelink.com/docs/contribute/docs).
+[`/docs/contribute/docs`](https://forge.com/docs/contribute/docs).
 
 ## Deploy
 
 Two Vercel projects, one repo. The marketing app redirects `/docs/*` to
-the docs deployment (docs.nativelink.com) via a Next.js redirect that reads
+the docs deployment (docs.forge.com) via a Next.js redirect that reads
 the `DOCS_URL` env var at build time. Full walkthrough in
 [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 

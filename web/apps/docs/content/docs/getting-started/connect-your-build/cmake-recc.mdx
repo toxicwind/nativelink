@@ -1,34 +1,34 @@
 ---
 title: "CMake with recc"
-description: "Accelerate CMake builds with NativeLink as a remote cache, using recc as the bridge."
+description: "Accelerate CMake builds with Forge as a remote cache, using recc as the bridge."
 pagefind: true
 ---
 
 <Prerequisites>
-  A running NativeLink instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
+  A running Forge instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
 </Prerequisites>
 
 <Callout title="Inspired by Reid Kleckner" type="idea">
 This tutorial follows the approach Reid Kleckner laid out in
-[Distributed builds of LLVM with CMake, recc, and NativeLink](https://reidkleckner.dev/posts/llvm-recc-nativelink/).
+[Distributed builds of LLVM with CMake, recc, and Forge](https://reidkleckner.dev/posts/llvm-recc-forge/).
 Read his post for the LLVM-scale walkthrough and the reasoning behind
 each piece. This page is the short, hands-on version for your own
 projects.
 </Callout>
 
-[reid]: https://reidkleckner.dev/posts/llvm-recc-nativelink/
+[reid]: https://reidkleckner.dev/posts/llvm-recc-forge/
 
 *Read time: ~5 minutes. Hands-on time: another ~5 if you have Docker and a
 package manager handy; longer on Linux if you build `recc` from source.*
 
-This tutorial gets you from zero to a CMake build hitting a NativeLink
+This tutorial gets you from zero to a CMake build hitting a Forge
 remote cache. Works on Linux and macOS (tested on macOS Apple Silicon;
 Linux x86_64 follows the exact same commands).
 
 We use [`recc`](https://buildgrid.gitlab.io/recc), a small Remote Execution
 v2 client originally from Bloomberg, as a CMake compiler launcher. We run
 it in **cache-only mode**: compiles still happen on your machine, only the
-*outputs* travel through NativeLink. That keeps the setup tiny while still
+*outputs* travel through Forge. That keeps the setup tiny while still
 giving you cross-machine and cross-branch caching.
 
 ## Prerequisites [#prerequisites]
@@ -37,15 +37,15 @@ giving you cross-machine and cross-branch caching.
 - CMake 3.16+
 - A C/C++ compiler (clang or gcc)
 
-## 1. Start NativeLink [#1-start-nativelink]
+## 1. Start Forge [#1-start-forge]
 
 ```sh
-curl -O https://raw.githubusercontent.com/TraceMachina/nativelink/v1.6.5/nativelink-config/examples/basic_cas.json5
+curl -O https://raw.githubusercontent.com/toxicwind/forge/v1.6.5/forge-config/examples/basic_cas.json5
 
-docker run -d --name nativelink \
+docker run -d --name forge \
   -v $(pwd)/basic_cas.json5:/config \
   -p 50051:50051 -p 50061:50061 \
-  ghcr.io/tracemachina/nativelink:v1.6.5 config
+  ghcr.io/tracemachina/forge:v1.6.5 config
 ```
 
 The image is multi-arch (x86_64 and ARM64) as of v1.6.0, so it runs
@@ -54,7 +54,7 @@ natively on Linux and Apple Silicon alike.
 Confirm it came up:
 
 ```sh
-docker logs nativelink 2>&1 | grep "Ready, listening on 0.0.0.0:50051"
+docker logs forge 2>&1 | grep "Ready, listening on 0.0.0.0:50051"
 ```
 
 ## 2. Install recc [#2-install-recc]
@@ -114,12 +114,12 @@ add_executable(hello main.cpp)
 #include <iostream>
 
 int main() {
-    std::cout << "Hello, NativeLink!\n";
+    std::cout << "Hello, Forge!\n";
     return 0;
 }
 ```
 
-## 4. Point recc at NativeLink [#4-point-recc-at-nativelink]
+## 4. Point recc at Forge [#4-point-recc-at-forge]
 
 ```sh
 export RECC_SERVER=localhost:50051
@@ -131,7 +131,7 @@ export RECC_CACHE_UPLOAD_LOCAL_BUILD=1
 What each one does:
 
 - `RECC_SERVER`: gRPC endpoint for the CAS / Action Cache.
-- `RECC_INSTANCE=main`: must match an `instance_name` in your NativeLink
+- `RECC_INSTANCE=main`: must match an `instance_name` in your Forge
   config. `basic_cas.json5` exposes both `""` and `"main"`; `recc`
   defaults to `""` unless it was built with a different
   `DEFAULT_RECC_INSTANCE`, so setting it explicitly removes the guesswork.
@@ -154,12 +154,12 @@ cmake --build build
 ./build/hello
 ```
 
-You should see `Hello, NativeLink!`.
+You should see `Hello, Forge!`.
 
 ## 6. Confirm the cache is live [#6-confirm-the-cache-is-live]
 
 Wipe the build directory and rebuild. This time the compile output
-should come straight out of NativeLink:
+should come straight out of Forge:
 
 ```sh
 rm -rf build
@@ -181,14 +181,14 @@ captured output below:
 [100%] Built target hello
 ```
 
-That's NativeLink serving the compile result instead of the compiler
+That's Forge serving the compile result instead of the compiler
 running again. Linking still happens locally. `recc` only ships compile
 actions, not link actions, by default.
 
 ## Teardown [#teardown]
 
 ```sh
-docker stop nativelink && docker rm nativelink
+docker stop forge && docker rm forge
 ```
 
 ## FAQ [#faq]
@@ -196,7 +196,7 @@ docker stop nativelink && docker rm nativelink
 <Accordions type="multiple">
   <Accordion title="Does recc offload my compiles to remote workers?" id="does-recc-offload-my-compiles-to-remote-workers">
     Not in this setup: `RECC_CACHE_ONLY=1` means misses compile locally
-    and only the outputs travel through NativeLink. Drop that variable
+    and only the outputs travel through Forge. Drop that variable
     once you have remote workers configured and recc will dispatch
     compiles to them.
   </Accordion>
@@ -206,8 +206,8 @@ docker stop nativelink && docker rm nativelink
     [Examples and templates](/remote-execution/examples-and-templates).
   </Accordion>
   <Accordion title="How do I share the cache with my team?" id="how-do-i-share-the-cache-with-my-team">
-    Point `RECC_SERVER` at a shared NativeLink deployment and keep
-    `RECC_INSTANCE` identical across machines. NativeLink rejects
+    Point `RECC_SERVER` at a shared Forge deployment and keep
+    `RECC_INSTANCE` identical across machines. Forge rejects
     requests for an instance name it does not serve, so a mismatch shows
     up as recc errors on stderr and every compile running locally.
   </Accordion>
@@ -215,13 +215,13 @@ docker stop nativelink && docker rm nativelink
 
 ## Going further [#going-further]
 
-- Point `RECC_SERVER` at a shared NativeLink deployment to share the
+- Point `RECC_SERVER` at a shared Forge deployment to share the
   cache across your team.
 - Drop `RECC_CACHE_ONLY` once you have remote workers configured to
   actually offload compile work. See
   [Remote execution](/remote-execution).
 - For PCH, LTO, and other gnarly C++ build features at scale, read
-  [Reid Kleckner's writeup](https://reidkleckner.dev/posts/llvm-recc-nativelink/).
+  [Reid Kleckner's writeup](https://reidkleckner.dev/posts/llvm-recc-forge/).
 
 <NextStep href="/getting-started/shared-cache" title="Share the cache">
   recc is caching compiles against one server. Next is making that server shared, which is where a compiler cache stops being a local optimisation.

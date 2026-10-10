@@ -14,11 +14,11 @@
 // `content/docs/` appears there.
 //
 // Usage, from web/:
-//   bun --filter @nativelink/docs lint:snippets
+//   bun --filter @forge/docs lint:snippets
 // or directly:
 //   node scripts/lint-snippets.mjs
 //
-// Escapes, for the snippets that legitimately are not NativeLink config:
+// Escapes, for the snippets that legitimately are not Forge config:
 //   - Put `{/* lint-snippets: ignore */}` on the line before the fence.
 //   - Keys nested under a free-form map (`properties`, `platform_properties`,
 //     `env`, …) are skipped automatically; those are operator-chosen names.
@@ -38,8 +38,8 @@ const contentDir = join(docsRoot, "content/docs");
  * known once `gen:config-reference main` has been run.
  */
 const REFERENCES = [
-  join(contentDir, "reference/nativelink-config/index.mdx"),
-  join(contentDir, "reference/nativelink-config/main.mdx"),
+  join(contentDir, "reference/forge-config/index.mdx"),
+  join(contentDir, "reference/forge-config/main.mdx"),
 ];
 
 /** Keys under these parents are operator-chosen, not config fields. */
@@ -74,7 +74,7 @@ const KNOWN_MAP_KEYS = new Set([
   // here is a hole in the lint AND a gap in the reference; the fix is to teach
   // `scripts/lib/schema-to-mdx.mjs` to expand that spec, after which these
   // should be deleted.
-  "sas_url", // nativelink-config/src/stores.rs:1233
+  "sas_url", // forge-config/src/stores.rs:1233
 ]);
 
 const IGNORE_MARKER = "lint-snippets: ignore";
@@ -262,7 +262,7 @@ function braceBalance(src) {
 
 function main() {
   const known = harvestKnownKeys(REFERENCES);
-  const files = walk(contentDir).filter((f) => !f.includes("reference/nativelink-config/"));
+  const files = walk(contentDir).filter((f) => !f.includes("reference/forge-config/"));
 
   const problems = [];
   let checked = 0;
@@ -315,7 +315,7 @@ function main() {
   console.error(`\n${problems.length} problem(s):`);
   for (const p of problems) console.error(`  ${p.file}:${p.line}  ${p.message}`);
   console.error(
-    "\nIf a snippet is deliberately not NativeLink config, put " +
+    "\nIf a snippet is deliberately not Forge config, put " +
       `\`{/* ${IGNORE_MARKER} */}\` on the line before its fence.`,
   );
   process.exitCode = 1;

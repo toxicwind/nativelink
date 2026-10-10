@@ -5,7 +5,7 @@ description: "Back the cache with OCI Object Storage through its S3 Compatibilit
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone running NativeLink on Oracle Cloud who wants the
+**Who this is for:** anyone running Forge on Oracle Cloud who wants the
 durable tier to be an OCI bucket. **What you'll have at the end:** a
 bucket-backed CAS and Action Cache authenticated with a Customer Secret Key.
 **Time:** thirty minutes, most of it namespace and policy setup.
@@ -38,7 +38,7 @@ either:
   Without the downgrade, small single-`PUT` objects (notably Action Cache
   entries) fail.
 
-<SourceLink file="nativelink-store/src/oci_store.rs" symbol="OciStore" />
+<SourceLink file="forge-store/src/oci_store.rs" symbol="OciStore" />
 
 ## Before you start [#before-you-start]
 
@@ -78,7 +78,7 @@ rather than pasting them into the config; see
 <Callout type="warn" title="Only Customer Secret Keys work here">
   The S3 Compatibility API supports no other credential. OCI-native
   authentication (API signing keys, instance principals, resource principals)
-  is not available through this store. If you run NativeLink on OCI compute and
+  is not available through this store. If you run Forge on OCI compute and
   want keyless workload identity, that is not currently supported: you use
   static Customer Secret Keys and rotate them yourself.
 </Callout>
@@ -95,7 +95,7 @@ stores: [
       provider: "oci",
       namespace: "storagenamespace",
       region: "ap-mumbai-1",
-      bucket: "nativelink-cas",
+      bucket: "forge-cas",
       access_key_id: "${OCI_ACCESS_KEY_ID}",
       secret_access_key: "${OCI_SECRET_ACCESS_KEY}",
       key_prefix: "cas/",
@@ -108,7 +108,7 @@ stores: [
       provider: "oci",
       namespace: "storagenamespace",
       region: "ap-mumbai-1",
-      bucket: "nativelink-cas",
+      bucket: "forge-cas",
       access_key_id: "${OCI_ACCESS_KEY_ID}",
       secret_access_key: "${OCI_SECRET_ACCESS_KEY}",
       key_prefix: "ac/",
@@ -118,7 +118,7 @@ stores: [
 ],
 ```
 
-<SourceLink file="nativelink-config/examples/oci_backend.json5" />
+<SourceLink file="forge-config/examples/oci_backend.json5" />
 
 That is the smallest thing that works, not the thing to run. In production,
 wrap the CAS in `verify` for integrity and front it with a `fast_slow`
@@ -136,7 +136,7 @@ filesystem tier to cut round trips, exactly as for AWS.
 | `secret_access_key` | no | Customer Secret Key secret |
 | `key_prefix`, `retry`, … | no | The [shared cloud object options](/how-to/stores/s3-and-compatible) |
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ExperimentalOciSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ExperimentalOciSpec" />
 
 OCI also accepts `us-east-1` as a `region` value to target the tenancy home
 region, which is occasionally useful when a tool insists on an AWS region name.
@@ -215,7 +215,7 @@ not been benchmarked at sustained production scale or duration.
 Something is re-adding the default trailing checksum the store removes. This is
 the failure the checksum downgrade exists to prevent, and it shows up first on
 Action Cache entries because they are small single-`PUT` objects. Confirm you
-are on a NativeLink version that carries the `oci` provider rather than
+are on a Forge version that carries the `oci` provider rather than
 pointing the `aws` provider at an OCI endpoint by hand.
 
 </Accordion>

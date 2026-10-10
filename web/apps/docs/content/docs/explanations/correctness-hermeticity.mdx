@@ -81,7 +81,7 @@ environment variables it declared. Anything the action reads that is not in
 there is invisible to the cache, and a cache hit will confidently return a
 result computed with a different value of it.
 
-NativeLink helps in one significant way: the worker calls `env_clear()` and
+Forge helps in one significant way: the worker calls `env_clear()` and
 injects no `PATH`, `HOME` or `TMPDIR` on Linux or macOS, so an action that
 depends on an undeclared environment variable tends to fail loudly rather
 than succeed differently.
@@ -107,7 +107,7 @@ reservation; a `ResourceExhausted` never costs anything.
 
 For a pure function this is invisible. For an action with side effects (one
 that publishes, deploys, increments, or writes anywhere outside its declared
-outputs) it means the side effect happens up to four times, and NativeLink
+outputs) it means the side effect happens up to four times, and Forge
 has no way to know that it should not.
 
 **What to do:** actions with side effects do not belong in a remote execution
@@ -128,7 +128,7 @@ something that must be executable, the consumer has to set that itself.
 
 Three, all of which have bitten someone:
 
-**`do_not_cache` does nothing.** NativeLink parses the REAPI flag and no code
+**`do_not_cache` does nothing.** Forge parses the REAPI flag and no code
 reads it. Setting it does not prevent a result being written.
 
 **`skip_cache_lookup` still writes.** It disables the cache read and disables
@@ -217,5 +217,5 @@ that encounters it.
 
 <NextStep href="/explanations/lre" title="Local Remote Execution">
   The toolchain-pinning half of hermeticity, and the one piece of it that
-  NativeLink ships rather than delegates.
+  Forge ships rather than delegates.
 </NextStep>

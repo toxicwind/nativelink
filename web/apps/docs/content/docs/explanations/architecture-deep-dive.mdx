@@ -5,7 +5,7 @@ description: The crate graph, the startup sequence, and the path an action actua
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone about to read, extend or debug the NativeLink
+**Who this is for:** anyone about to read, extend or debug the Forge
 source, and anyone who needs to predict what the binary does rather than
 what the protocol says it should. **What you'll have at the end:** the crate
 graph, the order things come up in at startup, and where an action's path
@@ -20,10 +20,10 @@ process at all.
 
 ## One binary, five decisions [#one-binary-five-decisions]
 
-`nativelink` is a single executable. Which roles it plays is decided entirely
+`forge` is a single executable. Which roles it plays is decided entirely
 by the config file it is handed; there are no build features to toggle and
 no separate images per role. Everything below happens inside
-<SourceLink file="src/bin/nativelink.rs" symbol="src/bin/nativelink.rs" />.
+<SourceLink file="src/bin/forge.rs" symbol="src/bin/forge.rs" />.
 
 <Mermaid>{`graph TD
   cfg["Parse JSON5 config"] --> stores["Build every store<br/>store_factory + post_init"]
@@ -44,7 +44,7 @@ would announce to can answer.
 The last step is the one worth internalising: the listener accept loops, the
 local workers and the origin-event publisher are joined as root futures with
 `try_join_all`, and if any of them returns an error the process panics rather
-than continuing in a degraded state. A NativeLink whose worker task has died
+than continuing in a degraded state. A Forge whose worker task has died
 does not limp; it dies and lets your supervisor restart it. That is a
 deliberate choice about which failure mode is easier to operate.
 
@@ -58,42 +58,42 @@ deliberate choice about which failure mode is easier to operate.
 
 Twelve library crates plus the binary, in strict layers. The diagram shows
 the ten that give the program its shape; the other two are
-`nativelink-metric-macro-derive` (the proc macro behind `nativelink-metric`)
-and `nativelink-redis-tester` (a fake Redis used by the store crate and by
-tests). `nativelink-macro` is a test-only proc macro that no library crate
+`forge-metric-macro-derive` (the proc macro behind `forge-metric`)
+and `forge-redis-tester` (a fake Redis used by the store crate and by
+tests). `forge-macro` is a test-only proc macro that no library crate
 depends on. An arrow points from a crate to a crate that depends on it.
 
 <Mermaid>{`graph BT
-  proto["nativelink-proto"] --> error["nativelink-error"]
-  metric["nativelink-metric"] --> error
-  error --> config["nativelink-config"]
-  config --> util["nativelink-util"]
-  util --> store["nativelink-store"]
-  store --> scheduler["nativelink-scheduler"]
-  store --> worker["nativelink-worker"]
-  scheduler --> service["nativelink-service"]
-  service --> bin["src/bin/nativelink.rs"]
+  proto["forge-proto"] --> error["forge-error"]
+  metric["forge-metric"] --> error
+  error --> config["forge-config"]
+  config --> util["forge-util"]
+  util --> store["forge-store"]
+  store --> scheduler["forge-scheduler"]
+  store --> worker["forge-worker"]
+  scheduler --> service["forge-service"]
+  service --> bin["src/bin/forge.rs"]
   worker --> bin
 `}</Mermaid>
 
 Two absences carry more information than any of the edges.
 
-**`nativelink-worker` does not depend on `nativelink-scheduler`.** A worker
+**`forge-worker` does not depend on `forge-scheduler`.** A worker
 reaches its scheduler over gRPC and nothing else, whether that scheduler is
 in the same process or in another datacentre. No in-process
 fast path exists to accidentally rely on, which is why "run everything in one
 process" and "run a worker fleet" are the same code with different config.
 
-**`nativelink-service` does not depend on `nativelink-worker`.** The gRPC
+**`forge-service` does not depend on `forge-worker`.** The gRPC
 surface has no notion of a local worker. The root binary is the only place
 where a service and a worker are ever mentioned together.
 
-<Callout type="info" title="nativelink-proto's library root is not under src/">
+<Callout type="info" title="forge-proto's library root is not under src/">
   Its `src/` holds vendored Bazel `.proto` files; the crate's library root is
   checked-in generated code at
-  <SourceLink file="nativelink-proto/genproto/lib.rs" symbol="genproto/lib.rs" />.
+  <SourceLink file="forge-proto/genproto/lib.rs" symbol="genproto/lib.rs" />.
   Editing a `.proto` file does not change the build until that generated tree
-  is regenerated with `bazel run nativelink-proto:update_protos`, which is a
+  is regenerated with `bazel run forge-proto:update_protos`, which is a
   manual step, not a build script.
 </Callout>
 
@@ -102,7 +102,7 @@ where a service and a worker are ever mentioned together.
 Config parsing is JSON5, not JSON: comments and trailing commas are legal,
 which is why every example in these docs uses them. The entry point is
 `CasConfig::try_from_json5_file` in
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CasConfig" />.
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CasConfig" />.
 
 One cross-field check runs before anything is constructed: `check_store_conflict`
 rejects a config in which the CAS service and the action cache service for
@@ -113,7 +113,7 @@ describes. Catching it at parse time rather than at first collision is the
 whole reason the check exists.
 
 Everything else about the config file (every field, every default) lives in
-the [configuration reference](/reference/nativelink-config), which is
+the [configuration reference](/reference/forge-config), which is
 generated from these same Rust types rather than transcribed from them.
 
 ## Stores are built in two phases [#stores-are-built-in-two-phases]
@@ -191,7 +191,7 @@ the common client mistake (submitting an action whose inputs were never
 uploaded) into a fast `FAILED_PRECONDITION` carrying a `PreconditionFailure`
 that lists the missing digests, so Bazel re-uploads and retries, instead of
 a worker-side failure minutes later. It is a courtesy, not an invariant. See
-<SourceLink file="nativelink-service/src/execution_server.rs" symbol="ExecutionServer" />.
+<SourceLink file="forge-service/src/execution_server.rs" symbol="ExecutionServer" />.
 
 ## Two details that surprise people reading the wire [#two-details-that-surprise-people-reading-the-wire]
 
@@ -205,7 +205,7 @@ like `{instance}/blobs/{hash}/{size}`, and the instance name is allowed to
 contain slashes. Parsing left to right therefore cannot tell where the
 instance name ends; parsing from the right can, because the trailing
 components are fixed. See
-<SourceLink file="nativelink-util/src/resource_info.rs" symbol="ResourceInfo" />.
+<SourceLink file="forge-util/src/resource_info.rs" symbol="ResourceInfo" />.
 
 ## Common questions [#common-questions]
 
@@ -218,7 +218,7 @@ components are fixed. See
     separately. See [production configuration](/operate/production-config).
   </Accordion>
   <Accordion title="Can I add a store without touching the scheduler or worker?" id="add-a-store-in-isolation">
-    Yes. `nativelink-store` sits below both, and neither knows about concrete
+    Yes. `forge-store` sits below both, and neither knows about concrete
     store types, with one exception worth knowing: the worker's fast-CAS
     path downcasts to a concrete `FilesystemStore` and refuses to start if it
     is given anything else. That is covered in

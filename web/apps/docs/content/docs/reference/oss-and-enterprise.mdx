@@ -6,7 +6,7 @@ description: What the open-source distribution actually contains, which two modu
 {/* archetype: reference. See /web/apps/docs/templates/reference.mdx */}
 
 **Who this is for:** anyone who has to answer "are we allowed to run this?",
-and anyone deciding between self-hosting and NativeLink Enterprise. **What you'll
+and anyone deciding between self-hosting and Forge Enterprise. **What you'll
 have at the end:** an accurate picture of what is licensed how, what activates
 it, and what the open-source build does and does not restrict. **Time:** ten
 minutes.
@@ -15,14 +15,14 @@ minutes.
   Everything below is checkable against the source tree at the commit you are
   reading: file paths, licence headers, and the code that reaches them. None
   of it is legal advice, and the operative text is the
-  [licence page](https://nativelink.com/license) and the `LICENSE` file in the
+  [licence page](https://forge.com/license) and the `LICENSE` file in the
   repository root, not this page. If your intended use is near a boundary,
   read those and ask.
 </Callout>
 
 ## The short version [#the-short-version]
 
-The whole of NativeLink is in the public repository. No separate
+The whole of Forge is in the public repository. No separate
 "enterprise build", no stripped-down community edition, and no compile-time
 feature flag that divides them. What differs between the free and paid product
 is the *licence you hold*, not the *code you run*.
@@ -45,7 +45,7 @@ The repository root carries `LICENSE`, the Functional Source License 1.1 with
 an Apache 2.0 future grant. Its restriction is narrower than most people
 expect on first reading: it permits everything except a **Competing Use**,
 which the licence defines as making the software available to others in a
-commercial product or service that substitutes for NativeLink, substitutes for
+commercial product or service that substitutes for Forge, substitutes for
 something Trace Machina already offers using it, or offers substantially
 similar functionality.
 
@@ -54,9 +54,9 @@ access, non-commercial education, non-commercial research, and use in
 connection with professional services you provide to someone else who is
 themselves complying.
 
-The practical read for most readers is that running NativeLink as your own
+The practical read for most readers is that running Forge as your own
 build farm (for a team, for a company, in production, commercially) is
-internal use, and internal use is permitted. Reselling a managed NativeLink
+internal use, and internal use is permitted. Reselling a managed Forge
 service is what the licence is written to prevent.
 
 <Callout type="info" title="The Apache conversion clock is per version, not a single date">
@@ -75,19 +75,19 @@ the repository licence. They form two modules:
 
 | Module | Files | What it is |
 | --- | --- | --- |
-| Metrics | `nativelink-util/src/metrics.rs` | Every OpenTelemetry instrument NativeLink declares: the cache counters and histograms, the execution stage and result metrics, and the attribute sets attached to them |
-| Persistent workers | `nativelink-worker/src/persistent_worker/{mod,pool,live_worker,protocol}.rs` | Bazel's persistent-worker protocol: keeping a compiler process warm across actions instead of starting one per action |
+| Metrics | `forge-util/src/metrics.rs` | Every OpenTelemetry instrument Forge declares: the cache counters and histograms, the execution stage and result metrics, and the attribute sets attached to them |
+| Persistent workers | `forge-worker/src/persistent_worker/{mod,pool,live_worker,protocol}.rs` | Bazel's persistent-worker protocol: keeping a compiler process warm across actions instead of starting one per action |
 
 Their headers say the same thing, verbatim:
 
 ```text
 // Use of this module requires an enterprise license agreement, which can be
-// attained by emailing contact@nativelink.com or signing up for Nativelink
-// Cloud at app.nativelink.com.
+// attained by emailing contact@forge.com or signing up for Forge
+// Cloud at app.forge.com.
 ```
 
-(The header still names NativeLink Cloud, which is no longer offered; the
-managed option today is NativeLink Enterprise, and the email address is the
+(The header still names Forge Cloud, which is no longer offered; the
+managed option today is Forge Enterprise, and the email address is the
 route to either agreement.)
 
 The wording matters. It is a licence obligation attached to *use of the
@@ -137,7 +137,7 @@ page's own [licence callout](/operate/observability#do-metrics-require-a-commerc
 ### Persistent workers activate from the action, not from your config [#persistent-workers-activate-from-the-action-not-from-your-config]
 
 No `persistent_worker` key exists anywhere in the configuration schema;
-searching `nativelink-config` for it returns nothing at all. The module is
+searching `forge-config` for it returns nothing at all. The module is
 reached entirely from the action's own platform properties:
 
 | Property | Values | Effect |
@@ -150,7 +150,7 @@ declare worker support: Java and Scala compilation, TypeScript, and anything
 using `ctx.actions.run` with `execution_requirements` asking for workers.
 A Bazel build that already uses persistent workers locally will exercise
 the licensed module remotely the first time it runs an affected action, with
-no NativeLink-side opt-in and nothing in your configuration mentioning it.
+no Forge-side opt-in and nothing in your configuration mentioning it.
 
 Because there is no config surface, the pool's behaviour is fixed at
 compile-time defaults:
@@ -208,8 +208,8 @@ question (control-plane compute, CAS storage, worker compute, and the engineer
 hours to run it) rather than a licence question.
 
 For what Enterprise includes, its pricing, and what support attaches to it, the
-sources of truth are [nativelink.com/pricing](https://nativelink.com/pricing)
-and the [licence page](https://nativelink.com/license). Meaningful contributors
+sources of truth are [forge.com/pricing](https://forge.com/pricing)
+and the [licence page](https://forge.com/license). Meaningful contributors
 to the project may be eligible for waivers on the Business Source modules;
 ask the maintainers before relying on one.
 
@@ -219,12 +219,12 @@ The binary is a [clap](https://docs.rs/clap) parser with `version` derived from
 the crate, so:
 
 ```sh
-nativelink --version
+forge --version
 ```
 
 prints the crate version (`1.6.5` at the time of writing) and exits. The
 container image is tagged with the same version prefixed by `v`
-(`ghcr.io/tracemachina/nativelink:v1.6.5`); pin that tag in production rather
+(`ghcr.io/tracemachina/forge:v1.6.5`); pin that tag in production rather
 than a floating one. See
 [CLI and environment](/reference/cli-and-env) for the complete flag surface,
 which is `--help` and `--version` and nothing else, and
@@ -236,13 +236,13 @@ status to print.
 ## FAQ [#faq]
 
 <Accordions type="multiple">
-  <Accordion title="Can I run NativeLink commercially for free?" id="can-i-run-nativelink-commercially-for-free">
+  <Accordion title="Can I run Forge commercially for free?" id="can-i-run-forge-commercially-for-free">
     Running it as your own build infrastructure is internal use, which the
     Functional Source License permits regardless of whether your company is
     commercial. The separate question is the two Business Source modules:
     metrics in a shared or production setting needs a licence, and metrics
     cannot be switched off. Read the
-    [licence page](https://nativelink.com/license) against your actual
+    [licence page](https://forge.com/license) against your actual
     situation rather than inferring from this summary.
   </Accordion>
   <Accordion title="Can I fork it and remove the Business Source modules?" id="can-i-fork-it-and-remove-the-business-source-modules">
@@ -260,7 +260,7 @@ status to print.
     the endpoint you configure, which in every documented setup is a collector
     you run.
   </Accordion>
-  <Accordion title="When does NativeLink become Apache 2.0?" id="when-does-nativelink-become-apache-2-0">
+  <Accordion title="When does Forge become Apache 2.0?" id="when-does-forge-become-apache-2-0">
     Each released version does, two years after that version was made
     available, a rolling edge rather than a single cutover date. The Business
     Source modules are governed by their own headers and are not covered by the
@@ -276,8 +276,8 @@ status to print.
 </Accordions>
 
 <SourceLink file="LICENSE" symbol="Grant of Future License" />
-<SourceLink file="nativelink-util/src/metrics.rs" symbol="CACHE_METRICS" />
-<SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="action_supports_persistent_workers" />
+<SourceLink file="forge-util/src/metrics.rs" symbol="CACHE_METRICS" />
+<SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="action_supports_persistent_workers" />
 
 <NextStep href="/getting-started/shared-cache" title="Shared cache">
   The self-host-or-Enterprise decision worked through as an operational question

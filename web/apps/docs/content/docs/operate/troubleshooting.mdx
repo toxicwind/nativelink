@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: A symptom-to-cause-to-fix index for NativeLink, anchored on the error strings the system actually emits, including the ones that say nothing useful, and the failures that produce no error at all.
+description: A symptom-to-cause-to-fix index for Forge, anchored on the error strings the system actually emits, including the ones that say nothing useful, and the failures that produce no error at all.
 ---
 
 {/* archetype: reference, see /web/apps/docs/templates/reference.mdx */}
@@ -16,7 +16,7 @@ the procedure that fixes it. **Time:** find your row, follow it.
 Search this page for the error string you have. If your symptom is a *hang*
 rather than an error, start at
 [Actions queue forever and workers sit idle](#actions-queue-forever-and-workers-sit-idle);
-NativeLink's most common failure mode produces no error string at all.
+Forge's most common failure mode produces no error string at all.
 
 If you already know which incident you are having and need the procedure rather
 than the diagnosis, go to [Runbooks](/operate/runbooks).
@@ -39,12 +39,12 @@ than the diagnosis, go to [Runbooks](/operate/runbooks).
 | Worker logs cycle roughly twice a second | Reconnect storm, a flat 0.5 s retry | [Worker connection churn](#worker-connection-churn) |
 | Setting `max_job_retries: 0` did not stop retries | Zero is read as unset | [Zero means default](#zero-means-default) |
 | Everything slows down, nothing errors | FD semaphore exhaustion, or another blocking limit | [Limits that block](#limits-that-block-instead-of-erroring) |
-| Redis errors but the process stays up | By design: NativeLink serves errors during a Redis outage | [Runbooks: Redis](/operate/runbooks#redis-fails-over) |
+| Redis errors but the process stays up | By design: Forge serves errors during a Redis outage | [Runbooks: Redis](/operate/runbooks#redis-fails-over) |
 | `'cas_store': '<name>' does not exist` at startup | Store name typo in the config | [Startup failures](#startup-failures) |
 
 ## Actions queue forever and workers sit idle [#actions-queue-forever-and-workers-sit-idle]
 
-The single most important asymmetry in NativeLink:
+The single most important asymmetry in Forge:
 
 <Callout type="warn" title="A bad property name errors instantly. A bad property value hangs forever.">
 
@@ -246,7 +246,7 @@ Setting a field to `0` to disable it usually does the opposite.
 | `max_concurrent_writes` | Genuinely unlimited. |
 
 No single rule applies here, which is exactly why the table exists. When in
-doubt, check [the config reference](/reference/nativelink-config) for the field
+doubt, check [the config reference](/reference/forge-config) for the field
 rather than assuming.
 
 ## Worker connection churn [#worker-connection-churn]
@@ -277,8 +277,8 @@ The worker sends a keepalive every half of its `worker_api_endpoint.timeout`
 (default 5 s, so every 2.5 s), and the scheduler evicts a worker it has not
 heard from for `worker_timeout_s` (default 10 s), checking once a second. Any
 message from the worker resets that clock, not only keepalives. The
-scheduler counts what it receives in `nativelink_worker_keepalives_total` and
-departures by reason in `nativelink_worker_disconnections_total`.
+scheduler counts what it receives in `forge_worker_keepalives_total` and
+departures by reason in `forge_worker_disconnections_total`.
 
 ## Limits that block instead of erroring [#limits-that-block-instead-of-erroring]
 
@@ -292,7 +292,7 @@ sitting on one of these:
 | `max_client_permits` (Redis) | 500 | Blocks. |
 | `max_concurrent_writes` (filesystem) | unlimited | Blocks when set. |
 
-The FD limit deserves special attention. NativeLink uses only **80% of the
+The FD limit deserves special attention. Forge uses only **80% of the
 limit it actually achieved**, not 80% of what you configured. In a container
 with a hard `nofile` cap, the semaphore silently shrinks and the only evidence
 is a startup warning:
@@ -371,15 +371,15 @@ this page rather than duplicating it.
 [Observability](/operate/observability#troubleshooting) covers the metrics
 pipeline itself: no metrics appearing, missing cache metrics, out-of-order
 samples. Note that those are problems with the *collector*, not with
-NativeLink.
+Forge.
 
 [Security hardening](/operate/security-hardening) covers what is deliberately
 absent rather than broken: there is no inbound authentication anywhere, and
 the committed certificates expired in 2024.
 
-<SourceLink file="nativelink-scheduler/src/simple_scheduler.rs" symbol="do_try_match" />
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="is_cas_blob_missing" />
-<SourceLink file="nativelink-util/src/platform_properties.rs" symbol="is_satisfied_by" />
+<SourceLink file="forge-scheduler/src/simple_scheduler.rs" symbol="do_try_match" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="is_cas_blob_missing" />
+<SourceLink file="forge-util/src/platform_properties.rs" symbol="is_satisfied_by" />
 
 ## What's next [#whats-next]
 
@@ -387,7 +387,7 @@ the committed certificates expired in 2024.
   Once you know which incident you are in, the procedure that ends it.
 </NextStep>
 
-<NextStep href="/reference/nativelink-config" title="Configuration reference" kind="aside">
+<NextStep href="/reference/forge-config" title="Configuration reference" kind="aside">
   Every field, every default, generated from the source.
 </NextStep>
 

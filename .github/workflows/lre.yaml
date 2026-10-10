@@ -37,18 +37,18 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
-      - name: Setup NativeLink Cloud
-        uses: ./.github/actions/setup-nativelink-cloud
+      - name: Setup Forge Cloud
+        uses: ./.github/actions/setup-forge-cloud
         with:
-          ci-mode: ${{ vars.NATIVELINK_CI_MODE }}
-          claim-base: ${{ secrets.NATIVELINK_STAGING_CLAIM_BASE }}
-          bes-results-url: ${{ secrets.NATIVELINK_STAGING_BES_RESULTS_URL }}
+          ci-mode: ${{ vars.FORGE_CI_MODE }}
+          claim-base: ${{ secrets.FORGE_STAGING_CLAIM_BASE }}
+          bes-results-url: ${{ secrets.FORGE_STAGING_BES_RESULTS_URL }}
           api-key: >-
             ${{ github.event_name == 'push'
-                && secrets.NATIVELINK_STAGING_API_KEY_RW
-                || secrets.NATIVELINK_STAGING_API_KEY_RO }}
+                && secrets.FORGE_STAGING_API_KEY_RW
+                || secrets.FORGE_STAGING_API_KEY_RO }}
           mode: ${{ github.event_name == 'push' && 'write' || 'read' }}
           # Remote execution only on Linux; the action hard-fails exec on
           # non-Linux runners, so macOS lanes fall back to cache.
@@ -69,7 +69,7 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
 #   remote:
 #     strategy:
@@ -88,13 +88,13 @@ jobs:
 #       - name: Prepare Worker
 #         uses: ./.github/actions/prepare-nix
 #         with:
-#           nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+#           forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
 #       - name: Start Kubernetes cluster
 #         run: >
 #           nix run .#native up
 
-#       - name: Start NativeLink operator
+#       - name: Start Forge operator
 #         env:
 #           REPO_URL: ${{ github.event.pull_request.head.repo.clone_url || format('https://github.com/{0}.git', github.repository) }}
 #           BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
@@ -106,7 +106,7 @@ jobs:
 #           kind: Kustomization
 #           resources:
 #           - kubernetes/resources/flux
-#           - kubernetes/resources/nativelink-core
+#           - kubernetes/resources/forge-core
 #           - kubernetes/resources/gateway-routes
 #           - kubernetes/workers/resources/worker-init
 #           - kubernetes/workers/resources/${TOOLCHAIN}
@@ -123,28 +123,28 @@ jobs:
 #                 value: ${COMMIT}
 #             target:
 #               kind: GitRepository
-#               name: nativelink-infra
+#               name: forge-infra
 #           - patch: |-
 #               - op: replace
 #                 path: /spec/postBuild/substitute/PLACEHOLDER_FLAKE_OUTPUT
 #                 value: ./src_root#image
 #             target:
 #               kind: Kustomization
-#               name: nativelink-alert-core
+#               name: forge-alert-core
 #           - patch: |-
 #               - op: replace
 #                 path: /spec/postBuild/substitute/PLACEHOLDER_FLAKE_OUTPUT
-#                 value: ./src_root#nativelink-worker-init
+#                 value: ./src_root#forge-worker-init
 #             target:
 #               kind: Kustomization
-#               name: nativelink-alert-worker-init
+#               name: forge-alert-worker-init
 #           - patch: |-
 #               - op: replace
 #                 path: /spec/postBuild/substitute/PLACEHOLDER_FLAKE_OUTPUT
-#                 value: ./src_root#nativelink-worker-${TOOLCHAIN}
+#                 value: ./src_root#forge-worker-${TOOLCHAIN}
 #             target:
 #               kind: Kustomization
-#               name: nativelink-alert-${TOOLCHAIN}
+#               name: forge-alert-${TOOLCHAIN}
 #           EOF
 #           kubectl apply -k . &&
 #           rm kustomization.yaml'
@@ -154,7 +154,7 @@ jobs:
 #           nix develop --impure --command
 #           bash -c "flux reconcile kustomization \
 #             --timeout=15m \
-#             nativelink-tekton-resources"
+#             forge-tekton-resources"
 
 #       - name: Wait for alerts
 #         env:
@@ -163,24 +163,24 @@ jobs:
 #           nix develop --impure --command
 #           bash -c "flux reconcile kustomization \
 #             --timeout=15m \
-#             nativelink-alert-core && \
+#             forge-alert-core && \
 #           flux reconcile kustomization \
 #             --timeout=15m \
-#             nativelink-alert-worker-init && \
+#             forge-alert-worker-init && \
 #           flux reconcile kustomization \
 #             --timeout=15m \
-#             nativelink-alert-${TOOLCHAIN}"
+#             forge-alert-${TOOLCHAIN}"
 
 #       - name: Trigger pipelines
 #         env:
 #           REPO_URL: ${{ github.event.pull_request.head.repo.clone_url || format('https://github.com/{0}.git', github.repository) }}
 #           BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
 #         run: |
-#           nix develop --impure --command bash -c 'cat > nativelink-repo.yaml << EOF
+#           nix develop --impure --command bash -c 'cat > forge-repo.yaml << EOF
 #           apiVersion: source.toolkit.fluxcd.io/v1
 #           kind: GitRepository
 #           metadata:
-#             name: nativelink
+#             name: forge
 #             namespace: default
 #           spec:
 #             interval: 2m
@@ -188,14 +188,14 @@ jobs:
 #             ref:
 #               branch: ${BRANCH}
 #           EOF
-#           kubectl apply -f nativelink-repo.yaml &&
-#           rm nativelink-repo.yaml'
+#           kubectl apply -f forge-repo.yaml &&
+#           rm forge-repo.yaml'
 
 #       - name: Wait for Tekton pipelines
 #         run: >
 #           nix develop --impure --command bash << 'EOF'
 #             until pr=$(kubectl get pipelinerun -n ci -o name | \
-#                        grep rebuild-nativelink-run-); do
+#                        grep rebuild-forge-run-); do
 #               echo "Waiting for pipeline to be created..."
 #               sleep 1
 #             done
@@ -209,15 +209,15 @@ jobs:
 #               --timeout=45m \
 #               pipelinerun \
 #               -n ci \
-#               -l tekton.dev/pipeline=rebuild-nativelink
+#               -l tekton.dev/pipeline=rebuild-forge
 #           EOF
 
-#       - name: Wait for NativeLink Kustomization
+#       - name: Wait for Forge Kustomization
 #         run: >
 #           nix develop --impure --command
 #           bash -c "flux reconcile kustomization -n default \
 #             --timeout=15m \
-#             nativelink-core"
+#             forge-core"
 
 #       - name: Debug Kustomizations
 #         run: >
@@ -232,7 +232,7 @@ jobs:
 #           nix develop --impure --command
 #           bash -c "flux reconcile kustomization -n default \
 #             --timeout=15m \
-#             nativelink-${TOOLCHAIN}"
+#             forge-${TOOLCHAIN}"
 
 #       - name: Debug Kustomizations
 #         run: >
@@ -240,22 +240,22 @@ jobs:
 #           bash -c "kubectl get kustomizations.kustomize.toolkit.fluxcd.io -A && kubectl events --all-namespaces && kubectl describe kustomizations.kustomize.toolkit.fluxcd.io -A"
 #         if: always()
 
-#       - name: Wait for NativeLink
+#       - name: Wait for Forge
 #         run: >
 #           nix develop --impure --command
-#           bash -c "kubectl rollout status deploy/nativelink"
+#           bash -c "kubectl rollout status deploy/forge"
 
 #       - name: Wait for worker
 #         env:
 #           TOOLCHAIN: ${{ matrix.toolchain }}
 #         run: >
 #           nix develop --impure --command
-#           bash -c "kubectl rollout status deploy/nativelink-worker-${TOOLCHAIN}"
+#           bash -c "kubectl rollout status deploy/forge-worker-${TOOLCHAIN}"
 
 #       - name: Get gateway IPs
 #         id: gateway-ips
 #         run: |
-#           echo "nativelink_ip=$(kubectl get gtw nativelink-gateway -o=jsonpath='{.status.addresses[0].value}')" >> "$GITHUB_ENV"
+#           echo "forge_ip=$(kubectl get gtw forge-gateway -o=jsonpath='{.status.addresses[0].value}')" >> "$GITHUB_ENV"
 
 #       - name: Print cluster state
 #         run: |
@@ -264,10 +264,10 @@ jobs:
 #           kubectl get svc -A
 #           kubectl get deployments -A
 #           kubectl describe gtw
-#           echo "nativelink"
-#           kubectl logs -l app=nativelink
+#           echo "forge"
+#           kubectl logs -l app=forge
 #           echo "worker"
-#           kubectl logs -l app=nativelink-worker
+#           kubectl logs -l app=forge-worker
 
 #       - name: Build example with ${{ matrix.toolchain }} toolchain
 #         env:
@@ -275,7 +275,7 @@ jobs:
 #         run: >
 #           nix develop --impure --command
 #           bash -c "bazel run \
-#             --remote_cache=grpc://$nativelink_ip \
-#             --remote_executor=grpc://$nativelink_ip \
+#             --remote_cache=grpc://$forge_ip \
+#             --remote_executor=grpc://$forge_ip \
 #             --verbose_failures \
 #             @local-remote-execution//examples:${TOOLCHAIN}"

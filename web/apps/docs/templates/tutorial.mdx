@@ -28,7 +28,7 @@ instructions.
 
 <Mermaid chart={`
 graph LR
-  A[your build] --> B[NativeLink]
+  A[your build] --> B[Forge]
 `} />
 
 {/* ── Layer 2: the working detail ────────────────────────────────────── */}
@@ -39,7 +39,7 @@ Pinned versions, not "a recent version". A tutorial that worked once should
 work again, and a reader who fails at step 6 needs to be able to rule this
 out.
 
-- NativeLink <MinVersion v="1.6.0" />
+- Forge <MinVersion v="1.6.0" />
 - Whatever else, with its version
 
 ## Steps
@@ -53,7 +53,7 @@ out.
 The command, alone, copy-pasteable:
 
 ```bash
-nativelink ./config.json5
+forge ./config.json5
 ```
 
 Then what they should see. Every step shows its expected output; this is

@@ -12,17 +12,17 @@ components:
 replacements:
   - source:
       kind: Kustomization
-      name: nativelink
+      name: forge
       fieldPath: metadata.name
     targets:
       - select:
           kind: Kustomization
-          name: nativelink-alert
+          name: forge-alert
         fieldPaths:
           - spec.postBuild.substitute.PLACEHOLDER_CONFIG_MAP_NAME
       - select:
           kind: Kustomization
-          name: nativelink
+          name: forge
         fieldPaths:
           - spec.postBuild.substituteFrom.0.name
 
@@ -30,13 +30,13 @@ patches:
 - patch: |-
     - op: replace
       path: /spec/postBuild/substitute/PLACEHOLDER_FLAKE_OUTPUT
-      value: github:TraceMachina/nativelink#nativelink-worker-lre-rs
+      value: github:toxicwind/forge#forge-worker-lre-rs
     - op: add
       path: /spec/nameSuffix
       value: -lre-rs
   target:
     kind: Kustomization
-    name: nativelink-alert
+    name: forge-alert
 - patch: |-
     - op: replace
       path: /spec/path
@@ -45,16 +45,16 @@ patches:
       path: /spec/postBuild/substituteFrom/1
       value:
         kind: ConfigMap
-        name: nativelink-worker-init
+        name: forge-worker-init
     - op: add
       path: /spec/images
       value:
-      - name: nativelink-worker-init
-        newName: localhost:5001/nativelink-worker-init
-        newTag: ${NATIVELINK_WORKER_INIT_TAG}
-      - name: nativelink-worker-lre-rs
-        newName: localhost:5001/nativelink-worker-lre-rs
-        newTag: ${NATIVELINK_WORKER_LRE_RS_TAG}
+      - name: forge-worker-init
+        newName: localhost:5001/forge-worker-init
+        newTag: ${FORGE_WORKER_INIT_TAG}
+      - name: forge-worker-lre-rs
+        newName: localhost:5001/forge-worker-lre-rs
+        newTag: ${FORGE_WORKER_LRE_RS_TAG}
   target:
     kind: Kustomization
-    name: nativelink
+    name: forge

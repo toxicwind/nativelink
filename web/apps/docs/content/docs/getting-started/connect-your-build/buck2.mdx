@@ -1,21 +1,21 @@
 ---
 title: Buck2
-description: Configure Buck2 to use NativeLink for remote cache and execution.
+description: Configure Buck2 to use Forge for remote cache and execution.
 ---
 
 <Prerequisites>
-  A running NativeLink instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
+  A running Forge instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
 </Prerequisites>
 
-Buck2 has a native Remote Execution API client. NativeLink can serve the
+Buck2 has a native Remote Execution API client. Forge can serve the
 CAS, Action Cache, capabilities, and execution services that Buck2 expects.
 
 The repo includes a runnable Buck2 integration test at
 <SourceLink file="integration_tests/buck2" dir symbol="integration_tests/buck2/" />.
-It starts NativeLink with a combined scheduler and local worker, runs
+It starts Forge with a combined scheduler and local worker, runs
 `buck2 build //...`, and checks for `BUILD SUCCEEDED`.
 
-## Start NativeLink [#start-nativelink]
+## Start Forge [#start-forge]
 
 Use a config that exposes these services on `localhost:50051`:
 
@@ -89,12 +89,12 @@ download paths are working.
 
 ## Troubleshooting [#troubleshooting]
 
-- **Buck2 cannot connect.** Confirm NativeLink is listening on `50051` and
+- **Buck2 cannot connect.** Confirm Forge is listening on `50051` and
   Buck2 is not expecting TLS.
 - **Everything runs locally.** Check that your selected execution platform
   sets `remote_enabled = True`.
 - **Instance-name errors.** Make sure Buck2's `instance_name` matches the
-  NativeLink config. The integration test uses `main`.
+  Forge config. The integration test uses `main`.
 
 ## FAQ [#faq]
 
@@ -102,12 +102,12 @@ download paths are working.
   <Accordion title="Why do all three addresses point at the same listener?" id="why-do-all-three-addresses-point-at-the-same-listener">
     `engine_address`, `action_cache_address`, and `cas_address` are
     separate settings because Buck2 lets you split those services across
-    hosts. NativeLink serves them all from one listener, so all three
+    hosts. Forge serves them all from one listener, so all three
     point at the same `host:port`.
   </Accordion>
-  <Accordion title="Does NativeLink support Buck2 remote execution, or only caching?" id="does-nativelink-support-buck2-remote-execution-or-only-caching">
+  <Accordion title="Does Forge support Buck2 remote execution, or only caching?" id="does-forge-support-buck2-remote-execution-or-only-caching">
     Both. Execution needs an execution platform registered with
-    `remote_enabled = True` (above) plus a NativeLink scheduler and
+    `remote_enabled = True` (above) plus a Forge scheduler and
     worker; the integration test config runs one of each.
   </Accordion>
 </Accordions>

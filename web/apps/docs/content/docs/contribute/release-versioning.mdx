@@ -1,6 +1,6 @@
 ---
 title: Releases and versioning
-description: How a NativeLink version becomes a signed tag, what the tag triggers, and what compatibility the project does and does not promise.
+description: How a Forge version becomes a signed tag, what the tag triggers, and what compatibility the project does and does not promise.
 ---
 
 {/* archetype: how-to. See /web/apps/docs/templates/how-to.mdx */}
@@ -11,7 +11,7 @@ the end:** the fourteen files a version lives in, the release sequence, what
 each workflow produces, and the compatibility policy, which is mostly the
 absence of one. **Time:** twenty minutes.
 
-NativeLink's release process is deliberately semi-manual. Tags are signed by
+Forge's release process is deliberately semi-manual. Tags are signed by
 a human, and release notes are written by a human, because both are things
 an automated changelog does badly. Everything downstream of the tag is
 automated.
@@ -27,14 +27,14 @@ No single source of truth for the version exists, because the root
 | Root `Cargo.toml` | 1 |
 | `MODULE.bazel` | 1 |
 | Each crate's `Cargo.toml` | 11 |
-| `nativelink-metric/nativelink-metric-macro-derive/Cargo.toml` | 1 |
+| `forge-metric/forge-metric-macro-derive/Cargo.toml` | 1 |
 
 <Callout type="warn" title="The nested crate is the one that gets missed">
   The macro-derive crate is nested one level deeper inside
-  `nativelink-metric/` and does not match a `nativelink-*/Cargo.toml` glob.
+  `forge-metric/` and does not match a `forge-*/Cargo.toml` glob.
   `CONTRIBUTING.md` calls it out by name and gives a sanity check: a standard
   release commit touches 17 files, the fourteen above plus `Cargo.lock`,
-  `nativelink-test/fuzz/Cargo.lock` and `CHANGELOG.md`.
+  `forge-test/fuzz/Cargo.lock` and `CHANGELOG.md`.
 </Callout>
 
 Several things that contain a version are **generated** and must not be
@@ -61,7 +61,7 @@ The shape of it:
     wrong section.
   </li>
   <li>
-    **Open the release PR**, titled `Release NativeLink v1.x.y`, and merge it.
+    **Open the release PR**, titled `Release Forge v1.x.y`, and merge it.
   </li>
   <li>
     **Create a signed tag on the release commit**: `git tag -s v1.x.y`, with
@@ -79,7 +79,7 @@ The shape of it:
     triggers `config-reference.yaml`, which opens an auto-merging PR against
     `main`. If it did not fire, re-run it from the Actions tab or regenerate
     by hand with
-    `bun --filter @nativelink/docs gen:config-reference v1.x.y`.
+    `bun --filter @forge/docs gen:config-reference v1.x.y`.
   </li>
   <li>
     **Write the release notes**, attributing every entry to its author, then
@@ -115,9 +115,9 @@ keyless Sigstore cosign, and attaches SLSA Build Level 3 provenance.
 Verify any asset locally:
 
 ```bash
-slsa-verifier verify-artifact nativelink-1.x.y-x86_64-unknown-linux-musl.tar.gz \
-  --provenance-path nativelink-1.x.y.intoto.jsonl \
-  --source-uri github.com/TraceMachina/nativelink \
+slsa-verifier verify-artifact forge-1.x.y-x86_64-unknown-linux-musl.tar.gz \
+  --provenance-path forge-1.x.y.intoto.jsonl \
+  --source-uri github.com/toxicwind/forge \
   --source-tag v1.x.y
 ```
 
@@ -138,16 +138,16 @@ rather than a range; and treat a minor bump as something to test, not
 something to assume.
 
 **Nothing is published to crates.io.** The crates exist for the workspace's
-own use. Consume NativeLink as a binary, a container image, or a Bazel
+own use. Consume Forge as a binary, a container image, or a Bazel
 module, not as a library dependency.
 
 Backward-compatible config changes do get shims: see the `#[serde(untagged)]`
-helpers in `nativelink-config`'s `backcompat.rs`, which accept the old shape
+helpers in `forge-config`'s `backcompat.rs`, which accept the old shape
 and emit a deprecation warning. That is a convention, not a promise.
 
 ## Regenerating the configuration reference [#regenerating-the-configuration-reference]
 
-The reference pages under `reference/nativelink-config/` are generated from
+The reference pages under `reference/forge-config/` are generated from
 the Rust config crate and must never be hand-edited. The chain is:
 `cargo run --bin build-schema --features dev-schema` produces a JSON schema,
 `web/apps/docs/scripts/gen-config-reference.mjs` and `scripts/lib/schema-to-mdx.mjs`
@@ -155,7 +155,7 @@ turn it into MDX, and the whole thing is invoked as:
 
 ```bash
 cd web
-bun --filter @nativelink/docs gen:config-reference v1.x.y
+bun --filter @forge/docs gen:config-reference v1.x.y
 ```
 
 Passing a tag updates `lib/config-versions.ts` (which is what the docs UI
@@ -177,7 +177,7 @@ versions do not need regenerating.
     move the signing key into CI, which is exactly what the signature is
     supposed to rule out.
   </Accordion>
-  <Accordion title="Can I depend on `nativelink-store` from my own crate?" id="depend-on-crates">
+  <Accordion title="Can I depend on `forge-store` from my own crate?" id="depend-on-crates">
     Not from crates.io; nothing is published there. You can path- or
     git-depend on it, but with no compatibility policy you are pinning a
     commit, not an interface.

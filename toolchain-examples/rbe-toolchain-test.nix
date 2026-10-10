@@ -1,5 +1,5 @@
 {
-  nativelink,
+  forge,
   writeShellScriptBin,
   jo,
   bazel-retry,
@@ -20,7 +20,7 @@ writeShellScriptBin "rbe-toolchain-test" ''
   ZIG_PLATFORM="--config=zig-cc --platforms @zig_sdk//platform:linux_''${PLATFORM}"
   RUST_PLATFORM="--platforms=//platforms:linux_''${PLATFORM}_gnu_2_28 --host_platform=@rules_rs//:local_gnu_platform --extra_execution_platforms=@rules_rs//:local_gnu_platform"
 
-  # As per https://nativelink.com/docs/rbe/remote-execution-examples#minimal-example-targets
+  # As per https://forge.com/docs/rbe/remote-execution-examples#minimal-example-targets
   declare -A COMMANDS
   COMMANDS=(
     [cpp-zig]="test //cpp $ZIG_PLATFORM"
@@ -56,7 +56,7 @@ writeShellScriptBin "rbe-toolchain-test" ''
   }
   trap "cleanup" INT QUIT TERM EXIT
 
-  NO_COLOR=true ${nativelink}/bin/nativelink -- toolchain-examples/nativelink-config.json5 | tee -i toolchain-examples/nativelink.log &
+  NO_COLOR=true ${forge}/bin/forge -- toolchain-examples/forge-config.json5 | tee -i toolchain-examples/forge.log &
 
   # --noshow_progress / --show_result=0 quiet the per-action progress stream and
   # the built-target listing so the RBE example logs stay scannable. Raw flags
@@ -102,15 +102,15 @@ writeShellScriptBin "rbe-toolchain-test" ''
     run_cmd "$cmd"
   fi
 
-  nativelink_output=$(cat toolchain-examples/nativelink.log)
+  forge_output=$(cat toolchain-examples/forge.log)
 
-  case $nativelink_output in
+  case $forge_output in
     *"ERROR "* )
-      echo "Error in nativelink build"
+      echo "Error in forge build"
       exit 1
     ;;
     *)
-      echo 'Successful nativelink build'
+      echo 'Successful forge build'
     ;;
   esac
 ''

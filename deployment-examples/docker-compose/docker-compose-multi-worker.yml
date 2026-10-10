@@ -3,20 +3,20 @@ version: '3.8'
 services:
   # CAS/AC server
   cas-server:
-    image: nativelink:latest
+    image: forge:latest
     build:
       context: ../..
       dockerfile: deployment-examples/docker-compose/Dockerfile
     volumes:
       - cas-data:/data/cas
-      - ./cas-server-multi-worker.json5:/nativelink-config.json5
+      - ./cas-server-multi-worker.json5:/forge-config.json5
     ports:
       - "50051:50051"
     environment:
       - RUST_LOG=info
-    command: nativelink /nativelink-config.json5
+    command: forge /forge-config.json5
     networks:
-      - nativelink-network
+      - forge-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:50051/status"]
       interval: 5s
@@ -25,21 +25,21 @@ services:
 
   # Scheduler
   scheduler:
-    image: nativelink:latest
+    image: forge:latest
     volumes:
-      - ./scheduler-multi-worker.json5:/nativelink-config.json5
+      - ./scheduler-multi-worker.json5:/forge-config.json5
     ports:
       - "50052:50052"
       - "50061:50061"
     environment:
       - RUST_LOG=info
       - CAS_ENDPOINT=cas-server
-    command: nativelink /nativelink-config.json5
+    command: forge /forge-config.json5
     depends_on:
       cas-server:
         condition: service_started
     networks:
-      - nativelink-network
+      - forge-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:50052/status"]
       interval: 5s
@@ -48,23 +48,23 @@ services:
 
   # Worker 1 - Uses shared CAS volume
   worker-1:
-    image: nativelink:latest
+    image: forge:latest
     volumes:
       - cas-data:/data/cas  # Shared CAS volume
       - worker1-data:/data/worker1
-      - ./worker-shared-cas.json5:/nativelink-config.json5
+      - ./worker-shared-cas.json5:/forge-config.json5
     environment:
       - RUST_LOG=info
       - SCHEDULER_ENDPOINT=scheduler
       - CAS_ENDPOINT=cas-server
       - WORKER_NAME=worker-1
       - WORKER_ID=worker-1
-    command: nativelink /nativelink-config.json5
+    command: forge /forge-config.json5
     depends_on:
       scheduler:
         condition: service_started
     networks:
-      - nativelink-network
+      - forge-network
     deploy:
       resources:
         limits:
@@ -73,23 +73,23 @@ services:
 
   # Worker 2 - Uses shared CAS volume
   worker-2:
-    image: nativelink:latest
+    image: forge:latest
     volumes:
       - cas-data:/data/cas  # Shared CAS volume
       - worker2-data:/data/worker2
-      - ./worker-shared-cas.json5:/nativelink-config.json5
+      - ./worker-shared-cas.json5:/forge-config.json5
     environment:
       - RUST_LOG=info
       - SCHEDULER_ENDPOINT=scheduler
       - CAS_ENDPOINT=cas-server
       - WORKER_NAME=worker-2
       - WORKER_ID=worker-2
-    command: nativelink /nativelink-config.json5
+    command: forge /forge-config.json5
     depends_on:
       scheduler:
         condition: service_started
     networks:
-      - nativelink-network
+      - forge-network
     deploy:
       resources:
         limits:
@@ -98,23 +98,23 @@ services:
 
   # Worker 3 - Uses shared CAS volume
   worker-3:
-    image: nativelink:latest
+    image: forge:latest
     volumes:
       - cas-data:/data/cas  # Shared CAS volume
       - worker3-data:/data/worker3
-      - ./worker-shared-cas.json5:/nativelink-config.json5
+      - ./worker-shared-cas.json5:/forge-config.json5
     environment:
       - RUST_LOG=info
       - SCHEDULER_ENDPOINT=scheduler
       - CAS_ENDPOINT=cas-server
       - WORKER_NAME=worker-3
       - WORKER_ID=worker-3
-    command: nativelink /nativelink-config.json5
+    command: forge /forge-config.json5
     depends_on:
       scheduler:
         condition: service_started
     networks:
-      - nativelink-network
+      - forge-network
     deploy:
       resources:
         limits:
@@ -142,10 +142,10 @@ services:
   #     - worker-2
   #     - worker-3
   #   networks:
-  #     - nativelink-network
+  #     - forge-network
 
 networks:
-  nativelink-network:
+  forge-network:
     driver: bridge
 
 volumes:

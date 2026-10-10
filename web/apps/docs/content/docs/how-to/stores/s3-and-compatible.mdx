@@ -38,8 +38,8 @@ stores: [
     fast_slow: {
       fast: {
         filesystem: {
-          content_path: "/var/lib/nativelink/cas/content",
-          temp_path: "/var/lib/nativelink/cas/tmp",
+          content_path: "/var/lib/forge/cas/content",
+          temp_path: "/var/lib/forge/cas/tmp",
           eviction_policy: { max_bytes: "50gb" },
         },
       },
@@ -47,7 +47,7 @@ stores: [
         experimental_cloud_object_store: {
           provider: "aws",
           region: "us-east-1",
-          bucket: "my-nativelink-cas",
+          bucket: "my-forge-cas",
           key_prefix: "cas/",
           retry: { max_retries: 6, delay: 0.3, jitter: 0.5 },
         },
@@ -85,7 +85,7 @@ A plain `http://` endpoint needs `insecure_allow_http` as well, from
 [the shared options](#the-options-all-three-share). It turns off transport
 encryption for the whole store, so keep it to local testing.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ExperimentalAwsSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ExperimentalAwsSpec" />
 
 ## Cloudflare R2 [#cloudflare-r2]
 
@@ -98,7 +98,7 @@ entirely from your account ID.
   experimental_cloud_object_store: {
     provider: "r2",
     account_id: "${R2_ACCOUNT_ID}",
-    bucket: "nativelink-cas",
+    bucket: "forge-cas",
     access_key_id: "${R2_ACCESS_KEY_ID}",
     secret_access_key: "${R2_SECRET_ACCESS_KEY}",
     key_prefix: "cas/",
@@ -116,7 +116,7 @@ chain, so in practice you set them, from environment variables. The
 R2 charges no egress, which changes the arithmetic on how small a fast tier
 you can get away with.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ExperimentalR2Spec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ExperimentalR2Spec" />
 
 ## NetApp ONTAP S3 [#netapp-ontap-s3]
 
@@ -131,7 +131,7 @@ usually a private CA bundle:
     endpoint: "https://ontap-s3-endpoint:443",
     vserver_name: "your-vserver",
     bucket: "your-bucket",
-    root_certificates: "/etc/nativelink/ontap-ca.pem",
+    root_certificates: "/etc/forge/ontap-ca.pem",
     key_prefix: "cas/",
     retry: { max_retries: 6, delay: 0.3, jitter: 0.5 },
     multipart_max_concurrent_uploads: 10,
@@ -150,7 +150,7 @@ path-style addressing, its default `max_retry_buffer_per_request` is 20 MB
 rather than 5 MB, and it is HTTPS-only with HTTP/1.1 and HTTP/2 both enabled,
 so `insecure_allow_http` and `disable_http2` have no effect on it.
 
-<SourceLink file="nativelink-store/src/ontap_s3_store.rs" symbol="OntapS3Store" />
+<SourceLink file="forge-store/src/ontap_s3_store.rs" symbol="OntapS3Store" />
 
 ONTAP has one extra store type of its own, `ontap_s3_existence_cache`, which
 keeps a persisted index of what the bucket contains and refreshes it on an
@@ -160,7 +160,7 @@ interval:
 {
   name: "CAS_SLOW_STORE",
   ontap_s3_existence_cache: {
-    index_path: "/var/lib/nativelink/ontap-index.json",
+    index_path: "/var/lib/forge/ontap-index.json",
     sync_interval_seconds: 300,
     backend: {
       endpoint: "https://ontap-s3-endpoint:443",
@@ -175,7 +175,7 @@ interval:
 It exists because `FindMissingBlobs` against an on-premises S3 endpoint is
 often the slowest thing in the build, and the answer is usually stale-tolerant.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ExperimentalOntapS3Spec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ExperimentalOntapS3Spec" />
 
 ## The options all three share [#the-options-all-three-share]
 
@@ -204,17 +204,17 @@ Objects smaller than 5 MB with a known size are uploaded in one `PutObject`
 request; anything larger, or of unknown size, goes through a multipart upload
 in parts of at least 5 MB, each part held in memory and retried on its own.
 
-<SourceLink file="nativelink-util/src/retry.rs" symbol="Retrier" />
+<SourceLink file="forge-util/src/retry.rs" symbol="Retrier" />
 
 `consider_expired_after_s` is the one people are surprised by. When set, an
 object whose `last_modified` is older than this many seconds is reported as
 *not existing*, even though it is still in the bucket. Pair it with a bucket
 lifecycle rule whose window is longer by a comfortable margin (a few days):
-the rule deletes the object, and this setting stops NativeLink handing out a
+the rule deletes the object, and this setting stops Forge handing out a
 digest that is about to disappear. Clients that get a `NotFound`
 re-upload.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="CommonObjectSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="CommonObjectSpec" />
 
 ## Steps [#steps]
 
@@ -320,7 +320,7 @@ entirely, which trades retry safety for memory.
 
 </Accordion>
 
-<Accordion title="Objects exist in the bucket but NativeLink reports them missing" id="objects-exist-in-the-bucket-but-nativelink-reports-them-missing">
+<Accordion title="Objects exist in the bucket but Forge reports them missing" id="objects-exist-in-the-bucket-but-forge-reports-them-missing">
 
 Check `consider_expired_after_s`. A non-zero value makes objects older than
 that window invisible on purpose. If you didn't intend that, set it back

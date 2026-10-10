@@ -1,6 +1,6 @@
 ---
 title: Run multiple workers
-description: "Add workers to a running NativeLink: how they share the CAS, how the scheduler matches them, and the two things about the shipped compose example that will mislead you."
+description: "Add workers to a running Forge: how they share the CAS, how the scheduler matches them, and the two things about the shipped compose example that will mislead you."
 ---
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
@@ -49,7 +49,7 @@ an input it has fetched once does not cross the network again. That is a
 server. [Compose stores](/how-to/stores/compose-stores) covers the wrapper in
 general; this is its most load-bearing use.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
 
 ## What a worker config looks like [#what-a-worker-config-looks-like]
 
@@ -81,8 +81,8 @@ general; this is its most load-bearing use.
       fast_slow: {
         fast: {
           filesystem: {
-            content_path: "/root/.cache/nativelink/content_path-cas",
-            temp_path: "/root/.cache/nativelink/tmp_path-cas",
+            content_path: "/root/.cache/forge/content_path-cas",
+            temp_path: "/root/.cache/forge/tmp_path-cas",
             eviction_policy: { max_bytes: 10000000000 },
           },
         },
@@ -98,7 +98,7 @@ general; this is its most load-bearing use.
         },
         cas_fast_slow_store: "WORKER_FAST_SLOW_STORE",
         upload_action_result: { ac_store: "GRPC_AC" },
-        work_directory: "/root/.cache/nativelink/work",
+        work_directory: "/root/.cache/forge/work",
         platform_properties: {
           cpu_count: { query_cmd: "nproc" },
           OSFamily: { values: [""] },
@@ -165,7 +165,7 @@ property`, and the usual symptom is an action that queues forever while idle
 workers sit next to it. A worker that advertises a key the scheduler does not
 list is rejected when it connects.
 
-<SourceLink file="nativelink-config/src/schedulers.rs" symbol="PropertyType" />
+<SourceLink file="forge-config/src/schedulers.rs" symbol="PropertyType" />
 
 [Platform properties](/remote-execution/platform-properties) is the page for
 that contract; this page only needs you to know that every worker in a pool
@@ -273,7 +273,7 @@ It is unconditional (every worker prints it, including a single worker) and
 it is describing the same stale advice. If your workers reach one CAS server
 over gRPC, you have satisfied the requirement it is gesturing at.
 
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="new_local_worker" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="new_local_worker" />
 
 **The healthchecks in the compose file probe a path that isn't served.** Both
 services healthcheck `http://localhost:PORT/status`, but `/status` only exists
@@ -344,7 +344,7 @@ flapping worker. HTTP/2 keepalive pings on this listener come from
 `servers` entry. The worker API is a long-lived streaming connection, not a
 series of requests.
 
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="start_keep_alive" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="start_keep_alive" />
 
 </Accordion>
 

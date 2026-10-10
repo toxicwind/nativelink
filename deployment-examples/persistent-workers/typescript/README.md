@@ -1,7 +1,7 @@
 # TypeScript Persistent Worker Example
 
 TypeScript worker wrappers commonly use JSON worker protocol framing. The
-important NativeLink requirement is that the remote action advertises both
+important Forge requirement is that the remote action advertises both
 worker support and the JSON protocol.
 
 ```starlark

@@ -10,7 +10,7 @@ predict the result, and anyone writing a new store backend. **What you'll
 have at the end:** the trait, the key space, the composition rules, and the
 one place verification actually happens. **Time:** twenty minutes.
 
-A NativeLink store is not a database binding. It is one small trait
+A Forge store is not a database binding. It is one small trait
 (eight required methods), and everything you configure as a "store" is either
 an implementation of it or a wrapper around other implementations of it. The
 `stores` block in your config is a graph, and its edges have semantics that
@@ -19,7 +19,7 @@ the JSON5 does not show you.
 ## Three names, one file [#three-names-one-file]
 
 `Store`, `StoreLike` and `StoreDriver` all live in
-<SourceLink file="nativelink-util/src/store_trait.rs" symbol="store_trait.rs" />,
+<SourceLink file="forge-util/src/store_trait.rs" symbol="store_trait.rs" />,
 and the split between them matters when you read the source.
 
 `StoreDriver` is the trait a backend implements. `Store` is a
@@ -38,7 +38,7 @@ particular is where composition either succeeds or silently stops.
 ## The key space is not just digests [#the-key-space-is-not-just-digests]
 
 `StoreKey` has two variants: `Digest(DigestInfo)` and `Str(Cow<str>)`. Most
-of NativeLink deals in the first. The second exists because two subsystems
+of Forge deals in the first. The second exists because two subsystems
 need to store things that are not content-addressed at all: the Build Event
 Protocol service, and the scheduler's awaited-action database.
 
@@ -62,10 +62,10 @@ for string keys, `d/` for digests) so the two can never collide.
 
 This is the single most important thing on this page.
 
-**NativeLink does not derive a blob's digest from its bytes on upload.** The
+**Forge does not derive a blob's digest from its bytes on upload.** The
 client declares the digest in the ByteStream resource name, and the server
 stores the bytes under the declared key. See
-<SourceLink file="nativelink-service/src/bytestream_server.rs" symbol="ByteStreamServer" />.
+<SourceLink file="forge-service/src/bytestream_server.rs" symbol="ByteStreamServer" />.
 (The one exception is a zstd-compressed ByteStream upload, where the decoder
 already has to read every byte and rejects a decoded stream whose size or
 hash does not match the digest.)
@@ -81,7 +81,7 @@ default to **off**:
 
 A cache with no `verify` store in the write path is a cache that will store,
 and later serve, whatever a buggy or hostile client claims. That is not a
-NativeLink-specific hazard (it is how the REAPI is specified), but the
+Forge-specific hazard (it is how the REAPI is specified), but the
 default being `false` means it is a decision you are making whether or not
 you know it. [Correctness and hermeticity](/explanations/correctness-hermeticity)
 covers what to do about it.
@@ -89,7 +89,7 @@ covers what to do about it.
 ### How the verify store actually works [#how-the-verify-store-actually-works]
 
 The implementation in
-<SourceLink file="nativelink-store/src/verify_store.rs" symbol="VerifyStore" />
+<SourceLink file="forge-store/src/verify_store.rs" symbol="VerifyStore" />
 is worth understanding, because three of its properties are not apparent from the config.
 
 **Size is checked eagerly, before a byte is read.** If the declared size is
@@ -203,11 +203,11 @@ first thing to suspect.
 
 ## Two things that are not what their filenames say [#two-things-that-are-not-what-their-filenames-say]
 
-<SourceLink file="nativelink-store/src/r2_store.rs" symbol="r2_store.rs" /> and
-<SourceLink file="nativelink-store/src/oci_store.rs" symbol="oci_store.rs" />
+<SourceLink file="forge-store/src/r2_store.rs" symbol="r2_store.rs" /> and
+<SourceLink file="forge-store/src/oci_store.rs" symbol="oci_store.rs" />
 are not store implementations. Both are thin constructors that return an
 `S3Store`. Cloudflare R2 and OCI object storage are S3-compatible, and
-NativeLink treats them as exactly that. If you are chasing a bug in R2
+Forge treats them as exactly that. If you are chasing a bug in R2
 behaviour, the code you want is in `s3_store.rs`.
 
 `RefStore` is the other oddity: it resolves its target by name at
@@ -227,7 +227,7 @@ one store be named by several others without duplicating it, and it is why
 ## Where the exact truth lives [#where-the-exact-truth-lives]
 
 Every store type, every field and every default is in the generated
-[store configuration reference](/reference/nativelink-config/store-overview). This
+[store configuration reference](/reference/forge-config/store-overview). This
 page deliberately does not restate field names, because the reference is
 generated from the Rust types and this page is not.
 

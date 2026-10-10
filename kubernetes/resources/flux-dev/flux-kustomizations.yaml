@@ -16,7 +16,7 @@ spec:
   wait: true
   sourceRef:
     kind: GitRepository
-    name: nativelink-infra
+    name: forge-infra
     namespace: flux-system
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -34,7 +34,7 @@ spec:
   wait: true
   sourceRef:
     kind: GitRepository
-    name: nativelink-infra
+    name: forge-infra
     namespace: flux-system
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -52,7 +52,7 @@ spec:
   wait: true
   sourceRef:
     kind: GitRepository
-    name: nativelink-infra
+    name: forge-infra
     namespace: flux-system
   dependsOn:
     - name: olm

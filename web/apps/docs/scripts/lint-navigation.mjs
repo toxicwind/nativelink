@@ -32,7 +32,7 @@
 // showing what they look like.
 //
 // Usage, from web/:
-//   bun --filter @nativelink/docs lint:navigation
+//   bun --filter @forge/docs lint:navigation
 // or directly:
 //   node scripts/lint-navigation.mjs
 //

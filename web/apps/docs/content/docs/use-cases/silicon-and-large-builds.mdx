@@ -7,7 +7,7 @@ description: "EDA flows, large C++ and LLVM trees, and ML graphs are the workloa
 
 **Who this is for:** anyone whose build is measured in thousands of actions and
 tens of minutes, on hardware that isn't uniform. **What you'll have at the end:**
-an understanding of why these builds are the hard case, and how NativeLink routes
+an understanding of why these builds are the hard case, and how Forge routes
 actions to the machines that suit them. **Time:** about fifteen minutes.
 
 ## What makes a build "large" in the way that matters [#what-makes-a-build-large-in-the-way-that-matters]
@@ -61,7 +61,7 @@ or as a command run at startup whose output becomes the value, which is how a
 worker discovers, say, its own core count rather than having it hard-coded per
 host.
 
-<SourceLink file="nativelink-config/src/schedulers.rs" symbol="PropertyType" />
+<SourceLink file="forge-config/src/schedulers.rs" symbol="PropertyType" />
 
 The scheduler declares, separately, which property keys exist and how each one
 is matched. Four kinds exist and the differences are load-bearing:
@@ -95,14 +95,14 @@ logs `Unknown platform property` and the action stays queued, so a typo in a
 requirement stalls visibly instead of quietly sending a GPU action to a CPU
 worker.
 
-<SourceLink file="nativelink-scheduler/src/platform_property_manager.rs" symbol="make_prop_value" />
+<SourceLink file="forge-scheduler/src/platform_property_manager.rs" symbol="make_prop_value" />
 
 [Platform properties](/remote-execution/platform-properties) is the reference
 for the mechanism.
 
-## Special hardware, and what NativeLink actually knows about it [#special-hardware-and-what-nativelink-actually-knows-about-it]
+## Special hardware, and what Forge actually knows about it [#special-hardware-and-what-forge-actually-knows-about-it]
 
-NativeLink has no GPU support, and that phrasing is deliberate rather
+Forge has no GPU support, and that phrasing is deliberate rather
 than a shortcoming. No GPU-aware code exists anywhere in the codebase: no
 CUDA integration, no device discovery, no special-cased scheduling. GPUs are
 routed the same way a specific kernel version or a licensed tool is: as plain
@@ -124,7 +124,7 @@ with four GPUs can hold four single-GPU actions. `gpu_model` as `exact` so an
 action needing a particular device does not land on a different one.
 
 <Callout type="warn" title="One shipped example gets this wrong">
-  The Kubernetes example config in `kubernetes/nativelink/nativelink-config.json5`
+  The Kubernetes example config in `kubernetes/forge/forge-config.json5`
   declares both `gpu_count` and `gpu_model` as `priority`, which, per the
   section above, enforces nothing. An action requesting four GPUs will schedule
   onto a worker with none. If you started from that file, change both.
@@ -172,7 +172,7 @@ shell profile, a vendor toolchain with a license daemon. All of that works
 locally and none of it exists on a worker. Getting a large build onto remote
 execution is mostly the work of finding those assumptions and declaring them.
 
-NativeLink's answer is **Local Remote Execution**: building the toolchain
+Forge's answer is **Local Remote Execution**: building the toolchain
 itself as a declared, reproducible artifact so that the environment a worker
 runs in is the same one you get locally, by construction rather than by
 convention. [Local Remote Execution](/explanations/lre) is the explanation, and
@@ -187,8 +187,8 @@ config change is how these migrations stall.
 ## What a build like this looks like when it works [#what-a-build-like-this-looks-like-when-it-works]
 
 One published account is worth reading rather than paraphrasing:
-[Reid Kleckner's write-up](https://reidkleckner.dev/posts/llvm-recc-nativelink/)
-describes building LLVM with `recc` executing remotely against NativeLink and
+[Reid Kleckner's write-up](https://reidkleckner.dev/posts/llvm-recc-forge/)
+describes building LLVM with `recc` executing remotely against Forge and
 taking a build from roughly seventeen minutes to roughly four. It is one
 person's measurement on their own hardware, with caveats the post itself spells
 out (precompiled headers disabled, a mixed home fleet, a wireless link), so
@@ -235,7 +235,7 @@ they are still colliding, that's the signal to split the pool.
 Yes: a worker is a process, and pools are distinguished only by the properties
 they declare. Declare `os` as `exact` on the scheduler, have each worker declare
 its own, and one scheduler routes to all of them. The constraint is not
-NativeLink's; it's that the action's toolchain has to exist for the target
+Forge's; it's that the action's toolchain has to exist for the target
 platform.
 
 </Accordion>

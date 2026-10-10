@@ -1,0 +1,247 @@
+// Copyright 2026 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#![cfg(target_family = "unix")]
+use std::collections::HashMap;
+use std::env;
+
+use forge_config::cas_server::WorkerProperty;
+use forge_error::Error;
+use forge_macro::forge_test;
+use forge_proto::build::bazel::remote::execution::v2::platform::Property;
+use forge_worker::worker_utils::make_connect_worker_request;
+use tonic::Code;
+
+#[forge_test]
+async fn make_connect_worker_request_with_extra_envs() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert(
+        "test".into(),
+        WorkerProperty::QueryCmd("bash -c \"echo $DEMO_ENV\"".to_string()),
+    );
+    let mut extra_envs = HashMap::new();
+    extra_envs.insert("DEMO_ENV".into(), "test_value_for_demo_env".into());
+
+    // So we have bash for nix cases, because the PATH gets reset
+    extra_envs.insert("PATH".into(), env::var("PATH").unwrap());
+
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &extra_envs,
+        1,
+        false,
+    )
+    .await?;
+    assert_eq!(
+        res.properties.first(),
+        Some(&Property {
+            name: "test".into(),
+            value: "test_value_for_demo_env".into()
+        })
+    );
+    Ok(())
+}
+
+#[forge_test]
+async fn make_connect_worker_request_with_values() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert("test".into(), WorkerProperty::Values(vec!["bar".into()]));
+
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &HashMap::new(),
+        1,
+        false,
+    )
+    .await?;
+    assert_eq!(
+        res.properties.first(),
+        Some(&Property {
+            name: "test".into(),
+            value: "bar".into()
+        })
+    );
+    Ok(())
+}
+
+#[forge_test]
+async fn make_connect_worker_request_with_bad_cmd() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert("test".into(), WorkerProperty::QueryCmd("'\\".to_string()));
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &HashMap::new(),
+        1,
+        false,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        res,
+        Error::new(
+            Code::InvalidArgument,
+            "Could not parse the value of worker property: test: ''\\'".into()
+        )
+    );
+    Ok(())
+}
+
+#[forge_test]
+async fn make_connect_worker_request_with_bad_exit_code() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert(
+        "test".into(),
+        WorkerProperty::QueryCmd("bash -c \"exit 1\"".to_string()),
+    );
+
+    let mut extra_envs = HashMap::new();
+    // So we have bash for nix cases, because the PATH gets reset
+    extra_envs.insert("PATH".into(), env::var("PATH").unwrap());
+
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &extra_envs,
+        1,
+        false,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        res,
+        Error::new(
+            Code::Cancelled,
+            "Error executing property_name test command: 'bash -c \"exit 1\"'".into()
+        )
+    );
+    Ok(())
+}
+
+#[forge_test]
+async fn make_connect_worker_request_with_signal() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert(
+        "test".into(),
+        WorkerProperty::QueryCmd("bash -c \"kill -TERM $$\"".to_string()),
+    );
+
+    let mut extra_envs = HashMap::new();
+    extra_envs.insert("PATH".into(), env::var("PATH").unwrap());
+
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &extra_envs,
+        1,
+        false,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(res.code, Code::Internal);
+    assert!(res.messages[0].contains("signal: 15"));
+    Ok(())
+}
+
+#[forge_test]
+async fn make_connect_worker_request_with_stderr() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert(
+        "test".into(),
+        WorkerProperty::QueryCmd("bash -c \"echo foo >&2\"".to_string()),
+    );
+
+    let mut extra_envs = HashMap::new();
+    // So we have bash for nix cases, because the PATH gets reset
+    extra_envs.insert("PATH".into(), env::var("PATH").unwrap());
+
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &extra_envs,
+        1,
+        false,
+    )
+    .await?;
+    assert_eq!(res.properties.first(), None);
+    assert!(logs_contain(
+        "Got stderr when running query cmd stderr=\"foo\\n\" cmd=\"bash -c \\\"echo foo >&2\\\"\" property_name=\"test\""
+    ));
+    Ok(())
+}
+
+#[forge_test]
+async fn make_connect_worker_request_with_non_utf8_stderr() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert(
+        "test".into(),
+        WorkerProperty::QueryCmd("bash -c \"echo -e '\\xf0\\x20' >&2\"".to_string()),
+    );
+
+    let mut extra_envs = HashMap::new();
+    // So we have bash for nix cases, because the PATH gets reset
+    extra_envs.insert("PATH".into(), env::var("PATH").unwrap());
+
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &extra_envs,
+        1,
+        false,
+    )
+    .await?;
+    assert_eq!(res.properties.first(), None);
+    assert!(logs_contain(
+        "Got stderr when running query cmd stderr=\"� \\n\" cmd=\"bash -c \\\"echo -e '\\\\xf0\\\\x20' >&2\\\"\" property_name=\"test\""
+    ));
+    Ok(())
+}
+
+#[forge_test]
+async fn make_connect_worker_request_with_multiline() -> Result<(), Error> {
+    let mut worker_properties: HashMap<String, WorkerProperty> = HashMap::new();
+    worker_properties.insert(
+        "test".into(),
+        WorkerProperty::QueryCmd("bash -c \"echo 'foo\nbar'\"".to_string()),
+    );
+
+    let mut extra_envs = HashMap::new();
+    // So we have bash for nix cases, because the PATH gets reset
+    extra_envs.insert("PATH".into(), env::var("PATH").unwrap());
+
+    let res = make_connect_worker_request(
+        "1234".to_string(),
+        &worker_properties,
+        &extra_envs,
+        1,
+        false,
+    )
+    .await?;
+    assert_eq!(
+        res.properties,
+        vec![
+            Property {
+                name: "test".into(),
+                value: "foo".into()
+            },
+            Property {
+                name: "test".into(),
+                value: "bar".into()
+            }
+        ]
+    );
+    Ok(())
+}

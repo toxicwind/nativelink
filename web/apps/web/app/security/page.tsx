@@ -1,14 +1,14 @@
-import { Badge, Button, Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Badge, Button, Eyebrow, Reveal, Section } from "@forge/ui";
 
 const SCORECARD_URL =
-  "https://securityscorecards.dev/viewer/?uri=github.com/TraceMachina/nativelink";
+  "https://securityscorecards.dev/viewer/?uri=github.com/toxicwind/forge";
 const SCORECARD_API_URL =
-  "https://api.securityscorecards.dev/projects/github.com/TraceMachina/nativelink";
+  "https://api.securityscorecards.dev/projects/github.com/toxicwind/forge";
 
 export const metadata = {
   title: "Security",
   description:
-    "NativeLink's security program: organizational, cloud, access, and vendor controls, aligned to SOC 2.",
+    "Forge's security program: organizational, cloud, access, and vendor controls, aligned to SOC 2.",
 };
 
 async function getScorecardScore(): Promise<number | null> {
@@ -239,7 +239,7 @@ export default async function SecurityPage() {
               target="_blank"
               rel="noreferrer"
               className="group flex h-full flex-col justify-between rounded-2xl border border-border bg-surface p-7 transition-colors hover:border-brand/50"
-              aria-label="View NativeLink's OpenSSF Scorecard"
+              aria-label="View Forge's OpenSSF Scorecard"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>

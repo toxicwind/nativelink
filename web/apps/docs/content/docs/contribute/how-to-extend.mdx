@@ -1,5 +1,5 @@
 ---
-title: How to extend NativeLink
+title: How to extend Forge
 description: Complete file-by-file recipes for adding a store, a config field, a metric, or a gRPC service.
 ---
 
@@ -19,12 +19,12 @@ not; the trait split and the spawning rules are assumed here.
 
 ## Adding a store [#adding-a-store]
 
-Model: `nativelink-store/src/noop_store.rs`, the smallest complete
+Model: `forge-store/src/noop_store.rs`, the smallest complete
 `StoreDriver` in the tree.
 
 <Steps>
   <li>
-    **Add the spec** to `nativelink-config/src/stores.rs`. A new variant on
+    **Add the spec** to `forge-config/src/stores.rs`. A new variant on
     `StoreSpec` (the JSON5 key is the snake_case form of the variant name;
     box the payload if it is large) plus a spec struct modelled on
     `MemorySpec`:
@@ -42,39 +42,39 @@ Model: `nativelink-store/src/noop_store.rs`, the smallest complete
 
     The `dev-schema` `cfg_attr` is not optional; without it your store never
     appears in the generated
-    [configuration reference](/reference/nativelink-config).
+    [configuration reference](/reference/forge-config).
   </li>
   <li>
-    **Write the store** at `nativelink-store/src/my_store.rs`: the license
+    **Write the store** at `forge-store/src/my_store.rs`: the license
     header copied from a neighbouring file, the struct, a `MetricsComponent`
     impl, `pub fn new(...) -> Arc<Self>`, `#[async_trait] impl StoreDriver`,
     and `default_health_status_indicator!(MyStore);` as the last line.
   </li>
   <li>
     **Declare the module**: `pub mod my_store;` in
-    `nativelink-store/src/lib.rs`.
+    `forge-store/src/lib.rs`.
   </li>
   <li>
     **Wire the factory**: an import and a match arm in
-    `nativelink-store/src/default_store_factory.rs`. The match is exhaustive,
+    `forge-store/src/default_store_factory.rs`. The match is exhaustive,
     so this one is a compile error if you forget it. It is the only step that
     is.
   </li>
   <li>
-    **Add the file to `nativelink-store/BUILD.bazel`**, in the `srcs` list,
+    **Add the file to `forge-store/BUILD.bazel`**, in the `srcs` list,
     **alphabetically**. Cargo does not care. Bazel does, and CI runs Bazel;
     this is the single most common way a store PR goes red after a green
     local run.
   </li>
   <li>
-    **Add a test** at `nativelink-store/tests/my_store_test.rs` and register
+    **Add a test** at `forge-store/tests/my_store_test.rs` and register
     it in the crate's `rust_test_suite`. See
     [the testing guide](/contribute/testing-guide).
   </li>
 </Steps>
 
 <Callout type="warn" title="The store examples file is generated from your doc comments">
-  `nativelink-config/examples/stores-config.json5` is produced by the
+  `forge-config/examples/stores-config.json5` is produced by the
   `generate-stores-config` tool from the ```` ```json ```` fenced blocks in
   the doc comments in `stores.rs`, via a pre-commit hook. And
   `tests/json5_test.rs` parses every example, so a malformed JSON fence in a
@@ -115,13 +115,13 @@ JSON rather than illustrative fragments.
   </li>
   <li>
     **Pick the right `deserialize_with` helper** from
-    <SourceLink file="nativelink-config/src/serde_utils.rs" symbol="serde_utils.rs" />.
+    <SourceLink file="forge-config/src/serde_utils.rs" symbol="serde_utils.rs" />.
     They all expand shell variables, which is how a config file references
     the environment.
   </li>
   <li>
     **Regenerate the reference** if you want to see the result:
-    `bun --filter @nativelink/docs gen:config-reference` from `web/`.
+    `bun --filter @forge/docs gen:config-reference` from `web/`.
   </li>
 </Steps>
 
@@ -171,13 +171,13 @@ introspection tree automatically.
 <Steps>
   <li>
     Declare the instrument in the appropriate `LazyLock` bundle in
-    `nativelink-util/src/metrics.rs` (`CACHE_METRICS`, `EXECUTION_METRICS`,
+    `forge-util/src/metrics.rs` (`CACHE_METRICS`, `EXECUTION_METRICS`,
     `WORKER_METRICS`, `RPC_METRICS`, `SCHEDULER_METRICS`,
     `STORE_TIER_METRICS`, `HEALTH_METRICS` or `CONNECTION_METRICS`). Use a
     dotted name, a `.with_description`, and a `.with_unit` that is a UCUM
     unit (`"By"`, `"s"`, `"ms"`) or a braced count such as `"{entry}"`.
     Then regenerate the metrics reference with
-    `bun --filter @nativelink/docs gen:metrics-reference` from `web/`, which
+    `bun --filter @forge/docs gen:metrics-reference` from `web/`, which
     reads this file.
   </li>
   <li>
@@ -186,29 +186,29 @@ introspection tree automatically.
     than building attributes inline.
   </li>
   <li>
-    Extend `nativelink-util/tests/metrics_test.rs`.
+    Extend `forge-util/tests/metrics_test.rs`.
   </li>
 </Steps>
 
 <Callout type="warn" title="Two things to not do here">
-  `nativelink-util/src/metrics.rs` is **Business Source License**; keep its
+  `forge-util/src/metrics.rs` is **Business Source License**; keep its
   header, do not paste the FSL one in. And never add an action digest or a
   worker ID as an attribute on a hot instrument: the cardinality will kill
-  the metrics backend long before it affects NativeLink.
+  the metrics backend long before it affects Forge.
 </Callout>
 
 ## Adding a gRPC service [#adding-a-grpc-service]
 
-Model: `nativelink-service/src/fetch_server.rs`: 165 lines, and it has
+Model: `forge-service/src/fetch_server.rs`: 165 lines, and it has
 every convention in it.
 
 <Steps>
   <li>
-    **Write the server** at `nativelink-service/src/my_server.rs`. Import
+    **Write the server** at `forge-service/src/my_server.rs`. Import
     the generated trait and server type with the standard alias:
 
     ```rust
-    use nativelink_proto::…::my_server::{My, MyServer as Server};
+    use forge_proto::…::my_server::{My, MyServer as Server};
     ```
 
     Hold per-instance state in a `HashMap<String, _>` keyed by instance
@@ -233,7 +233,7 @@ every convention in it.
   </li>
   <li>
     **Split each RPC in two.** A private `inner_<rpc>` returning
-    `nativelink_error::Error` holds the logic; the public
+    `forge_error::Error` holds the logic; the public
     `#[tonic::async_trait]` method wraps it, converts to `Status`, and
     carries the instrumentation:
 
@@ -248,7 +248,7 @@ every convention in it.
   </li>
   <li>
     **Register it** in the `Routes::builder().routes()` chain in
-    `src/bin/nativelink.rs`, with `.add_optional_service(...)` and
+    `src/bin/forge.rs`, with `.add_optional_service(...)` and
     `service_setup!`. The macro applies the message-size limit (4 MiB by
     default) and compression settings, so registering without it silently
     opts out of both.
@@ -256,14 +256,14 @@ every convention in it.
 </Steps>
 
 If the service needs new protos: add the package to `PROTO_NAMES` **and** to
-the `gen_rs_protos` `srcs` list in `nativelink-proto/BUILD.bazel`, then
+the `gen_rs_protos` `srcs` list in `forge-proto/BUILD.bazel`, then
 regenerate and commit the output:
 
 ```bash
-bazel run nativelink-proto:update_protos
+bazel run forge-proto:update_protos
 ```
 
-`//nativelink-proto:update_protos_test` is the CI gate that catches a
+`//forge-proto:update_protos_test` is the CI gate that catches a
 forgotten regeneration.
 
 <Callout type="warn" title="Worker-facing services belong on their own port">
@@ -278,9 +278,9 @@ forgotten regeneration.
 
 <Accordions type="multiple">
   <Accordion title="My store builds with Cargo but CI fails. Why?" id="cargo-green-bazel-red">
-    Almost certainly the `srcs` list in `nativelink-store/BUILD.bazel`. Cargo
+    Almost certainly the `srcs` list in `forge-store/BUILD.bazel`. Cargo
     globs; Bazel enumerates. Add the file, keep the list alphabetical, and
-    run `bazel build //nativelink-store:nativelink-store` before pushing.
+    run `bazel build //forge-store:forge-store` before pushing.
   </Accordion>
   <Accordion title="My new config field doesn't show up in the reference." id="field-missing-from-reference">
     Check that the spec struct has
@@ -290,15 +290,15 @@ forgotten regeneration.
     add a `/// Default: …` line to the doc comment.
   </Accordion>
   <Accordion title="A doc comment broke the build. How?" id="doc-comment-broke-build">
-    Doc comments in `nativelink-config` are load-bearing twice over: fenced
+    Doc comments in `forge-config` are load-bearing twice over: fenced
     JSON blocks are extracted into
-    `nativelink-config/examples/stores-config.json5` by a pre-commit hook,
+    `forge-config/examples/stores-config.json5` by a pre-commit hook,
     and `tests/json5_test.rs` parses every generated example. Malformed JSON
     in a fence fails that test.
   </Accordion>
   <Accordion title="Do I need protoc installed to add a proto?" id="need-protoc">
-    No. Generated Rust is checked into `nativelink-proto/genproto/`, and
-    regeneration goes through `bazel run nativelink-proto:update_protos`.
+    No. Generated Rust is checked into `forge-proto/genproto/`, and
+    regeneration goes through `bazel run forge-proto:update_protos`.
     Commit the regenerated files with your change.
   </Accordion>
   <Accordion title="Where does a new store's default go?" id="where-do-store-defaults-go">
@@ -309,6 +309,6 @@ forgotten regeneration.
 </Accordions>
 
 <NextStep href="/contribute/testing-guide" title="Testing guide">
-  How the suites are organised, what `#[nativelink_test]` does for you, and
+  How the suites are organised, what `#[forge_test]` does for you, and
   which local environment problems produce which confusing failure.
 </NextStep>

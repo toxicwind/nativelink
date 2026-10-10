@@ -18,7 +18,7 @@ const FALLBACK: Contributor[] = [
   { login: "blaise-d", avatar_url: "https://github.com/blaise-d.png?size=80", html_url: "https://github.com/blaise-d", contributions: 0 },
 ];
 
-export async function getContributors(repo = "TraceMachina/nativelink"): Promise<ContributorsResult> {
+export async function getContributors(repo = "toxicwind/forge"): Promise<ContributorsResult> {
   const url = `https://api.github.com/repos/${repo}/contributors?per_page=30`;
   try {
     const res = await fetch(url, {
@@ -61,7 +61,7 @@ const FALLBACK_STATS: RepoStats = {
   fromCache: true,
 };
 
-export async function getRepoStats(repo = "TraceMachina/nativelink"): Promise<RepoStats> {
+export async function getRepoStats(repo = "toxicwind/forge"): Promise<RepoStats> {
   try {
     const res = await fetch(`https://api.github.com/repos/${repo}`, {
       headers: {

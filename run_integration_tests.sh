@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2024 The NativeLink Authors. All rights reserved.
+# Copyright 2024 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -70,21 +70,21 @@ cd "$SELF_DIR/deployment-examples/docker-compose"
 export UNDER_TEST_RUNNER=1
 
 # Ensure our cache locations are empty.
-sudo rm -rf ~/.cache/nativelink
-mkdir -p ~/.cache/nativelink
+sudo rm -rf ~/.cache/forge
+mkdir -p ~/.cache/forge
 
 # Ensure our docker compose is not running.
 sudo docker compose rm --stop -f
 
-export TMPDIR=$HOME/.cache/nativelink/
+export TMPDIR=$HOME/.cache/forge/
 mkdir -p "$TMPDIR"
 
 if [[ $OSTYPE == "darwin"* ]]; then
-    CACHE_DIR=$(mktemp -d "${TMPDIR}nativelink-integration-test")
+    CACHE_DIR=$(mktemp -d "${TMPDIR}forge-integration-test")
     export CACHE_DIR
 else
     echo "Assumes Linux/WSL"
-    CACHE_DIR=$(mktemp -d --tmpdir="$TMPDIR" --suffix="-nativelink-integration-test")
+    CACHE_DIR=$(mktemp -d --tmpdir="$TMPDIR" --suffix="-forge-integration-test")
     export CACHE_DIR
 fi
 
@@ -93,8 +93,8 @@ trap 'sudo rm -rf $CACHE_DIR; sudo docker compose rm --stop -f' EXIT
 
 echo "" # New line.
 
-export NATIVELINK_DIR="$CACHE_DIR/nativelink"
-mkdir -p "$NATIVELINK_DIR"
+export FORGE_DIR="$CACHE_DIR/forge"
+mkdir -p "$FORGE_DIR"
 
 wait_for_tcp() {
     local host="$1"
@@ -116,21 +116,21 @@ wait_for_tcp() {
 for pattern in "${TEST_PATTERNS[@]}"; do
     find "$SELF_DIR/integration_tests/" -name "$pattern" -type f -print0 | while IFS= read -r -d $'\0' fullpath; do
         # Cleanup.
-        echo "Cleaning up cache directories NATIVELINK_DIR: $NATIVELINK_DIR"
-        echo "Checking for existence of the NATIVELINK_DIR"
-        if [ -d "$NATIVELINK_DIR" ]; then
-            sudo find "$NATIVELINK_DIR" -delete
+        echo "Cleaning up cache directories FORGE_DIR: $FORGE_DIR"
+        echo "Checking for existence of the FORGE_DIR"
+        if [ -d "$FORGE_DIR" ]; then
+            sudo find "$FORGE_DIR" -delete
         else
-            echo "Directory $NATIVELINK_DIR does not exist."
+            echo "Directory $FORGE_DIR does not exist."
         fi
 
         bazel --output_base="$BAZEL_CACHE_DIR" clean
         FILENAME=$(basename "$fullpath")
         echo "Running test $FILENAME"
-        # sudo resets the environment, so NATIVELINK_DIR must be passed
+        # sudo resets the environment, so FORGE_DIR must be passed
         # through explicitly or docker compose falls back to mounting
-        # root's ~/.cache/nativelink instead of the per-run cache dir.
-        sudo env RUST_LOG=info NATIVELINK_DIR="$NATIVELINK_DIR" docker compose up -d
+        # root's ~/.cache/forge instead of the per-run cache dir.
+        sudo env RUST_LOG=info FORGE_DIR="$FORGE_DIR" docker compose up -d
         if perl -e 'alarm shift; exec @ARGV' 30 bash -c 'until sudo docker compose logs | grep -q "Ready, listening on"; do sleep 1; done'; then
             echo "String 'Ready, listening on' found in the logs."
         else

@@ -1,11 +1,11 @@
 ---
 title: Production configuration
-description: "The shape a real NativeLink cluster runs in: three processes, a split port surface, and what to turn on before other people depend on it."
+description: "The shape a real Forge cluster runs in: three processes, a split port surface, and what to turn on before other people depend on it."
 ---
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** you have NativeLink working and now other people are going
+**Who this is for:** you have Forge working and now other people are going
 to depend on it. **What you'll have at the end:** a three-process deployment
 whose ports, state, and failure behaviour you can explain to someone else.
 **Time:** an afternoon, plus however long your change process takes.
@@ -68,8 +68,8 @@ action results, each with its own eviction budget:
         compression_algorithm: { lz4: {} },
         backend: {
           filesystem: {
-            content_path: "/var/lib/nativelink/content_path-cas",
-            temp_path: "/var/lib/nativelink/tmp_path-cas",
+            content_path: "/var/lib/forge/content_path-cas",
+            temp_path: "/var/lib/forge/tmp_path-cas",
             eviction_policy: {
               // 10gb. This is a cache: size it to your working set,
               // not to your total build output.
@@ -82,8 +82,8 @@ action results, each with its own eviction budget:
     {
       name: "AC_MAIN_STORE",
       filesystem: {
-        content_path: "/var/lib/nativelink/content_path-ac",
-        temp_path: "/var/lib/nativelink/tmp_path-ac",
+        content_path: "/var/lib/forge/content_path-ac",
+        temp_path: "/var/lib/forge/tmp_path-ac",
         eviction_policy: {
           // 500mb. The AC is tiny next to the CAS; it stores
           // result metadata, not outputs.
@@ -112,7 +112,7 @@ its own `name`, and other parts of the config refer to it by that name.
 `deny_unknown_fields`, so a typo or an invented key is a startup failure rather
 than a silently ignored line.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CasConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CasConfig" />
 
 Each entry in `cas`, `ac`, `bytestream`, and `capabilities` carries an optional
 `instance_name` (default: the empty string, which is also what Bazel sends by
@@ -133,8 +133,8 @@ the local disk as the fast tier:
   fast_slow: {
     fast: {
       filesystem: {
-        content_path: "/var/lib/nativelink/content_path-cas",
-        temp_path: "/var/lib/nativelink/tmp_path-cas",
+        content_path: "/var/lib/forge/content_path-cas",
+        temp_path: "/var/lib/forge/tmp_path-cas",
         eviction_policy: { max_bytes: 100000000000 },
       },
     },
@@ -142,7 +142,7 @@ the local disk as the fast tier:
       experimental_cloud_object_store: {
         provider: "aws",
         region: "us-east-1",
-        bucket: "nativelink-prod-cas",
+        bucket: "forge-prod-cas",
         key_prefix: "cas/",
         retry: { max_retries: 6, delay: 0.3, jitter: 0.5 },
       },
@@ -163,7 +163,7 @@ The store key is `experimental_cloud_object_store` with a `provider` discriminat
 
 The full backend list and the tradeoffs between them are in
 [Storage backends](/how-to/stores/oci-object-storage) and
-[Store overview](/reference/nativelink-config/store-overview).
+[Store overview](/reference/forge-config/store-overview).
 
 ## Process 2: the scheduler [#process-2--the-scheduler]
 
@@ -236,7 +236,7 @@ workers is the single most common reason actions sit in the queue forever; see
 [platform properties](/remote-execution/platform-properties) for how the two
 halves line up.
 
-<SourceLink file="nativelink-scheduler/src/platform_property_manager.rs" symbol="make_prop_value" />
+<SourceLink file="forge-scheduler/src/platform_property_manager.rs" symbol="make_prop_value" />
 
 <Callout type="warn" title="The queue is in memory">
   The default scheduler keeps its queue in process memory. Restarting it loses the
@@ -245,7 +245,7 @@ halves line up.
   queue to survive a restart, the scheduler has an experimental Redis backend
   (`experimental_backend: { redis: { redis_store: "..." } }`). The only example
   of it in this repository is
-  `nativelink-config/examples/worker_with_redis_scheduler.json5`; there is no
+  `forge-config/examples/worker_with_redis_scheduler.json5`; there is no
   Compose or Kubernetes deployment of it, so treat it as something to validate
   yourself rather than something to copy.
 </Callout>
@@ -279,8 +279,8 @@ needs no inbound port at all. It dials out to the scheduler and the CAS.
       fast_slow: {
         fast: {
           filesystem: {
-            content_path: "/var/lib/nativelink/worker/content_path-cas",
-            temp_path: "/var/lib/nativelink/worker/tmp_path-cas",
+            content_path: "/var/lib/forge/worker/content_path-cas",
+            temp_path: "/var/lib/forge/worker/tmp_path-cas",
             eviction_policy: { max_bytes: 10000000000 },
           },
         },
@@ -297,7 +297,7 @@ needs no inbound port at all. It dials out to the scheduler and the CAS.
         worker_api_endpoint: { uri: "grpc://scheduler.internal:50061" },
         cas_fast_slow_store: "WORKER_FAST_SLOW_STORE",
         upload_action_result: { ac_store: "GRPC_AC_STORE" },
-        work_directory: "/var/lib/nativelink/worker/work",
+        work_directory: "/var/lib/forge/worker/work",
         platform_properties: {
           cpu_count: { query_cmd: "nproc" },
           OSFamily: { values: [""] },
@@ -317,7 +317,7 @@ needs no inbound port at all. It dials out to the scheduler and the CAS.
 `platform_properties` are all required. `upload_action_result` takes `ac_store`
 directly; it is not nested twice.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
 
 `work_directory` is where actions are staged and executed. It sees every input
 file and every output file of every action, so put it on the fastest local disk
@@ -382,8 +382,8 @@ global: {
 `default_digest_size_health_check`. It has no `metrics` or `tracing` section;
 telemetry is configured by environment variable, below.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="GlobalConfig" />
-<SourceLink file="nativelink-util/src/fs.rs" symbol="set_open_file_limit" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="GlobalConfig" />
+<SourceLink file="forge-util/src/fs.rs" symbol="set_open_file_limit" />
 
 ### Turn on namespaces on Linux workers [#turn-on-namespaces-on-linux-workers]
 
@@ -418,11 +418,11 @@ servers: [{
     http: {
       socket_address: "0.0.0.0:50071",
       tls: {
-        cert_file: "/etc/nativelink/tls/server.crt",
-        key_file: "/etc/nativelink/tls/server.key",
+        cert_file: "/etc/forge/tls/server.crt",
+        key_file: "/etc/forge/tls/server.key",
         // Optional: require client certificates (mTLS).
-        client_ca_file: "/etc/nativelink/tls/clients-ca.crt",
-        client_crl_file: "/etc/nativelink/tls/clients.crl",
+        client_ca_file: "/etc/forge/tls/clients-ca.crt",
+        client_crl_file: "/etc/forge/tls/clients.crl",
       },
     },
   },
@@ -457,7 +457,7 @@ export NL_LOG=json
 export RUST_LOG=info
 ```
 
-Prometheus sees NativeLink through an OpenTelemetry Collector that exports to it,
+Prometheus sees Forge through an OpenTelemetry Collector that exports to it,
 or through Prometheus' own OTLP receiver. [Observability](/operate/observability)
 has the collector config and the Grafana dashboard.
 
@@ -479,7 +479,7 @@ wrap it:
 }
 ```
 
-Without the wrapper there are no `nativelink_cache_*` series at all, and any
+Without the wrapper there are no `forge_cache_*` series at all, and any
 dashboard panel or alert built on them stays empty forever. The wrapper is opt-in
 because it costs hot-path timing on every operation.
 
@@ -487,7 +487,7 @@ because it costs hot-path timing on every operation.
 
 <VerifyBlock>
 
-Each process starts and stays up: `nativelink /etc/nativelink/cas.json5` exits
+Each process starts and stays up: `forge /etc/forge/cas.json5` exits
 non-zero immediately on a config error rather than starting degraded, so a
 process that is still running has a config the parser fully accepted.
 
@@ -504,15 +504,15 @@ than falling back to local.
 Four signals cover most of what goes wrong. All four are recording rules in
 <SourceLink file="deployment-examples/metrics/prometheus-recording-rules.yml" symbol="deployment-examples/metrics/prometheus-recording-rules.yml" />:
 
-- `nativelink:queue_depth`: actions waiting, by priority. Rising and staying
+- `forge:queue_depth`: actions waiting, by priority. Rising and staying
   risen means you need workers; spiking and draining is normal.
-- `nativelink:worker_utilization`: the fraction of workers actually executing.
+- `forge:worker_utilization`: the fraction of workers actually executing.
   Low utilization with a deep queue means a matching problem, not a capacity
   problem.
-- `nativelink:execution_queue_time_p95`: how long an action waits before a
+- `forge:execution_queue_time_p95`: how long an action waits before a
   worker picks it up. This is the number your users experience as "the build farm
   is slow."
-- `nativelink:cache_hit_rate`: requires the `cache_metrics` wrapper above.
+- `forge:cache_hit_rate`: requires the `cache_metrics` wrapper above.
 
 [Observability](/operate/observability) covers the pipeline that produces these.
 
@@ -549,7 +549,7 @@ this shape actually produces.
     artifacts that must survive a fast-tier wipe (remote execution outputs
     especially), make sure the write path covers both tiers deliberately. More
     store gotchas:
-    [Store overview](/reference/nativelink-config/store-overview#faq).
+    [Store overview](/reference/forge-config/store-overview#faq).
   </Accordion>
   <Accordion title="Can I run this as one process instead of three?" id="can-i-run-this-as-one-process-instead-of-three">
     Yes, and for a single-machine deployment you should: put the stores,

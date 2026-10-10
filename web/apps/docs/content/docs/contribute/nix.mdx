@@ -11,7 +11,7 @@ the end:** the shell, the five generated `bazelrc` files it produces, and an
 accurate list of what it does and does not contain. **Time:** twenty
 minutes, mostly download.
 
-The flake in the repository root is where almost all of NativeLink's tooling
+The flake in the repository root is where almost all of Forge's tooling
 lives. Entering the shell is not just a convenience: the shell hook is what
 writes the `bazelrc` fragments that `.bazelrc` pulls in with `try-import`,
 and `try-import` means their absence is silent. A build outside the shell is
@@ -52,8 +52,8 @@ experimental features, which the repository's flake needs.
 ## Enter the dev shell [#enter-the-dev-shell]
 
 ```bash
-git clone git@github.com:yourusername/nativelink
-cd nativelink
+git clone git@github.com:yourusername/forge
+cd forge
 nix develop
 ```
 
@@ -85,7 +85,7 @@ writes five things into your working tree:
 | --- | --- |
 | `.pre-commit-config.yaml` | Symlink enabling the repo's pre-commit hooks |
 | `lre.bazelrc` | Points Bazel at the LRE toolchains |
-| `nativelink.bazelrc` | Gives your builds access to NativeLink's read-only cache |
+| `forge.bazelrc` | Gives your builds access to Forge's read-only cache |
 | `nixos.bazelrc` | Adds the required NixOS binary paths (NixOS only) |
 | `darwin.bazelrc` | Configures Darwin libs and frameworks (macOS only) |
 
@@ -119,8 +119,8 @@ builders, `local-image-test`, and the LRE clang.
 
 <Callout type="warn" title="Some things you might expect are not here">
   No `protoc` is provided; the generated Rust is checked into
-  `nativelink-proto/genproto/` and nothing invokes `protoc` at build time.
-  No prebuilt `nativelink` binary is in the shell; build it with Bazel
+  `forge-proto/genproto/` and nothing invokes `protoc` at build time.
+  No prebuilt `forge` binary is in the shell; build it with Bazel
   or Cargo, or run `nix run .` which builds and runs the flake's default
   package. And `CONTRIBUTING.md` still advises installing Clang separately;
   the shell does now ship `lre.clang`, so try without first, and fall back to
@@ -138,7 +138,7 @@ The two commands worth knowing that only exist here:
 
 ```bash
 pre-commit run -a                       # the full pre-commit suite
-nix build .#nativelinkCoverageForHost   # HTML coverage report in ./result
+nix build .#forgeCoverageForHost   # HTML coverage report in ./result
 ```
 
 ## LRE and worker images [#lre-and-worker-images]
@@ -147,9 +147,9 @@ The flake builds the LRE worker images rather than exposing an LRE shell.
 The ones you are likely to want:
 
 ```bash
-nix build .#nativelink-worker-lre-cc
-nix build .#nativelink-worker-lre-rs
-nix build .#nativelink-worker-lre-java
+nix build .#forge-worker-lre-cc
+nix build .#forge-worker-lre-rs
+nix build .#forge-worker-lre-java
 ```
 
 `lre.bazelrc`, generated on entering the shell, is what points a local Bazel
@@ -180,7 +180,7 @@ docs, since `vale` and `bun` both come from here.
   </Accordion>
   <Accordion title="My Bazel build behaves differently outside the shell." id="different-outside-shell">
     Almost certainly the `try-import`ed fragments. `lre.bazelrc`,
-    `nativelink.bazelrc`, `nixos.bazelrc` and `darwin.bazelrc` are generated
+    `forge.bazelrc`, `nixos.bazelrc` and `darwin.bazelrc` are generated
     by the shell hook and silently skipped when absent. Enter the shell, or
     accept that you are building without the LRE toolchains and without the
     read-only cache.

@@ -46,7 +46,7 @@ Makefile
 Nvidia
 Omniverse
 NVMe
-hello@nativelink.com
+hello@forge.com
 [Nn]ative[Ll]ink
 namespacing
 [Nn]anophotonic

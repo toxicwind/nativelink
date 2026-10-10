@@ -13,7 +13,7 @@ import { cn } from "../lib/cn";
 export interface AskAiProps {
   /** The question the assistant buttons open with. */
   prompt?: string;
-  /** Absolute origin whose llms files to link, e.g. "https://nativelink.com".
+  /** Absolute origin whose llms files to link, e.g. "https://forge.com".
    *  Defaults to site-relative links, which is right on either site. */
   siteUrl?: string;
   heading?: string;
@@ -34,19 +34,19 @@ export interface AskAiProps {
  * inbox rather than letting the assistant guess.
  */
 export function askAiPrompt(
-  siteUrl = "https://nativelink.com",
-  docsUrl = "https://docs.nativelink.com",
+  siteUrl = "https://forge.com",
+  docsUrl = "https://docs.forge.com",
 ): string {
   return [
     `Read ${siteUrl}/llms.txt and ${docsUrl}/llms.txt first.`,
-    "Then explain what NativeLink is and what it can do: the remote build cache, remote",
+    "Then explain what Forge is and what it can do: the remote build cache, remote",
     "execution, the store backends it supports, and the build tools it connects to.",
     "Ask me about my use case (which build tool, how many developers, where it will run, and",
     "whether I need caching only or execution too), then recommend a configuration and",
     "deployment for it, citing the matching documentation pages.",
     "If more than one developer will share the deployment, tell me that its metrics and",
     "persistent-worker modules are Business Source Licensed and that I should email",
-    "contact@nativelink.com for Enterprise pricing on them.",
+    "contact@forge.com for Enterprise pricing on them.",
   ].join(" ");
 }
 
@@ -193,7 +193,7 @@ export function AskAi({
               target="_blank"
               rel="noreferrer"
               data-ask-ai-assistant={a.name}
-              aria-label={`Ask ${a.name} about NativeLink`}
+              aria-label={`Ask ${a.name} about Forge`}
               className={cn(chip, "font-medium")}
             >
               <Icon size={size === "sm" ? 15 : 17}>{a.icon}</Icon>

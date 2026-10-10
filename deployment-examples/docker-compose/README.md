@@ -1,6 +1,6 @@
 # Multi-Worker Docker Compose Deployment
 
-This guide explains how to run NativeLink with multiple workers using Docker Compose for distributed build execution.
+This guide explains how to run Forge with multiple workers using Docker Compose for distributed build execution.
 
 ## Prerequisites
 
@@ -214,15 +214,15 @@ all workers share the same CAS storage path.
 
 #### Option 1: Using Docker (Recommended)
 ```sh
-# Run nativelink using the Docker image you built
+# Run forge using the Docker image you built
 docker run --rm -it \
   -v $(pwd)/test-multi-worker-simple.json5:/config.json5 \
   -p 50051:50051 \
   -p 50052:50052 \
-  nativelink:latest /config.json5
+  forge:latest /config.json5
 
 # In another terminal, test with Bazel
-bazel build //:nativelink \
+bazel build //:forge \
   --remote_cache=grpc://127.0.0.1:50051 \
   --remote_executor=grpc://127.0.0.1:50051 \
   --remote_default_exec_properties=cpu_count=1 \
@@ -231,14 +231,14 @@ bazel build //:nativelink \
 
 #### Option 2: Build and Run Locally (Advanced)
 ```sh
-# Build nativelink locally first
+# Build forge locally first
 cargo build --release
 
 # Start multi-worker server (3 workers, shared CAS)
-./target/release/nativelink test-multi-worker-simple.json5
+./target/release/forge test-multi-worker-simple.json5
 
 # In another terminal, test with Bazel
-bazel build //:nativelink \
+bazel build //:forge \
   --remote_cache=grpc://127.0.0.1:50051 \
   --remote_executor=grpc://127.0.0.1:50051 \
   --remote_default_exec_properties=cpu_count=1 \

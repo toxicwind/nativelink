@@ -1,6 +1,6 @@
 ---
-title: Why NativeLink
-description: What NativeLink is, what a remote cache and remote execution actually do, and a 30-second check for whether your build is one that benefits.
+title: Why Forge
+description: What Forge is, what a remote cache and remote execution actually do, and a 30-second check for whether your build is one that benefits.
 ---
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
@@ -8,12 +8,12 @@ description: What NativeLink is, what a remote cache and remote execution actual
 **Who this is for:** anyone deciding whether to put a remote cache and
 execution layer in front of their build, including people meeting the idea for
 the first time. **What you'll have at the end:** a working mental model of what
-NativeLink does, and a clear yes or no for your own situation. **Time:** about
+Forge does, and a clear yes or no for your own situation. **Time:** about
 ten minutes.
 
-## What NativeLink is [#what-nativelink-is]
+## What Forge is [#what-forge-is]
 
-NativeLink is a **remote build cache** and a **remote execution** service in one
+Forge is a **remote build cache** and a **remote execution** service in one
 program. Your build tool asks it "have you already built this?" and, when the
 answer is no, "can you build it for me over there?" Nothing about your source
 code changes. You point your build tool at a URL, and work that used to happen
@@ -21,7 +21,7 @@ on your machine stops happening on your machine.
 
 It's written in Rust, ships as a single binary that plays every role, and
 speaks the [Remote Execution API](https://github.com/bazelbuild/remote-apis),
-an open protocol, not a NativeLink invention, which is why the build tool you
+an open protocol, not a Forge invention, which is why the build tool you
 already use can talk to it without a plugin.
 
 ## The problem it exists to solve [#the-problem-it-exists-to-solve]
@@ -40,7 +40,7 @@ Some work is *genuinely new* but badly placed: it has to run, but it doesn't
 have to run on the laptop you're typing on, one action at a time. The fix is to
 run it somewhere else, in parallel, on hardware that suits it.
 
-NativeLink is both fixes.
+Forge is both fixes.
 
 ## What a remote cache is [#what-a-remote-cache-is]
 
@@ -61,7 +61,7 @@ cache keyed on the hash of the inputs cannot return the wrong answer for a
 question, because a different question has a different key.
 
 <Callout type="info" title="Two caches, one idea">
-  NativeLink stores these separately. The **CAS** (content-addressable storage)
+  Forge stores these separately. The **CAS** (content-addressable storage)
   holds the bytes of files. The **action cache** maps "this action, with these
   inputs" to "these output files." Most sentences about "the cache" mean both
   at once.
@@ -98,7 +98,7 @@ the part your laptop cannot do no matter how new it is.
   W3 -.-> CAS`}
 </Mermaid>
 
-Four roles, CAS, action cache, scheduler and worker, and in NativeLink all four
+Four roles, CAS, action cache, scheduler and worker, and in Forge all four
 are the same binary started with different configuration.
 
 Remote execution asks something of you that caching does not: the action has to
@@ -109,7 +109,7 @@ they run on work locally and fail remotely, and that is the honest cost of the
 feature. [Toolchains and hermeticity](/remote-execution/toolchains-and-hermeticity)
 is the page about earning it.
 
-## Why NativeLink specifically [#why-nativelink-specifically]
+## Why Forge specifically [#why-forge-specifically]
 
 The protocol is open and there are other implementations. What's particular
 here:
@@ -139,7 +139,7 @@ use.
 
 ## Is this for you? [#is-this-for-you]
 
-You will get something out of NativeLink if any of these are true:
+You will get something out of Forge if any of these are true:
 
 - Your build takes long enough that people context-switch while waiting.
 - CI rebuilds artifacts that a developer already built minutes earlier.
@@ -171,7 +171,7 @@ does. Build time is the loop's wall clock and a large share of its token cost.
 **[Autonomous operation](/use-cases/autonomous-operation)**: the case for a
 build farm that grows and shrinks with demand instead of being sized for the
 worst Tuesday of the quarter, and an honest account of how much of that
-NativeLink hands you versus how much you assemble.
+Forge hands you versus how much you assemble.
 
 **[Silicon and large builds](/use-cases/silicon-and-large-builds)**: EDA
 flows, big C++ and LLVM trees, and ML graphs: thousands of actions, hardware
@@ -185,7 +185,7 @@ clock. This is the workload remote execution was invented for.
 <Accordion title="Is this the same thing as ccache or sccache?" id="is-this-the-same-thing-as-ccache-or-sccache">
 
 Same instinct, different scope. `ccache` caches compiler invocations on one
-machine, and `sccache` extends that to a shared bucket. NativeLink caches every
+machine, and `sccache` extends that to a shared bucket. Forge caches every
 action in the build graph rather than just compiles, and it can also *run* the
 actions that miss. If a shared compile cache is all you need, you may not need
 this.
@@ -203,7 +203,7 @@ commitment. Most of the win, for most teams, is in the cache.
 
 <Accordion title="Does my build have to be Bazel?" id="does-my-build-have-to-be-bazel">
 
-No. Anything speaking the Remote Execution API can use NativeLink, and the
+No. Anything speaking the Remote Execution API can use Forge, and the
 docs cover Buck2, Siso, Pants, BuildStream and CMake via recc alongside Bazel.
 What matters is whether your build tool can describe an action's inputs
 precisely enough to hash them.

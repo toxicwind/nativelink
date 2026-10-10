@@ -59,13 +59,13 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Regenerate llms files
         working-directory: web
         run: |
           nix develop --impure --command bash -c "
-            bun install && bun --filter @nativelink/web gen:llms
+            bun install && bun --filter @forge/web gen:llms
           "
 
       - name: Open auto-merge PR
@@ -106,4 +106,4 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}

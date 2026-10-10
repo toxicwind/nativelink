@@ -1,15 +1,15 @@
 ---
 title: Chromium
-description: Building Chromium with NativeLink as the Siso backend, a worked example for the largest public consumer.
+description: Building Chromium with Forge as the Siso backend, a worked example for the largest public consumer.
 ---
 
 <Prerequisites>
-  A running NativeLink instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
+  A running Forge instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
 </Prerequisites>
 
 Chromium's build system shells out to
 [Siso](https://chromium.googlesource.com/build/+/refs/heads/main/siso/README.md),
-which speaks the Remote Execution API. Pointing it at a NativeLink cluster is a
+which speaks the Remote Execution API. Pointing it at a Forge cluster is a
 configuration change, with no patches to the Chromium tree.
 
 The same pattern works for upstream Chromium and any Chromium-based
@@ -17,7 +17,7 @@ browser.
 
 ## Prerequisites [#prerequisites]
 
-- A NativeLink cluster reachable from your build machines. Cache-only
+- A Forge cluster reachable from your build machines. Cache-only
   is fine to start; remote execution drops build times further.
 - A Chromium checkout with `depot_tools` on `$PATH`.
 - The Chromium source checkout (`fetch chromium`).
@@ -28,21 +28,21 @@ Siso reads its server settings from environment variables. Add
 to your build shell:
 
 ```bash
-export SISO_REAPI_ADDRESS=cas.nativelink.internal:50051
+export SISO_REAPI_ADDRESS=cas.forge.internal:50051
 export SISO_REAPI_INSTANCE=main
 export RBE_service_no_security=false   # mTLS in production
-export RBE_tls_client_auth_cert=/etc/nativelink/tls/client.crt
-export RBE_tls_client_auth_key=/etc/nativelink/tls/client.key
-export RBE_tls_ca_cert=/etc/nativelink/tls/ca.crt
+export RBE_tls_client_auth_cert=/etc/forge/tls/client.crt
+export RBE_tls_client_auth_key=/etc/forge/tls/client.key
+export RBE_tls_ca_cert=/etc/forge/tls/ca.crt
 ```
 
-`SISO_REAPI_INSTANCE` must match an `instance_name` your NativeLink
+`SISO_REAPI_INSTANCE` must match an `instance_name` your Forge
 server exposes. The repository's own Chromium example uses the default
 empty instance name (`SISO_REAPI_INSTANCE=''`) and also sets
 `SISO_REAPI_CAS_ADDRESS` to the same endpoint:
 <SourceLink file="deploy/chromium-example/build_chromium_tests.sh" symbol="deploy/chromium-example/build_chromium_tests.sh" />.
 
-For local development against a non-TLS NativeLink:
+For local development against a non-TLS Forge:
 
 ```bash
 export SISO_REAPI_ADDRESS=localhost:50051
@@ -78,7 +78,7 @@ of the time.
 
 - **Cache hit rate**: on a warm cache the hit rate for an incremental
   build should be high and climb from build to build; watch it in the
-  NativeLink cache metrics.
+  Forge cache metrics.
 - **Local fallback rate**: close to zero. Anything higher means workers
   are rejecting actions (platform mismatch, capacity).
 - **Network errors**: zero. Anything else is a problem.
@@ -89,13 +89,13 @@ Chromium's Siso config takes its remote platform properties from
 `build/config/siso/backend_config/backend.star` (copy `template.star`
 and edit it, or point the `reapi_backend_config_path` gclient custom
 var at your own file). Each platform entry names an `OSFamily` and a
-`container-image`, and every NativeLink worker that should run Chromium
+`container-image`, and every Forge worker that should run Chromium
 actions must advertise the same values, with the property key spelled
 `container-image` (hyphen).
 
 The repository ships a Chromium worker image built from Chromium's
 public `siso-chromium/linux` RBE image, and a kustomization that deploys
-it alongside a NativeLink cluster:
+it alongside a Forge cluster:
 
 - <SourceLink file="deploy/chromium-example" dir symbol="deploy/chromium-example/" />
   for the deployment,
@@ -121,7 +121,7 @@ it alongside a NativeLink cluster:
 
 <Accordions type="multiple">
   <Accordion title="Do I need to patch the Chromium tree?" id="do-i-need-to-patch-the-chromium-tree">
-    No. Pointing Siso at NativeLink is configuration only: GN args, the
+    No. Pointing Siso at Forge is configuration only: GN args, the
     Siso environment variables, and a local `backend.star` for the
     platform properties. The same applies to Chromium forks.
   </Accordion>

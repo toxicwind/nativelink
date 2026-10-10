@@ -1,11 +1,11 @@
 /* Tailwind v4 shared preset.
  *
- * Pulls raw RGB triplets from @nativelink/tokens and exposes them through
+ * Pulls raw RGB triplets from @forge/tokens and exposes them through
  * @theme as full rgb() values so utilities + opacity modifiers work
  * end-to-end (color-mix needs a valid color argument).
  */
 
-@import "@nativelink/tokens/src/index.css";
+@import "@forge/tokens/src/index.css";
 
 /* Dark variant follows our explicit data-theme attribute, not the media query.
  * The ThemeProvider toggles this on <html>. */

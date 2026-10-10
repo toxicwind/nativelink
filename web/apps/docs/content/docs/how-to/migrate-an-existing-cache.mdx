@@ -1,18 +1,18 @@
 ---
 title: Migrate from another REAPI cache
-description: Put NativeLink in front of your existing cache as a read-only diode, let real builds warm it, and cut over when the hit rate says you can.
+description: Put Forge in front of your existing cache as a read-only diode, let real builds warm it, and cut over when the hit rate says you can.
 ---
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
 **Who this is for:** anyone running Buildbarn, Buildfarm, bazel-remote or a
-hosted REAPI cache who wants to move to NativeLink without a flag day. **What
-you'll have at the end:** NativeLink serving your builds, backed by the old
+hosted REAPI cache who wants to move to Forge without a flag day. **What
+you'll have at the end:** Forge serving your builds, backed by the old
 cache, with a cutover you choose rather than one you're forced into. **Time:**
 an hour to set up; days to weeks of running both, at your pace.
 
 <Prerequisites>
-  A working NativeLink CAS. See [Getting started](/getting-started).
+  A working Forge CAS. See [Getting started](/getting-started).
 </Prerequisites>
 
 The instinct is to copy the data across. Don't. A remote cache is not a
@@ -20,13 +20,13 @@ database: every entry in it is derived, reproducible, and has a key that is a
 hash of its own contents. Copying terabytes to preserve something your build can
 regenerate is work you can skip.
 
-The move that works instead is to put NativeLink in front of the old cache and
-let it read through. Builds hit NativeLink; anything it doesn't have, it fetches
+The move that works instead is to put Forge in front of the old cache and
+let it read through. Builds hit Forge; anything it doesn't have, it fetches
 from the old cache and keeps. Your hit rate never drops, the new cache warms
 itself on real traffic, and the old one is never written to again, so if you
 need to go back, it is exactly as you left it.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="GrpcSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="GrpcSpec" />
 
 ## The diode [#the-diode]
 
@@ -67,15 +67,15 @@ stores: [
 
 `slow_direction: "read_only"` is the whole trick, and it is a documented use of
 the field rather than a clever misuse: the source calls this shape a diode.
-Reads fall through to the old cache when NativeLink misses. Writes stop at
-NativeLink. The old cache is a source and never a destination.
+Reads fall through to the old cache when Forge misses. Writes stop at
+Forge. The old cache is a source and never a destination.
 
 The `tls_config` block is required on any `grpcs://` address; the
 `use_native_roots` form is right for a hosted cache with a public certificate,
 and `ca_file` is the alternative for a private CA
 ([TLS and authentication](/how-to/tls-and-auth) has both).
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="FastSlowSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="FastSlowSpec" />
 
 Do the same for the action cache with a second `grpc` store at
 `store_type: "ac"`. Action results are the entries that actually decide your hit
@@ -92,9 +92,9 @@ caught by the HTTP/2 and TCP keepalives.
 builds now ask for BLAKE3, nothing is found, not because of a bug but because
 the key of a blob is its hash, and you are asking a different question. The
 digest function is chosen by the client (Bazel's `--digest_function`, SHA-256
-unless you changed it); NativeLink's `global.default_digest_hash_function`,
+unless you changed it); Forge's `global.default_digest_hash_function`,
 described in [Stores](/configuration/stores), only fills in when a client does
-not say. Keep the client, NativeLink and the old cache on the same function.
+not say. Keep the client, Forge and the old cache on the same function.
 This is the one incompatibility that cannot be worked around.
 
 **Instance names may need rewriting.** `instance_name` on the `grpc` store
@@ -147,8 +147,8 @@ in `.bazelrc`, so a build can pick:
 
 ```
 build:oldcache --remote_cache=grpcs://old-cache.example.com:443
-build:nativelink --remote_cache=grpcs://nativelink.example.com:50051
-build --config=nativelink
+build:forge --remote_cache=grpcs://forge.example.com:50051
+build --config=forge
 ```
 
 Move CI first, because it is the highest-volume traffic and warms the new cache
@@ -156,7 +156,7 @@ fastest, and because its failures are visible immediately rather than reported
 by a person mid-afternoon. Developers follow once CI has been steady for a week.
 
 <Callout type="info" title="The diode is not permanent">
-  Once NativeLink's own hit rate matches what the old cache was giving you, the
+  Once Forge's own hit rate matches what the old cache was giving you, the
   `slow` tier is doing nothing but adding a network hop on misses. Remove it,
   and the `fast_slow` wrapper with it, leaving the filesystem store on its own.
   Deciding to remove it is the actual end of the migration.
@@ -168,7 +168,7 @@ by a person mid-afternoon. Developers follow once CI has been steady for a week.
 
 <li>
 
-**Confirm the digest function** your builds use, and set NativeLink's
+**Confirm the digest function** your builds use, and set Forge's
 `default_digest_hash_function` to match. Everything downstream depends on this
 being right.
 
@@ -176,7 +176,7 @@ being right.
 
 <li>
 
-**Stand up NativeLink normally**, with its own filesystem or object store, and
+**Stand up Forge normally**, with its own filesystem or object store, and
 check that a build against it works before the old cache is involved at all.
 
 </li>
@@ -190,7 +190,7 @@ wrapped as the `slow` half of `fast_slow` with `slow_direction: "read_only"`.
 
 <li>
 
-**Point CI at NativeLink** and watch the hit rate. It should start near what the
+**Point CI at Forge** and watch the hit rate. It should start near what the
 old cache gave, because misses are being served through the diode, and it should
 stay there.
 
@@ -214,11 +214,11 @@ then decommission it.
 
 <VerifyBlock>
 
-- A build that got hits from the old cache gets hits from NativeLink on the
+- A build that got hits from the old cache gets hits from Forge on the
   first run against it.
-- NativeLink's `content_path` grows during that run, because it is keeping what it
+- Forge's `content_path` grows during that run, because it is keeping what it
   reads.
-- A second identical build is served entirely by NativeLink, with no traffic to
+- A second identical build is served entirely by Forge, with no traffic to
   the old cache.
 - The old cache's storage stops growing, confirming nothing is writing to it.
 - Turning the old cache off entirely, at the end, changes nothing.
@@ -234,7 +234,7 @@ then decommission it.
 Check the digest function first; a mismatch produces exactly this and no error.
 Then check `instance_name`, since an old cache scoped to a named instance
 returns nothing for a differently-named one. Then confirm the address is
-reachable from the NativeLink process rather than from your laptop.
+reachable from the Forge process rather than from your laptop.
 
 </Accordion>
 
@@ -287,6 +287,6 @@ both faster and safer.
 </NextStep>
 
 <NextStep href="/operate/production-config" kind="aside" title="Production configuration">
-  What to change once NativeLink is the cache rather than a proxy in front of
+  What to change once Forge is the cache rather than a proxy in front of
   one.
 </NextStep>

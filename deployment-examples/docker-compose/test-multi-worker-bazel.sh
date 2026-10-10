@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test script to validate multi-worker NativeLink setup with Bazel compilation
+# Test script to validate multi-worker Forge setup with Bazel compilation
 
 set -euo pipefail
 
@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "=========================================="
-echo "Multi-Worker NativeLink Bazel Test"
+echo "Multi-Worker Forge Bazel Test"
 echo "=========================================="
 
 # Colors for output
@@ -68,7 +68,7 @@ for file in "${required_files[@]}"; do
 done
 
 # Start multi-worker deployment
-print_status "Starting multi-worker NativeLink deployment..."
+print_status "Starting multi-worker Forge deployment..."
 docker-compose -f docker-compose-multi-worker.yml up -d
 
 # Wait for services to be healthy
@@ -116,10 +116,10 @@ for i in 1 2 3; do
 done
 
 # Test 1: Simple build with remote execution
-print_status "Test 1: Building NativeLink with multi-worker remote execution..."
-cd ../.. # Go to NativeLink root
+print_status "Test 1: Building Forge with multi-worker remote execution..."
+cd ../.. # Go to Forge root
 
-BUILD_CMD="bazel build //src:nativelink \
+BUILD_CMD="bazel build //src:forge \
     --remote_cache=grpc://127.0.0.1:50051 \
     --remote_executor=grpc://127.0.0.1:50052 \
     --remote_default_exec_properties=cpu_count=1 \
@@ -213,7 +213,7 @@ print_status "Build execution: SUCCESSFUL"
 print_status "Worker distribution: CONFIRMED"
 
 echo ""
-echo "Multi-worker NativeLink setup is working correctly!"
+echo "Multi-worker Forge setup is working correctly!"
 echo ""
 echo "You can now use this deployment with:"
 echo "  --remote_cache=grpc://127.0.0.1:50051"

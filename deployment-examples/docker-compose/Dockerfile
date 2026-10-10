@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Copyright 2022-2025 The NativeLink Authors. All rights reserved.
+# Copyright 2022-2025 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,21 +59,21 @@ RUN ARCH_SUFFIX=amd64 \
 
 # Build the binary.
 FROM dependencies AS builder
-WORKDIR /root/nativelink
+WORKDIR /root/forge
 COPY . .
 ARG OPT_LEVEL
 ARG ADDITIONAL_BAZEL_FLAGS
 # Add startup options to prevent Bazel server issues on ARM64
-RUN --mount=type=secret,id=nativelink-bazelrc,target=/root/nativelink/user.bazelrc \
+RUN --mount=type=secret,id=forge-bazelrc,target=/root/forge/user.bazelrc \
     bazel-retry \
     --batch \
     --output_base=/tmp/bazel_output \
-    build -c ${OPT_LEVEL} ${ADDITIONAL_BAZEL_FLAGS} nativelink && \
-    cp ./bazel-bin/nativelink /root/nativelink-bin
+    build -c ${OPT_LEVEL} ${ADDITIONAL_BAZEL_FLAGS} forge && \
+    cp ./bazel-bin/forge /root/forge-bin
 
 # Go back to a fresh ubuntu container and copy only the compiled binary.
 FROM ubuntu:noble-20250925@sha256:728785b59223d755e3e5c5af178fab1be7031f3522c5ccd7a0b32b80d8248123 AS final
-COPY --from=builder /root/nativelink-bin /usr/local/bin/nativelink
+COPY --from=builder /root/forge-bin /usr/local/bin/forge
 
 ARG ADDITIONAL_SETUP_WORKER_CMD
 
@@ -82,7 +82,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && bash -ueo pipefail -c "${ADDITIONAL_SETUP_WORKER_CMD}" \
-    && mkdir -p /root/.cache/nativelink
+    && mkdir -p /root/.cache/forge
 
 EXPOSE 50051/tcp 50052/tcp
-CMD ["nativelink"]
+CMD ["forge"]

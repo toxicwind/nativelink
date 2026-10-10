@@ -34,7 +34,7 @@ stores: [
       slow: {
         experimental_mongo: {
           connection_string: "${MONGO_URI}",
-          database: "nativelink",
+          database: "forge",
           cas_collection: "cas",
           key_prefix: "prod:",
         },
@@ -50,10 +50,10 @@ accepts, `mongodb://localhost:27017` or
 keep it in the environment and reference it with `${VAR}`; see
 [The config file](/configuration/config-file).
 
-Everything else has a default: `database` is `nativelink`, `cas_collection` is
+Everything else has a default: `database` is `forge`, `cas_collection` is
 `cas`, `scheduler_collection` is `scheduler`, and `key_prefix` is empty.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ExperimentalMongoSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ExperimentalMongoSpec" />
 
 ## Change streams and the scheduler [#change-streams-and-the-scheduler]
 
@@ -65,7 +65,7 @@ is no config path that puts a Mongo store behind the scheduler. Treat this
 store as a CAS and Action Cache backend, and see
 [Redis](/how-to/stores/redis) for a shared scheduler.
 
-<SourceLink file="nativelink-config/src/schedulers.rs" symbol="ExperimentalSimpleSchedulerBackend" />
+<SourceLink file="forge-config/src/schedulers.rs" symbol="ExperimentalSimpleSchedulerBackend" />
 
 Leave `enable_change_streams` off for a store used as a CAS. It buys nothing
 there.
@@ -81,7 +81,7 @@ there.
 
 | Field | Default | What it decides |
 | --- | --- | --- |
-| `database` | `nativelink` | Database name |
+| `database` | `forge` | Database name |
 | `cas_collection` | `cas` | Collection holding CAS objects |
 | `scheduler_collection` | `scheduler` | Collection holding scheduler state |
 | `key_prefix` | empty | Namespacing when several deployments share one database |
@@ -103,9 +103,9 @@ a cache entry a client believes exists.
 
 `max_requests` is the equivalent of Redis's permit ceiling and is unlimited by
 default. Set it if bursts are overwhelming the deployment; queuing in
-NativeLink beats timing out at Mongo. Zero is rejected at startup.
+Forge beats timing out at Mongo. Zero is rejected at startup.
 
-<SourceLink file="nativelink-store/src/mongo_store.rs" symbol="ExperimentalMongoStore::new" />
+<SourceLink file="forge-store/src/mongo_store.rs" symbol="ExperimentalMongoStore::new" />
 
 <Callout type="info" title="`max_concurrent_uploads` is deprecated and unused">
   It survives in the schema for compatibility. Setting it only logs a warning;
@@ -133,7 +133,7 @@ connection string in the environment rather than the config file.
 <li>
 
 **Add the store**, choosing a `key_prefix` if this database is shared with
-another NativeLink deployment.
+another Forge deployment.
 
 </li>
 
@@ -178,14 +178,14 @@ only accepts `memory` and `redis`, so there is nothing to point at it. Use
 <Accordion title="Connection failures against Atlas" id="connection-failures-against-atlas">
 
 Use the `mongodb+srv://` form, and check that the deployment's IP access list
-includes wherever NativeLink runs. An access-list rejection often surfaces as a
+includes wherever Forge runs. An access-list rejection often surfaces as a
 connection timeout rather than as an authorization error.
 
 </Accordion>
 
 <Accordion title="Timeouts under load" id="timeouts-under-load">
 
-Set `max_requests` so concurrency queues in NativeLink instead of arriving all
+Set `max_requests` so concurrency queues in Forge instead of arriving all
 at once, then consider raising `connection_timeout_ms`, which also bounds
 server selection. Also check the deployment's own connection limit; Atlas
 tiers cap it low.

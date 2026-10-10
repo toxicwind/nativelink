@@ -13,13 +13,13 @@ worker deliberately discards. **Time:** twenty-five minutes.
 
 The worker is where the abstractions stop. Everything upstream is digests and
 state machines; here there is a directory, a process, and an exit code. Most
-of the surprising behaviour in a NativeLink cluster originates in this crate,
+of the surprising behaviour in a Forge cluster originates in this crate,
 because this is the only place where the operating system gets a vote.
 
 ## The connection is one stream [#the-connection-is-one-stream]
 
 A worker opens exactly one bidirectional gRPC stream to the scheduler
-(`ConnectWorker`, the sole RPC on NativeLink's own `WorkerApi` service), and
+(`ConnectWorker`, the sole RPC on Forge's own `WorkerApi` service), and
 everything flows over it. It has no polling loop and no second connection.
 
 The worker supplies only an ID *prefix*; the scheduler mints the actual
@@ -91,7 +91,7 @@ given anything else. It does not degrade to copying.
 
 This section is deliberately blunt, because overclaiming here is dangerous.
 
-**With the default configuration, a NativeLink worker provides no
+**With the default configuration, a Forge worker provides no
 OS-level isolation whatsoever.** `use_namespaces` defaults to `false`. The
 action runs as an ordinary child process of the worker, with the worker's
 privileges, on the worker's network, with access to whatever the worker can
@@ -117,7 +117,7 @@ not a silent no-op you can leave enabled in a mixed fleet.
 <Callout type="warn" title="Real isolation is delegated, not provided">
   If you run untrusted actions, the isolation boundary has to come from
   somewhere else: the `entrypoint` wrapper, which can invoke whatever sandbox
-  you choose, or the container the worker itself runs in. NativeLink's
+  you choose, or the container the worker itself runs in. Forge's
   namespace support is a hygiene measure (it stops actions tripping over
   each other's processes and mounts), not a security boundary. Note also that
   inside Docker, creating namespaces requires a privileged container, which
@@ -172,7 +172,7 @@ cache entry. The final result update, which is what a client is waiting on,
 comes after all of that, so a client that observes completion and
 immediately queries the cache finds the result; but the scheduler knows the
 command finished slightly before the bytes exist.
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="execution_complete" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="execution_complete" />
 
 <Mermaid>{`sequenceDiagram
     participant sched as Scheduler
@@ -207,7 +207,7 @@ an older scheduler sees the old behaviour: the worker runs whatever it is
 sent. `dispatch_ack_timeout_s` on the scheduler adds the converse: a dispatch
 no worker acknowledged within the timeout is taken back, which only makes
 sense once every connected worker acknowledges.
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="Refusal" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="Refusal" />
 
 Four behaviours in the upload path:
 
@@ -261,11 +261,11 @@ from the second.
 ## Where the exact truth lives [#where-the-exact-truth-lives]
 
 Every worker field and default is in the generated
-[worker configuration reference](/reference/nativelink-config#workerconfig). The
+[worker configuration reference](/reference/forge-config#workerconfig). The
 execution code itself is
-<SourceLink file="nativelink-worker/src/running_actions_manager.rs" symbol="RunningActionsManager" />
+<SourceLink file="forge-worker/src/running_actions_manager.rs" symbol="RunningActionsManager" />
 and
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="LocalWorker" />.
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="LocalWorker" />.
 
 ## Common questions [#common-questions]
 
@@ -275,8 +275,8 @@ and
     hardlinks to read-only CAS blobs. Copy the file into the output tree
     first, or declare it as an output rather than an input.
   </Accordion>
-  <Accordion title="Is it safe to run untrusted actions on a NativeLink worker?" id="untrusted-actions">
-    Not on the strength of NativeLink's own isolation. With defaults there is
+  <Accordion title="Is it safe to run untrusted actions on a Forge worker?" id="untrusted-actions">
+    Not on the strength of Forge's own isolation. With defaults there is
     none; with namespaces enabled there is still no network isolation, no
     seccomp, no cgroups, no filesystem root change and no privilege drop. Put
     the boundary in the `entrypoint` wrapper or in the container the worker

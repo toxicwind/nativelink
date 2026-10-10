@@ -1,0 +1,265 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::pin::Pin;
+use core::time::Duration;
+use std::borrow::Cow;
+
+use bytes::BytesMut;
+use futures::{Stream, StreamExt};
+use forge_error::{Error, ResultExt};
+use forge_proto::com::github::trace_machina::forge::events::{BepEvent, bep_event};
+use forge_proto::google::devtools::build::v1::publish_build_event_server::{
+    PublishBuildEvent, PublishBuildEventServer,
+};
+use forge_proto::google::devtools::build::v1::{
+    PublishBuildToolEventStreamRequest, PublishBuildToolEventStreamResponse,
+    PublishLifecycleEventRequest,
+};
+use forge_store::store_manager::StoreManager;
+use forge_util::store_trait::{Store, StoreDriver, StoreKey, StoreLike};
+use opentelemetry::baggage::BaggageExt;
+use opentelemetry::context::Context;
+use opentelemetry_semantic_conventions::attribute::ENDUSER_ID;
+use prost::Message;
+use tokio::time::sleep;
+use tonic::{Request, Response, Result, Status, Streaming};
+use tracing::{Level, instrument, warn};
+
+/// Bounded retries for persisting a BEP event so a transient store failure
+/// (e.g. a Redis Sentinel failover) doesn't drop it — BEP events are the
+/// authoritative build record, the same durability class as origin events.
+const MAX_BEP_UPLOAD_ATTEMPTS: u32 = 5;
+/// Store writes in flight per stream. Bazel waits for every event's ack
+/// before it finishes, so a sequential write per event caps a build's
+/// upload at one store round trip per event; writes overlap up to this
+/// many while the acks still go out in sequence order.
+const MAX_IN_FLIGHT_BEP_EVENTS: usize = 64;
+
+/// Current version of the BEP event. This might be used in the future if
+/// there is a breaking change in the BEP event format.
+const BEP_EVENT_VERSION: u32 = 0;
+
+#[allow(clippy::result_large_err, reason = "TODO Fix this. Breaks on nightly")]
+fn get_identity() -> Option<String> {
+    Context::current()
+        .baggage()
+        .get(ENDUSER_ID)
+        .map(|value| value.as_str().to_string())
+}
+
+#[derive(Debug)]
+pub struct BepServer {
+    store: Store,
+}
+
+impl BepServer {
+    pub fn new(
+        config: &forge_config::cas_server::BepConfig,
+        store_manager: &StoreManager,
+    ) -> Result<Self, Error> {
+        let store = store_manager
+            .get_store(&config.store)
+            .err_tip(|| format!("Expected store {} to exist in store manager", config.store))?;
+
+        Ok(Self { store })
+    }
+
+    pub fn into_service(self) -> PublishBuildEventServer<Self> {
+        PublishBuildEventServer::new(self)
+    }
+
+    async fn inner_publish_lifecycle_event(
+        &self,
+        request: PublishLifecycleEventRequest,
+        identity: Option<String>,
+    ) -> Result<Response<()>, Error> {
+        let build_event = request
+            .build_event
+            .as_ref()
+            .err_tip(|| "Expected build_event to be set")?;
+        let stream_id = build_event
+            .stream_id
+            .as_ref()
+            .err_tip(|| "Expected stream_id to be set")?;
+
+        let sequence_number = build_event.sequence_number;
+
+        let store_key = StoreKey::Str(Cow::Owned(format!(
+            "BepEvent:le:{}:{}:{}",
+            stream_id.build_id, stream_id.invocation_id, sequence_number,
+        )));
+
+        let bep_event = BepEvent {
+            version: BEP_EVENT_VERSION,
+            identity: identity.unwrap_or_default(),
+            event: Some(bep_event::Event::LifecycleEvent(request)),
+        };
+        let mut buf = BytesMut::new();
+        bep_event
+            .encode(&mut buf)
+            .err_tip(|| "Could not encode PublishLifecycleEventRequest proto")?;
+
+        let data = buf.freeze();
+        for attempt in 1..=MAX_BEP_UPLOAD_ATTEMPTS {
+            match self
+                .store
+                .update_oneshot(store_key.borrow(), data.clone())
+                .await
+            {
+                Ok(()) => break,
+                Err(err) if attempt < MAX_BEP_UPLOAD_ATTEMPTS => {
+                    warn!(
+                        attempt,
+                        max = MAX_BEP_UPLOAD_ATTEMPTS,
+                        ?err,
+                        %store_key,
+                        "Failed to store BEP lifecycle event, retrying"
+                    );
+                    sleep(Duration::from_secs_f32(0.1 * attempt as f32)).await;
+                }
+                Err(err) => {
+                    return Err(err).err_tip(|| {
+                        format!(
+                            "Failed to store PublishLifecycleEventRequest for {store_key} after retries"
+                        )
+                    });
+                }
+            }
+        }
+
+        Ok(Response::new(()))
+    }
+
+    async fn inner_publish_build_tool_event_stream(
+        &self,
+        stream: Streaming<PublishBuildToolEventStreamRequest>,
+        identity: Option<String>,
+    ) -> Result<Response<PublishBuildToolEventStreamStream>, Error> {
+        async fn process_request(
+            store: Pin<&dyn StoreDriver>,
+            request: PublishBuildToolEventStreamRequest,
+            identity: String,
+        ) -> Result<PublishBuildToolEventStreamResponse, Status> {
+            let ordered_build_event = request
+                .ordered_build_event
+                .as_ref()
+                .err_tip(|| "Expected ordered_build_event to be set")?;
+            let stream_id = ordered_build_event
+                .stream_id
+                .as_ref()
+                .err_tip(|| "Expected stream_id to be set")?
+                .clone();
+
+            let sequence_number = ordered_build_event.sequence_number;
+
+            let bep_event = BepEvent {
+                version: BEP_EVENT_VERSION,
+                identity,
+                event: Some(bep_event::Event::BuildToolEvent(request)),
+            };
+            let mut buf = BytesMut::new();
+
+            bep_event
+                .encode(&mut buf)
+                .err_tip(|| "Could not encode PublishBuildToolEventStreamRequest proto")?;
+
+            let store_key = StoreKey::Str(Cow::Owned(format!(
+                "BepEvent:be:{}:{}:{}",
+                stream_id.build_id, stream_id.invocation_id, sequence_number,
+            )));
+            let data = buf.freeze();
+            for attempt in 1..=MAX_BEP_UPLOAD_ATTEMPTS {
+                match store.update_oneshot(store_key.borrow(), data.clone()).await {
+                    Ok(()) => break,
+                    Err(err) if attempt < MAX_BEP_UPLOAD_ATTEMPTS => {
+                        warn!(
+                            attempt,
+                            max = MAX_BEP_UPLOAD_ATTEMPTS,
+                            ?err,
+                            %store_key,
+                            "Failed to store BEP build-tool event, retrying"
+                        );
+                        sleep(Duration::from_secs_f32(0.1 * attempt as f32)).await;
+                    }
+                    Err(err) => {
+                        return Err(err).err_tip(
+                            || "Failed to store PublishBuildToolEventStreamRequest after retries",
+                        )?;
+                    }
+                }
+            }
+
+            Ok(PublishBuildToolEventStreamResponse {
+                stream_id: Some(stream_id.clone()),
+                sequence_number,
+            })
+        }
+
+        let store = self.store.clone();
+        let identity = identity.unwrap_or_default();
+        let response_stream = stream
+            .map(move |request| {
+                let store = store.clone();
+                let identity = identity.clone();
+                async move {
+                    let request = request
+                        .err_tip(|| "While receiving message in publish_build_tool_event_stream")?;
+                    process_request(store.as_store_driver_pin(), request, identity).await
+                }
+            })
+            .buffered(MAX_IN_FLIGHT_BEP_EVENTS);
+        Ok(Response::new(Box::pin(response_stream)))
+    }
+}
+
+type PublishBuildToolEventStreamStream = Pin<
+    Box<dyn Stream<Item = Result<PublishBuildToolEventStreamResponse, Status>> + Send + 'static>,
+>;
+
+#[tonic::async_trait]
+impl PublishBuildEvent for BepServer {
+    type PublishBuildToolEventStreamStream = PublishBuildToolEventStreamStream;
+
+    #[instrument(
+        err,
+        ret(level = Level::INFO),
+        level = Level::ERROR,
+        skip_all,
+        fields(request = ?grpc_request.get_ref())
+    )]
+    async fn publish_lifecycle_event(
+        &self,
+        grpc_request: Request<PublishLifecycleEventRequest>,
+    ) -> Result<Response<()>, Status> {
+        self.inner_publish_lifecycle_event(grpc_request.into_inner(), get_identity())
+            .await
+            .map_err(Error::into)
+    }
+
+    #[instrument(
+      err,
+      level = Level::ERROR,
+      skip_all,
+      fields(request = ?grpc_request.get_ref())
+    )]
+    async fn publish_build_tool_event_stream(
+        &self,
+        grpc_request: Request<Streaming<PublishBuildToolEventStreamRequest>>,
+    ) -> Result<Response<Self::PublishBuildToolEventStreamStream>, Status> {
+        self.inner_publish_build_tool_event_stream(grpc_request.into_inner(), get_identity())
+            .await
+            .map_err(Error::into)
+    }
+}

@@ -14,7 +14,7 @@ for the upgrade itself.
   A running deployment with a pinned version.
 </Prerequisites>
 
-NativeLink releases every week or two. Most releases change nothing you depend on,
+Forge releases every week or two. Most releases change nothing you depend on,
 which makes it tempting to upgrade casually and equally tempting to never
 upgrade at all. Both go wrong in the same way: the thing that breaks an upgrade
 is almost never the code, it is the config.
@@ -27,14 +27,14 @@ behaviour you want, because the alternative is a silently ignored setting and a
 deployment that is quietly not doing what the file says. But it means an
 upgrade is a config compatibility exercise first and a binary swap second.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CasConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CasConfig" />
 
 <SourceLink file="CHANGELOG.md" />
 
 ## What is stable and what isn't [#what-is-stable-and-what-isnt]
 
 The **client-facing API** is the Remote Execution API. It is a published,
-versioned protocol, and Bazel talking to NativeLink over `:50051` and `:50052`
+versioned protocol, and Bazel talking to Forge over `:50051` and `:50052`
 is the most stable surface here. You do not generally need to upgrade clients in
 step with the server.
 
@@ -52,7 +52,7 @@ store uses to organize those bytes. Layout changes are rare (the filesystem
 store still migrates its old single-folder layout in place at startup), and they
 are one of the things to look for when you read the changelog.
 
-<SourceLink file="nativelink-store/src/filesystem_store.rs" symbol="read_files" />
+<SourceLink file="forge-store/src/filesystem_store.rs" symbol="read_files" />
 
 ## Read the changelog for four things [#read-the-changelog-for-four-things]
 
@@ -79,7 +79,7 @@ Skip several versions and you must read every intervening release's entries, not
 just the newest, because the breaking change may be three releases back.
 
 <Callout type="info" title="The config reference is versioned">
-  [The configuration reference](/reference/nativelink-config) is published per
+  [The configuration reference](/reference/forge-config) is published per
   release. Open the page for the version you are moving to and diff it against
   the one you are on. It is the fastest way to see field-level changes without
   reading commits.
@@ -95,7 +95,7 @@ new binary accept this file":
 ```sh
 docker run --rm \
   -v $(pwd)/cas.json5:/config.json5 \
-  ghcr.io/tracemachina/nativelink:v1.6.5 /config.json5
+  ghcr.io/tracemachina/forge:v1.6.5 /config.json5
 ```
 
 A config error fails within a second, before any port is bound, with a message
@@ -233,7 +233,7 @@ a build at each, rather than making one jump you cannot bisect.
 
 <Accordion title="Do clients need to upgrade too?" id="do-clients-need-to-upgrade-too">
 
-Usually no. Bazel and NativeLink talk the Remote Execution API, which is stable
+Usually no. Bazel and Forge talk the Remote Execution API, which is stable
 across these releases. Client upgrades matter when you want a client-side
 feature, not because the server moved.
 
@@ -241,7 +241,7 @@ feature, not because the server moved.
 
 </Accordions>
 
-<NextStep href="/reference/nativelink-config" title="Configuration reference">
+<NextStep href="/reference/forge-config" title="Configuration reference">
   The per-version field reference, which is what you diff when a release note is
   ambiguous.
 </NextStep>

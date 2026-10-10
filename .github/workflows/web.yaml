@@ -1,12 +1,12 @@
 ---
-name: Build NativeLink Web
+name: Build Forge Web
 on:
   push:
     branches: [main]
     paths:
       - 'web/**'
       - '**/*.md'
-      - 'nativelink-config/**'
+      - 'forge-config/**'
       - 'tools/**'
       - '**/*.lock'
       - '**/*.nix'
@@ -15,7 +15,7 @@ on:
     paths:
       - 'web/**'
       - '**/*.md'
-      - 'nativelink-config/**'
+      - 'forge-config/**'
       - 'tools/**'
       - '**/*.lock'
       - '**/*.nix'
@@ -44,7 +44,7 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Test Build
         if: github.event_name == 'pull_request'
@@ -58,4 +58,4 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}

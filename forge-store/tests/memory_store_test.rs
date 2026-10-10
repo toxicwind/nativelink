@@ -1,0 +1,497 @@
+// Copyright 2024 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::future::Future;
+use core::ops::RangeBounds;
+use core::pin::Pin;
+use core::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+
+use bytes::{BufMut, Bytes, BytesMut};
+use memory_stats::memory_stats;
+use forge_config::stores::MemorySpec;
+use forge_error::{Error, ResultExt};
+use forge_macro::forge_test;
+use forge_store::memory_store::MemoryStore;
+use forge_util::buf_channel::make_buf_channel_pair;
+use forge_util::common::DigestInfo;
+use forge_util::spawn;
+use forge_util::store_trait::{
+    RemoveItemCallback, Store, StoreKey, StoreLike, UploadSizeInfo,
+};
+use pretty_assertions::assert_eq;
+use sha2::{Digest, Sha256};
+
+const VALID_HASH1: &str = "0123456789abcdef000000000000000000010000000000000123456789abcdef";
+const VALID_HASH2: &str = "0123456789abcdef000000000000000000020000000000000123456789abcdef";
+const VALID_HASH3: &str = "0123456789abcdef000000000000000000030000000000000123456789abcdef";
+const VALID_HASH4: &str = "0123456789abcdef000000000000000000040000000000000123456789abcdef";
+const TOO_LONG_HASH: &str = "0123456789abcdef000000000000000000010000000000000123456789abcdefff";
+const TOO_SHORT_HASH: &str = "100000000000000000000000000000000000000000000000000000000000001";
+const INVALID_HASH: &str = "g111111111111111111111111111111111111111111111111111111111111111";
+
+#[forge_test]
+async fn insert_one_item_then_update() -> Result<(), Error> {
+    const VALUE1: &str = "13";
+    const VALUE2: &str = "23";
+    let store = MemoryStore::new(&MemorySpec::default());
+
+    // Insert dummy value into store.
+    store
+        .update_oneshot(
+            DigestInfo::try_new(VALID_HASH1, VALUE1.len() as u64)?,
+            VALUE1.into(),
+        )
+        .await?;
+    assert_eq!(
+        store
+            .has(DigestInfo::try_new(VALID_HASH1, VALUE1.len() as u64)?)
+            .await,
+        Ok(Some(VALUE1.len() as u64)),
+        "Expected memory store to have hash: {}",
+        VALID_HASH1
+    );
+
+    let store_data = {
+        // Now change value we just inserted.
+        store
+            .update_oneshot(
+                DigestInfo::try_new(VALID_HASH1, VALUE2.len())?,
+                VALUE2.into(),
+            )
+            .await?;
+        store
+            .get_part_unchunked(DigestInfo::try_new(VALID_HASH1, VALUE2.len())?, 0, None)
+            .await?
+    };
+
+    assert_eq!(
+        store_data,
+        VALUE2.as_bytes(),
+        "Hash for key: {} did not update. Expected: {:#x?}, but got: {:#x?}",
+        VALID_HASH1,
+        VALUE2,
+        store_data
+    );
+    Ok(())
+}
+
+// Streams `data` into the store via the streaming `update` path. Tests must use
+// this (not `update_oneshot`, which takes the bytes already in memory and hits
+// MemoryStore's optimized direct-insert path, bypassing the oversized-skip logic
+// these tests exercise).
+async fn update_streamed(
+    store: &Store,
+    digest: DigestInfo,
+    data: &'static [u8],
+    size_info: UploadSizeInfo,
+) -> Result<(), Error> {
+    let (mut tx, rx) = make_buf_channel_pair();
+    let send_fut = async move {
+        tx.send(Bytes::from_static(data)).await?;
+        tx.send_eof()
+    };
+    let pinned_store = Pin::new(store);
+    let (res1, res2) = futures::join!(send_fut, pinned_store.update(digest, rx, size_info));
+    // `merge` returns its argument's Ok value (the byte count); discard it.
+    res1.merge(res2).map(|_| ())
+}
+
+fn store_with_max_bytes(max_bytes: usize) -> Store {
+    Store::new(MemoryStore::new(&MemorySpec {
+        eviction_policy: Some(forge_config::stores::EvictionPolicy {
+            max_bytes,
+            ..Default::default()
+        }),
+    }))
+}
+
+// A write whose exact size is >= `max_bytes` is skipped (drained, never buffered)
+// rather than materialized-then-evicted, and — crucially — it leaves the rest of
+// the cache untouched (the old buffer-then-evict path would have evicted the
+// within-budget entry trying to make room for an unstorable blob).
+#[forge_test]
+async fn skips_writes_larger_than_max_bytes() -> Result<(), Error> {
+    const SMALL: &[u8] = b"ab"; // 2 bytes, within the 4-byte budget
+    const BIG: &[u8] = b"0123456789"; // 10 bytes, over budget
+
+    let store = store_with_max_bytes(4);
+    let small_digest = DigestInfo::try_new(VALID_HASH1, SMALL.len() as u64)?;
+    let big_digest = DigestInfo::try_new(VALID_HASH2, BIG.len() as u64)?;
+
+    // Within budget → stored.
+    update_streamed(
+        &store,
+        small_digest,
+        SMALL,
+        UploadSizeInfo::ExactSize(SMALL.len() as u64),
+    )
+    .await?;
+    assert_eq!(store.has(small_digest).await, Ok(Some(SMALL.len() as u64)));
+
+    // Over budget → skipped, not stored.
+    update_streamed(
+        &store,
+        big_digest,
+        BIG,
+        UploadSizeInfo::ExactSize(BIG.len() as u64),
+    )
+    .await?;
+    assert_eq!(
+        store.has(big_digest).await,
+        Ok(None),
+        "oversized write should be skipped, not stored",
+    );
+
+    // The skip must leave the within-budget entry intact.
+    assert_eq!(
+        store.has(small_digest).await,
+        Ok(Some(SMALL.len() as u64)),
+        "within-budget entry must survive an oversized write",
+    );
+
+    Ok(())
+}
+
+#[derive(Debug)]
+struct CountingRemoveCallback(Arc<AtomicUsize>);
+
+impl RemoveItemCallback for CountingRemoveCallback {
+    fn callback<'a>(
+        &'a self,
+        _store_key: StoreKey<'a>,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+        let count = self.0.clone();
+        Box::pin(async move {
+            count.fetch_add(1, Ordering::SeqCst);
+        })
+    }
+}
+
+// Skipping an oversized write must still fire the remove callbacks, so a wrapping
+// store that tracks existence (e.g. `ExistenceCacheStore`) doesn't keep a stale
+// entry for a blob that was never stored.
+#[forge_test]
+async fn oversized_skip_fires_remove_callbacks() -> Result<(), Error> {
+    const BIG: &[u8] = b"0123456789"; // 10 bytes, over the 4-byte budget
+
+    let store = store_with_max_bytes(4);
+    let count = Arc::new(AtomicUsize::new(0));
+    store.register_remove_callback(Arc::new(CountingRemoveCallback(count.clone())))?;
+
+    update_streamed(
+        &store,
+        DigestInfo::try_new(VALID_HASH1, BIG.len() as u64)?,
+        BIG,
+        UploadSizeInfo::ExactSize(BIG.len() as u64),
+    )
+    .await?;
+
+    assert_eq!(
+        count.load(Ordering::SeqCst),
+        1,
+        "skipping an oversized write must fire the remove callback",
+    );
+    Ok(())
+}
+
+// `MaxSize` is an upper bound, not the real size, so it must NOT trigger the skip:
+// a `MaxSize` over `max_bytes` whose actual content fits is still cached.
+#[forge_test]
+async fn max_size_over_budget_with_small_actual_is_stored() -> Result<(), Error> {
+    const DATA: &[u8] = b"ab"; // 2 bytes, well within the 4-byte budget
+
+    let store = store_with_max_bytes(4);
+    let digest = DigestInfo::try_new(VALID_HASH1, DATA.len() as u64)?;
+    update_streamed(&store, digest, DATA, UploadSizeInfo::MaxSize(100)).await?;
+
+    assert_eq!(
+        store.has(digest).await,
+        Ok(Some(DATA.len() as u64)),
+        "MaxSize over budget but small actual content must still be cached",
+    );
+    Ok(())
+}
+
+// Regression test for: https://github.com/toxicwind/forge/issues/289.
+#[forge_test]
+async fn ensure_full_copy_of_bytes_is_made_test() -> Result<(), Error> {
+    // Arbitrary value, this may be increased if we find out that this is
+    // too low for some kernels/operating systems.
+    const MAXIMUM_MEMORY_USAGE_INCREASE_PERC: f64 = 1.3; // 30% increase.
+    const MAX_STATS_ITERATIONS: usize = 100;
+
+    let mut sum_memory_usage_increase_perc: f64 = 0.0;
+    for _ in 0..MAX_STATS_ITERATIONS {
+        let store_owned = MemoryStore::new(&MemorySpec::default());
+        let store = Pin::new(&store_owned);
+
+        let initial_virtual_mem = memory_stats()
+            .err_tip(|| "Failed to read memory.")?
+            .physical_mem;
+        for (i, hash) in [VALID_HASH1, VALID_HASH2, VALID_HASH3, VALID_HASH4]
+            .into_iter()
+            .enumerate()
+        {
+            // User a variety of sizes increasing up to 10MB each iteration.
+            // We do this to reduce the chance of memory page size masking the potential bug.
+            let reserved_size = 10_usize.pow(u32::try_from(i).expect("Cast failed") + 4);
+            let mut mut_data = BytesMut::with_capacity(reserved_size);
+            mut_data.put_bytes(u8::try_from(i).expect("Cast failed"), 1);
+            let data = mut_data.freeze();
+
+            let digest = DigestInfo::try_new(hash, data.len())?;
+            store
+                .update_oneshot(digest, data)
+                .await
+                .err_tip(|| "Could not update store")?;
+        }
+
+        let new_virtual_mem = memory_stats()
+            .err_tip(|| "Failed to read memory.")?
+            .physical_mem;
+        sum_memory_usage_increase_perc += new_virtual_mem as f64 / initial_virtual_mem as f64;
+    }
+    assert!(
+        (sum_memory_usage_increase_perc / MAX_STATS_ITERATIONS as f64)
+            < MAXIMUM_MEMORY_USAGE_INCREASE_PERC,
+        "Memory usage increased by {sum_memory_usage_increase_perc} perc, which is more than {MAXIMUM_MEMORY_USAGE_INCREASE_PERC} perc",
+    );
+    Ok(())
+}
+
+#[forge_test]
+async fn read_partial() -> Result<(), Error> {
+    const VALUE1: &str = "1234";
+    let store_owned = MemoryStore::new(&MemorySpec::default());
+    let store = Pin::new(&store_owned);
+
+    let digest = DigestInfo::try_new(VALID_HASH1, 4).unwrap();
+    store.update_oneshot(digest, VALUE1.into()).await?;
+
+    let store_data = store.get_part_unchunked(digest, 1, Some(2)).await?;
+
+    assert_eq!(
+        &VALUE1.as_bytes()[1..3],
+        store_data,
+        "Expected partial data to match, expected '{:#x?}' got: {:#x?}'",
+        &VALUE1.as_bytes()[1..3],
+        store_data,
+    );
+    Ok(())
+}
+
+// A bug was found where reading an empty value from memory store would result in an error
+// due to internal EOF handling. This is an edge case test.
+#[forge_test]
+async fn read_zero_size_item_test() -> Result<(), Error> {
+    const VALUE: &str = "";
+    let store_owned = MemoryStore::new(&MemorySpec::default());
+    let store = Pin::new(&store_owned);
+
+    // Insert dummy value into store.
+    store
+        .update_oneshot(DigestInfo::try_new(VALID_HASH1, VALUE.len())?, VALUE.into())
+        .await?;
+    assert_eq!(
+        store
+            .get_part_unchunked(DigestInfo::try_new(VALID_HASH1, VALUE.len())?, 0, None,)
+            .await,
+        Ok("".into()),
+        "Expected memory store to have empty value"
+    );
+    Ok(())
+}
+
+#[forge_test]
+async fn errors_with_invalid_inputs() -> Result<(), Error> {
+    const VALUE1: &str = "123";
+    let store_owned = MemoryStore::new(&MemorySpec::default());
+    let store = Pin::new(store_owned.as_ref());
+    {
+        // .has() tests.
+        async fn has_should_fail(store: Pin<&MemoryStore>, hash: &str, expected_size: usize) {
+            let digest = DigestInfo::try_new(hash, expected_size);
+            assert!(
+                digest.is_err() || store.has(digest.unwrap()).await.is_err(),
+                ".has() should have failed: {hash} {expected_size}",
+            );
+        }
+        has_should_fail(store, TOO_LONG_HASH, VALUE1.len()).await;
+        has_should_fail(store, TOO_SHORT_HASH, VALUE1.len()).await;
+        has_should_fail(store, INVALID_HASH, VALUE1.len()).await;
+    }
+    {
+        // .update() tests.
+        async fn update_should_fail<'a>(
+            store: Pin<&'a MemoryStore>,
+            hash: &'a str,
+            expected_size: usize,
+            value: &'static str,
+        ) {
+            let digest = DigestInfo::try_new(hash, expected_size);
+            assert!(
+                digest.is_err()
+                    || store
+                        .update_oneshot(digest.unwrap(), value.into(),)
+                        .await
+                        .is_err(),
+                ".has() should have failed: {hash} {expected_size} {value}",
+            );
+        }
+        update_should_fail(store, TOO_LONG_HASH, VALUE1.len(), VALUE1).await;
+        update_should_fail(store, TOO_SHORT_HASH, VALUE1.len(), VALUE1).await;
+        update_should_fail(store, INVALID_HASH, VALUE1.len(), VALUE1).await;
+    }
+    {
+        // .update() tests.
+        async fn get_should_fail<'a>(
+            store: Pin<&'a MemoryStore>,
+            hash: &'a str,
+            expected_size: usize,
+        ) {
+            let digest = DigestInfo::try_new(hash, expected_size);
+            assert!(
+                digest.is_err()
+                    || store
+                        .get_part_unchunked(digest.unwrap(), 0, None)
+                        .await
+                        .is_err(),
+                ".get() should have failed: {hash} {expected_size}",
+            );
+        }
+
+        get_should_fail(store, TOO_LONG_HASH, 1).await;
+        get_should_fail(store, TOO_SHORT_HASH, 1).await;
+        get_should_fail(store, INVALID_HASH, 1).await;
+        // With an empty store .get() should fail too.
+        get_should_fail(store, VALID_HASH1, 1).await;
+    }
+    Ok(())
+}
+
+#[forge_test]
+async fn get_part_is_zero_digest() -> Result<(), Error> {
+    let digest = DigestInfo::new(Sha256::new().finalize().into(), 0);
+
+    let store = MemoryStore::new(&MemorySpec::default());
+    let store_clone = store.clone();
+    let (mut writer, mut reader) = make_buf_channel_pair();
+
+    let _drop_guard = spawn!("get_part_is_zero_digest", async move {
+        drop(
+            Pin::new(store_clone.as_ref())
+                .get_part(digest, &mut writer, 0, None)
+                .await
+                .err_tip(|| "Failed to get_part"),
+        );
+    });
+
+    let file_data = reader
+        .consume(Some(1024))
+        .await
+        .err_tip(|| "Error reading bytes")?;
+
+    let empty_bytes = Bytes::new();
+    assert_eq!(&file_data, &empty_bytes, "Expected file content to match");
+
+    Ok(())
+}
+
+#[forge_test]
+async fn has_with_results_on_zero_digests() -> Result<(), Error> {
+    let digest = DigestInfo::new(Sha256::new().finalize().into(), 0);
+    let keys = vec![digest.into()];
+    let mut results = vec![None];
+
+    let store_owned = MemoryStore::new(&MemorySpec::default());
+    let store = Pin::new(&store_owned);
+
+    drop(
+        store
+            .as_ref()
+            .has_with_results(&keys, &mut results)
+            .await
+            .err_tip(|| "Failed to get_part"),
+    );
+    assert_eq!(results, vec![Some(0)]);
+
+    Ok(())
+}
+
+#[forge_test]
+async fn list_test() -> Result<(), Error> {
+    async fn get_list(
+        store: &MemoryStore,
+        range: impl RangeBounds<StoreKey<'static>> + Send + Sync + 'static,
+    ) -> Vec<StoreKey<'static>> {
+        let mut found_keys = vec![];
+        store
+            .list(range, |key| {
+                found_keys.push(key.borrow().into_owned());
+                true
+            })
+            .await
+            .unwrap();
+        found_keys
+    }
+
+    const KEY1: StoreKey = StoreKey::new_str("key1");
+    const KEY2: StoreKey = StoreKey::new_str("key2");
+    const KEY3: StoreKey = StoreKey::new_str("key3");
+    const VALUE: &str = "value1";
+
+    let store = MemoryStore::new(&MemorySpec::default());
+    store.update_oneshot(KEY1, VALUE.into()).await?;
+    store.update_oneshot(KEY2, VALUE.into()).await?;
+    store.update_oneshot(KEY3, VALUE.into()).await?;
+
+    {
+        // Test listing all keys.
+        let keys = get_list(&store, ..).await;
+        assert_eq!(keys, vec![KEY1, KEY2, KEY3]);
+    }
+    {
+        // Test listing from key1 to all.
+        let keys = get_list(&store, KEY1..).await;
+        assert_eq!(keys, vec![KEY1, KEY2, KEY3]);
+    }
+    {
+        // Test listing from key1 to key2.
+        let keys = get_list(&store, KEY1..KEY2).await;
+        assert_eq!(keys, vec![KEY1]);
+    }
+    {
+        // Test listing from key1 including key2.
+        let keys = get_list(&store, KEY1..=KEY2).await;
+        assert_eq!(keys, vec![KEY1, KEY2]);
+    }
+    {
+        // Test listing from key1 to key3.
+        let keys = get_list(&store, KEY1..KEY3).await;
+        assert_eq!(keys, vec![KEY1, KEY2]);
+    }
+    {
+        // Test listing from all to key2.
+        let keys = get_list(&store, ..KEY2).await;
+        assert_eq!(keys, vec![KEY1]);
+    }
+    {
+        // Test listing from key2 to key3.
+        let keys = get_list(&store, KEY2..KEY3).await;
+        assert_eq!(keys, vec![KEY2]);
+    }
+
+    Ok(())
+}

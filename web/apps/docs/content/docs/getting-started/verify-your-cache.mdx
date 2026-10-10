@@ -5,14 +5,14 @@ description: Prove the cache is actually serving hits rather than quietly fallin
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone who has pointed a build at NativeLink and wants
+**Who this is for:** anyone who has pointed a build at Forge and wants
 evidence it is working, rather than the absence of an error. **What you'll
 have at the end:** a measurement you can repeat, a number you can put in a
 message to your team, and the ability to tell a cold cache from a broken one.
 **Time:** about ten minutes.
 
 <Prerequisites>
-  A running NativeLink and a build pointed at it. See the [Quickstart](/getting-started/quickstart) and [Connect your build](/getting-started/connect-your-build).
+  A running Forge and a build pointed at it. See the [Quickstart](/getting-started/quickstart) and [Connect your build](/getting-started/connect-your-build).
 </Prerequisites>
 
 A misconfigured remote cache almost never fails loudly. Bazel's default is to
@@ -25,7 +25,7 @@ using the cache.
 accounting of where each action's result came from.
 
 <Callout type="warn" title="There is no /metrics endpoint to curl">
-  NativeLink exports telemetry over OTLP and nothing else: there is no HTTP
+  Forge exports telemetry over OTLP and nothing else: there is no HTTP
   metrics route in the binary, and the `/status` path a `health` service
   mounts only reports whether the process is up and its stores pass a
   self-check. It will happily return OK for a server no client is
@@ -95,7 +95,7 @@ INFO: 1,284 processes: 1,203 remote cache hit, 81 internal.
 ```
 
 That number, `remote cache hit`, is the whole measurement. It is the count
-of actions Bazel did not run because NativeLink handed back a result.
+of actions Bazel did not run because Forge handed back a result.
 
 </li>
 
@@ -108,10 +108,10 @@ of actions Bazel did not run because NativeLink handed back a result.
 - The second build is substantially faster in wall time than the first.
 - The store's `content_path` on the server has grown; for the shipped
   `basic_cas.json5` that is
-  `/tmp/nativelink/data-worker-test/content_path-cas` (inside the container
+  `/tmp/forge/data-worker-test/content_path-cas` (inside the container
   on the Docker path), and the action cache is beside it under
   `content_path-ac`.
-- Stopping NativeLink and re-running the build makes the hits disappear. This
+- Stopping Forge and re-running the build makes the hits disappear. This
   one matters more than it looks: it is the only check that proves the hits
   were coming from *this* server rather than from a `--disk_cache` on the
   client.
@@ -173,20 +173,20 @@ tool's own accounting. Only the vocabulary changes. Buck2 shows where each
 action ran in `buck2 log what-ran`; Pants counts remote cache requests in
 its end-of-run stats when `[stats].log` is on; recc logs an
 `Action Cache hit` line per compile with `RECC_LOG_LEVEL=info`. Look for
-whatever your tool calls a cache hit rather than for a NativeLink-side signal;
+whatever your tool calls a cache hit rather than for a Forge-side signal;
 the server cannot tell you whether the client asked it the right question.
 
 <Accordions type="multiple">
 
 <Accordion title="Zero cache hits, and no errors anywhere" id="zero-cache-hits-and-no-errors">
-The overwhelmingly common cause is `--remote_instance_name`. NativeLink
+The overwhelmingly common cause is `--remote_instance_name`. Forge
 registers services under the instance names its config lists, and the shipped
 `basic_cas.json5` registers each service twice, once under `""` and once
 under `"main"`, precisely so both work. A config that registers only `main`
 answers a client that sends the empty instance name with an error,
 `'instance_name' not configured for ''`; Bazel treats a cache error as a
 warning, prints it once, and builds locally, which reads as zero hits.
-<SourceLink file="nativelink-service/src/ac_server.rs" symbol="get_action_result" />
+<SourceLink file="forge-service/src/ac_server.rs" symbol="get_action_result" />
 
 Second most common: the two runs did not use the same digest function. Bazel
 sends SHA-256 by default; if you set `--digest_function=blake3` on one run and
@@ -211,7 +211,7 @@ sure everyone builds with the same toolchain rather than the one on their
 `bazel clean` removes the output tree but not the repository cache or a
 `--disk_cache` if you have one configured, and disk cache hits are counted
 separately from remote ones. A run that is fast with zero remote hits is
-being served locally. Stop NativeLink and run the build again: if it is
+being served locally. Stop Forge and run the build again: if it is
 still fast, you have been measuring Bazel's local caches the whole time.
 </Accordion>
 

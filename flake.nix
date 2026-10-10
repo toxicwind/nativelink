@@ -1,5 +1,5 @@
 {
-  description = "nativelink";
+  description = "forge";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -68,11 +68,11 @@
               # Getting started
 
               Enter the Nix environment with `nix develop`.
-              Get your credentials for NativeLink and paste them into `user.bazelrc`.
+              Get your credentials for Forge and paste them into `user.bazelrc`.
               Run `bazel build hello-world` to build the example with local
               remote execution.
 
-              See <https://www.nativelink.com/docs/explanations/lre> for further
+              See <https://www.forge.com/docs/explanations/lre> for further
               details on local remote execution.
             '';
           };
@@ -102,7 +102,7 @@
         src = pkgs.lib.cleanSourceWith {
           src = (craneLibFor pkgs).path ./.;
           filter = path: type:
-            (builtins.match "^.*(tests/.+\.json5|examples/.+\.json5|data/.+|nativelink-config/README\.md|nativelink-store/aws_lc_musl_shims\.c)" path != null)
+            (builtins.match "^.*(tests/.+\.json5|examples/.+\.json5|data/.+|forge-config/README\.md|forge-store/aws_lc_musl_shims\.c)" path != null)
             || ((craneLibFor pkgs).filterCargoSources path type);
         };
 
@@ -185,7 +185,7 @@
         # the install name at `/usr/lib` is ABI-safe and leaves the binary with
         # no Nix store references at all.
         #
-        # See https://github.com/TraceMachina/nativelink/issues/2727.
+        # See https://github.com/toxicwind/forge/issues/2727.
         darwinSystemDylibArgs = p: {
           # `install_name_tool` invalidates the ad-hoc signature that arm64
           # macOS requires. This hook re-signs during fixup, i.e. after the
@@ -229,11 +229,11 @@
           '';
         };
 
-        nativelinkFor = p:
+        forgeFor = p:
           (craneLibFor p).buildPackage ((commonArgsFor p)
             // {
               cargoArtifacts = cargoArtifactsFor p;
-              # If you're testing Nativelink locally, doing a dev profile will
+              # If you're testing Forge locally, doing a dev profile will
               # massively speedup build times. Just don't commit/push anything build with dev!
               # CARGO_PROFILE = "dev";
             }
@@ -246,14 +246,14 @@
           then pkgs.pkgsCross.aarch64-multiplatform-musl
           else pkgs;
 
-        nativelink = nativelinkFor nativeTargetPkgs;
+        forge = forgeFor nativeTargetPkgs;
 
         # These two can be built by all build platforms. This is not true for
         # darwin targets which are only buildable via native compilation.
-        nativelink-aarch64-linux = nativelinkFor pkgs.pkgsCross.aarch64-multiplatform-musl;
-        nativelink-x86_64-linux = nativelinkFor pkgs.pkgsCross.musl64;
+        forge-aarch64-linux = forgeFor pkgs.pkgsCross.aarch64-multiplatform-musl;
+        forge-x86_64-linux = forgeFor pkgs.pkgsCross.musl64;
 
-        nativelink-is-executable-test = pkgs.callPackage ./tools/nativelink-is-executable-test.nix {inherit nativelink;};
+        forge-is-executable-test = pkgs.callPackage ./tools/forge-is-executable-test.nix {inherit forge;};
 
         generate-toolchains = pkgs.callPackage ./tools/generate-toolchains.nix {};
 
@@ -273,54 +273,54 @@
         inherit (nix2container.packages.${system}.nix2container) pullImage;
         inherit (nix2container.packages.${system}.nix2container) buildImage;
 
-        nativelinkImageFor = archPackages: arch:
+        forgeImageFor = archPackages: arch:
           buildImage {
             inherit arch;
-            name = "nativelink";
+            name = "forge";
             copyToRoot = [
               (pkgs.buildEnv {
-                name = "nativelink-buildEnv";
+                name = "forge-buildEnv";
                 paths = [archPackages];
                 pathsToLink = ["/bin"];
               })
             ];
             config = {
-              Entrypoint = [(pkgs.lib.getExe' archPackages "nativelink")];
+              Entrypoint = [(pkgs.lib.getExe' archPackages "forge")];
               Labels = {
                 "org.opencontainers.image.description" = "An RBE compatible, high-performance cache and remote executor.";
-                "org.opencontainers.image.documentation" = "https://github.com/TraceMachina/nativelink";
+                "org.opencontainers.image.documentation" = "https://github.com/toxicwind/forge";
                 "org.opencontainers.image.licenses" = "FSL-1.1-Apache-2.0";
                 "org.opencontainers.image.revision" = "${self.rev or self.dirtyRev or "dirty"}";
-                "org.opencontainers.image.source" = "https://github.com/TraceMachina/nativelink";
-                "org.opencontainers.image.title" = "NativeLink";
+                "org.opencontainers.image.source" = "https://github.com/toxicwind/forge";
+                "org.opencontainers.image.title" = "Forge";
                 "org.opencontainers.image.vendor" = "Trace Machina, Inc.";
               };
             };
           };
 
-        nativelink-image-for-x64 = nativelinkImageFor nativelink-x86_64-linux "amd64";
-        nativelink-image-for-aarch64 = nativelinkImageFor nativelink-aarch64-linux "arm64";
+        forge-image-for-x64 = forgeImageFor forge-x86_64-linux "amd64";
+        forge-image-for-aarch64 = forgeImageFor forge-aarch64-linux "arm64";
 
-        nativelink-image =
+        forge-image =
           if pkgs.stdenv.isx86_64
-          then nativelink-image-for-x64
-          else nativelink-image-for-aarch64;
+          then forge-image-for-x64
+          else forge-image-for-aarch64;
 
-        nativelinkWorkerInitFor = archImage: archPackages: arch:
-          pkgs.callPackage ./tools/nativelink-worker-init.nix {
+        forgeWorkerInitFor = archImage: archPackages: arch:
+          pkgs.callPackage ./tools/forge-worker-init.nix {
             inherit buildImage self arch archPackages;
-            nativelink-image = archImage;
+            forge-image = archImage;
           };
 
-        nativelink-init-for-x64 = nativelinkWorkerInitFor nativelink-image-for-x64 pkgs.pkgsCross.musl64 "amd64";
-        nativelink-init-for-aarch64 = nativelinkWorkerInitFor nativelink-image-for-aarch64 pkgs.pkgsCross.aarch64-multiplatform-musl "arm64";
+        forge-init-for-x64 = forgeWorkerInitFor forge-image-for-x64 pkgs.pkgsCross.musl64 "amd64";
+        forge-init-for-aarch64 = forgeWorkerInitFor forge-image-for-aarch64 pkgs.pkgsCross.aarch64-multiplatform-musl "arm64";
 
-        nativelink-worker-init =
+        forge-worker-init =
           if pkgs.stdenv.isx86_64
-          then nativelink-init-for-x64
-          else nativelink-init-for-aarch64;
+          then forge-init-for-x64
+          else forge-init-for-aarch64;
 
-        createWorker = pkgs.nativelink-tools.lib.createWorker self;
+        createWorker = pkgs.forge-tools.lib.createWorker self;
 
         buck2-toolchain = let
           buck2-nightly-rust-version = "2026-08-26";
@@ -384,7 +384,7 @@
           };
         };
 
-        nativelinkCoverageFor = p: let
+        forgeCoverageFor = p: let
           coverageArgs =
             (commonArgsFor p)
             // {
@@ -434,14 +434,14 @@
                 # fairly version agnostic so far and 7.0.11 is picked out of the air as the one we've used elsewhere.
 
                 mkdir -p $HOME/.cache/mongo/extracted/7.0.11/mongodb-linux-x86_64-ubuntu2204-7.0.11/bin
-                touch $HOME/.cache/mongo/extracted/7.0.11/extracted.marker # As needed by nativelink-store/tests/mongo_runner/mod.rs
+                touch $HOME/.cache/mongo/extracted/7.0.11/extracted.marker # As needed by forge-store/tests/mongo_runner/mod.rs
                 export MONGOD=$HOME/.cache/mongo/extracted/7.0.11/mongodb-linux-x86_64-ubuntu2204-7.0.11/bin/mongod
                 ln -s ${p.mongodb}/bin/mongod ''${MONGOD}
                 ''${MONGOD} --version
               '';
             });
 
-        nativelinkCoverageForHost = nativelinkCoverageFor pkgs;
+        forgeCoverageForHost = forgeCoverageFor pkgs;
       in rec {
         _module.args.pkgs = import self.inputs.nixpkgs {
           inherit system;
@@ -459,53 +459,53 @@
         apps = {
           default = {
             type = "app";
-            program = "${nativelink}/bin/nativelink";
+            program = "${forge}/bin/forge";
           };
         };
         packages =
           rec {
             inherit
-              nativelink
-              nativelinkCoverageForHost
-              nativelink-aarch64-linux
-              nativelink-image
-              nativelink-image-for-aarch64
-              nativelink-image-for-x64
-              nativelink-is-executable-test
-              nativelink-worker-init
-              nativelink-init-for-x64
-              nativelink-init-for-aarch64
-              nativelink-x86_64-linux
+              forge
+              forgeCoverageForHost
+              forge-aarch64-linux
+              forge-image
+              forge-image-for-aarch64
+              forge-image-for-x64
+              forge-is-executable-test
+              forge-worker-init
+              forge-init-for-x64
+              forge-init-for-aarch64
+              forge-x86_64-linux
               ;
 
             # Used by the CI
-            inherit (pkgs.nativelink-tools) local-image-test publish-ghcr create-multi-arch-image regctl-ghcr-login;
+            inherit (pkgs.forge-tools) local-image-test publish-ghcr create-multi-arch-image regctl-ghcr-login;
 
-            default = nativelink;
+            default = forge;
 
-            nativelink-worker-lre-cc = createWorker pkgs.lre.lre-cc.image;
+            forge-worker-lre-cc = createWorker pkgs.lre.lre-cc.image;
             lre-java = pkgs.callPackage ./local-remote-execution/lre-java.nix {inherit buildImage;};
             rbe-autogen-lre-java = pkgs.rbe-autogen lre-java;
-            nativelink-worker-lre-java = createWorker lre-java;
-            nativelink-worker-lre-rs = createWorker pkgs.lre.lre-rs.image;
-            nativelink-worker-siso-chromium = createWorker siso-chromium;
-            nativelink-worker-toolchain-drake = createWorker toolchain-drake;
-            nativelink-worker-toolchain-buck2 = createWorker toolchain-buck2;
-            nativelink-worker-buck2-toolchain = buck2-toolchain;
-            image = nativelink-image;
+            forge-worker-lre-java = createWorker lre-java;
+            forge-worker-lre-rs = createWorker pkgs.lre.lre-rs.image;
+            forge-worker-siso-chromium = createWorker siso-chromium;
+            forge-worker-toolchain-drake = createWorker toolchain-drake;
+            forge-worker-toolchain-buck2 = createWorker toolchain-buck2;
+            forge-worker-buck2-toolchain = buck2-toolchain;
+            image = forge-image;
 
             inherit (pkgs) buildstream buck2 mongodb wait4x bazelisk;
-            buildstream-with-nativelink-test = pkgs.callPackage integration_tests/buildstream/buildstream-with-nativelink-test.nix {
-              inherit nativelink buildstream;
+            buildstream-with-forge-test = pkgs.callPackage integration_tests/buildstream/buildstream-with-forge-test.nix {
+              inherit forge buildstream;
             };
-            mongo-with-nativelink-test = pkgs.callPackage integration_tests/mongo/mongo-with-nativelink-test.nix {
-              inherit nativelink mongodb wait4x bazelisk;
+            mongo-with-forge-test = pkgs.callPackage integration_tests/mongo/mongo-with-forge-test.nix {
+              inherit forge mongodb wait4x bazelisk;
             };
-            rbe-toolchain-with-nativelink-test = pkgs.callPackage toolchain-examples/rbe-toolchain-test.nix {
-              inherit nativelink bazel-retry bazel;
+            rbe-toolchain-with-forge-test = pkgs.callPackage toolchain-examples/rbe-toolchain-test.nix {
+              inherit forge bazel-retry bazel;
             };
-            buck2-with-nativelink-test = pkgs.callPackage integration_tests/buck2/buck2-with-nativelink-test.nix {
-              inherit nativelink buck2;
+            buck2-with-forge-test = pkgs.callPackage integration_tests/buck2/buck2-with-forge-test.nix {
+              inherit forge buck2;
             };
             update-module-hashes = pkgs.callPackage tools/updaters/rewrite-module.nix {
               python-with-requests = pkgs.python3.withPackages (ps:
@@ -514,7 +514,7 @@
                 ]);
             };
             generate-bazel-rc = pkgs.callPackage tools/generate-bazel-rc/build.nix {craneLib = craneLibFor pkgs;};
-            generate-stores-config = pkgs.callPackage nativelink-config/generate-stores-config/build.nix {craneLib = craneLibFor pkgs;};
+            generate-stores-config = pkgs.callPackage forge-config/generate-stores-config/build.nix {craneLib = craneLibFor pkgs;};
           }
           // (
             # It's not possible to crosscompile to darwin, not even between
@@ -522,11 +522,11 @@
             # To keep them uniform with the linux targets if they're buildable.
             if pkgs.stdenv.system == "aarch64-darwin"
             then {
-              nativelink-aarch64-darwin = nativelink;
+              forge-aarch64-darwin = forge;
             }
             else if pkgs.stdenv.system == "x86_64-darwin"
             then {
-              nativelink-x86_64-darwin = nativelink;
+              forge-x86_64-darwin = forge;
             }
             else {}
           );
@@ -627,9 +627,9 @@
               generate-toolchains
               pkgs.lre.clang
               pkgs.lre.lre-cc.lre-cc-configs-gen
-              pkgs.nativelink-tools.local-image-test
-              pkgs.nativelink-tools.create-local-image
-              pkgs.nativelink-tools.create-multi-arch-image
+              pkgs.forge-tools.local-image-test
+              pkgs.forge-tools.create-local-image
+              pkgs.forge-tools.create-multi-arch-image
               pkgs.attic-client
             ]
             ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
@@ -647,9 +647,9 @@
               # running in the nix environment.
               ${config.lre.installationScript}
 
-              # Generate nativelink.bazelrc which gives Bazel invocations access
-              # to NativeLink's read-only cache.
-              ${config.nativelink.installationScript}
+              # Generate forge.bazelrc which gives Bazel invocations access
+              # to Forge's read-only cache.
+              ${config.forge.installationScript}
 
               # If on NixOS, generate nixos.bazelrc, which adds the required
               # NixOS binary paths to the bazel environment.

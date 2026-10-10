@@ -3,7 +3,7 @@ kind: Kustomization
 
 resources:
 - ../../kubernetes/resources/flux
-- ../../kubernetes/resources/nativelink-core
+- ../../kubernetes/resources/forge-core
 - ../../kubernetes/resources/gateway-routes
 - ../../kubernetes/workers/resources/worker-init
 - ../../kubernetes/workers/resources/siso-chromium

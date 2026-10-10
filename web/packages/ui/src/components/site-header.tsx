@@ -35,14 +35,14 @@ const defaultLinks: NavLink[] = [
   { label: "Community", href: "/community" },
   { label: "Resources", href: "/resources" },
   { label: "Docs", href: "/docs" },
-  { label: "Enterprise", href: "https://enterprise.nativelink.com" },
+  { label: "Enterprise", href: "https://enterprise.forge.com" },
 ];
 
 export function SiteHeader({
   links = defaultLinks,
   ctaLabel = "Get started",
   ctaHref = "/docs",
-  githubHref = "https://github.com/TraceMachina/nativelink",
+  githubHref = "https://github.com/toxicwind/forge",
   currentPath,
   className,
 }: SiteHeaderProps) {
@@ -68,7 +68,7 @@ export function SiteHeader({
         {/* Logo — always left edge */}
         <a
           href="/"
-          aria-label="NativeLink — home"
+          aria-label="Forge — home"
           aria-current={homeCurrent ? "page" : undefined}
           className="inline-flex items-center"
         >

@@ -1,4 +1,4 @@
-import { Badge, Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Badge, Eyebrow, Reveal, Section } from "@forge/ui";
 import type { Post } from "../../lib/posts";
 import { formatPostDate } from "../../lib/posts";
 

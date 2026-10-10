@@ -36,18 +36,18 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
-      - name: Setup NativeLink Cloud
-        uses: ./.github/actions/setup-nativelink-cloud
+      - name: Setup Forge Cloud
+        uses: ./.github/actions/setup-forge-cloud
         with:
-          ci-mode: ${{ vars.NATIVELINK_CI_MODE }}
-          claim-base: ${{ secrets.NATIVELINK_STAGING_CLAIM_BASE }}
-          bes-results-url: ${{ secrets.NATIVELINK_STAGING_BES_RESULTS_URL }}
+          ci-mode: ${{ vars.FORGE_CI_MODE }}
+          claim-base: ${{ secrets.FORGE_STAGING_CLAIM_BASE }}
+          bes-results-url: ${{ secrets.FORGE_STAGING_BES_RESULTS_URL }}
           api-key: >-
             ${{ github.event_name == 'push'
-                && secrets.NATIVELINK_STAGING_API_KEY_RW
-                || secrets.NATIVELINK_STAGING_API_KEY_RO }}
+                && secrets.FORGE_STAGING_API_KEY_RW
+                || secrets.FORGE_STAGING_API_KEY_RO }}
           mode: ${{ github.event_name == 'push' && 'write' || 'read' }}
           # Remote execution only on Linux; the action hard-fails exec on
           # non-Linux runners, so macOS lanes fall back to cache.
@@ -74,7 +74,7 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
   nix-cargo:
     strategy:
@@ -92,7 +92,7 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Rust cache
         uses: >- # v2.9.1
@@ -110,7 +110,7 @@ jobs:
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
   installation:
     strategy:
@@ -129,18 +129,18 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Test nix run
         run: |
-          nix run -L .#nativelink-is-executable-test
+          nix run -L .#forge-is-executable-test
 
       - name: Teardown Worker
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nix_name: .#nativelink-is-executable-test
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          nix_name: .#forge-is-executable-test
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
   integration:
     name: ${{ matrix.test-name }}
@@ -157,18 +157,18 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Test ${{ matrix.test-name }} run
         run: |
-          nix run -L .#${{ matrix.test-name }}-with-nativelink-test
+          nix run -L .#${{ matrix.test-name }}-with-forge-test
 
       - name: Teardown Worker
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
-          nix_name: .#${{ matrix.test-name }}-with-nativelink-test
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
+          nix_name: .#${{ matrix.test-name }}-with-forge-test
 
   # rbe-toolchain is slow because it has many subcommands, so split it out
   generate-rbe-commands:
@@ -183,11 +183,11 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Get commands list
         run: |
-          COMMANDS=$(nix run .#rbe-toolchain-with-nativelink-test list)
+          COMMANDS=$(nix run .#rbe-toolchain-with-forge-test list)
           echo "matrix={\"command\":${COMMANDS}}" >> $GITHUB_OUTPUT
         id: set-matrix
 
@@ -206,15 +206,15 @@ jobs:
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Test ${{ matrix.command }} with rbe
         run: |
-          nix run -L .#rbe-toolchain-with-nativelink-test ${{ matrix.command }}
+          nix run -L .#rbe-toolchain-with-forge-test ${{ matrix.command }}
 
       - name: Teardown Worker
         uses: ./.github/actions/end-nix
         if: always()
         with:
-          nativelink_attic_token: ${{ secrets.NATIVELINK_ATTIC_TOKEN }}
-          nix_name: .#rbe-toolchain-with-nativelink-test
+          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
+          nix_name: .#rbe-toolchain-with-forge-test

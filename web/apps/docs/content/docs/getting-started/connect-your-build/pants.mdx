@@ -1,19 +1,19 @@
 ---
 title: Pants
-description: Enable Pants remote caching with NativeLink.
+description: Enable Pants remote caching with Forge.
 ---
 
 <Prerequisites>
-  A running NativeLink instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
+  A running Forge instance. If you don't have one, start with the [Quickstart](/getting-started/quickstart).
 </Prerequisites>
 
 Pants can read and write remote cache entries through the Remote Execution
-API. NativeLink can provide the remote store and Action Cache for Pants
+API. Forge can provide the remote store and Action Cache for Pants
 goals without changing BUILD files.
 
-## Start NativeLink [#start-nativelink]
+## Start Forge [#start-forge]
 
-Start a NativeLink server that exposes CAS and Action Cache on
+Start a Forge server that exposes CAS and Action Cache on
 `localhost:50051` with instance name `main`. The Docker quickstart in
 [Getting Started → Quickstart](/getting-started/quickstart) is enough for local
 cache validation.
@@ -30,7 +30,7 @@ remote_store_address = "grpc://localhost:50051"
 remote_instance_name = "main"
 ```
 
-For a shared deployment, replace `localhost:50051` with your NativeLink
+For a shared deployment, replace `localhost:50051` with your Forge
 endpoint and use the same instance name your server config exposes.
 
 ## Run a goal [#run-a-goal]
@@ -42,7 +42,7 @@ pants test ::
 ```
 
 The first run uploads results. A second run against the same inputs should
-read cached process results from NativeLink.
+read cached process results from Forge.
 
 ## Remote execution [#remote-execution]
 
@@ -55,7 +55,7 @@ and toolchains aligned.
 
 - **No cache hits on the second run.** Check that `remote_cache_write` and
   `remote_cache_read` are both enabled.
-- **Instance-name errors.** Match `remote_instance_name` to the NativeLink
+- **Instance-name errors.** Match `remote_instance_name` to the Forge
   config. The local examples use `main`.
 - **Connection failures.** Pants expects a `grpc://` URL in
   `remote_store_address` for a plaintext endpoint, or `grpcs://` for
@@ -69,7 +69,7 @@ and toolchains aligned.
     (`remote_cache_write = true`) while developer laptops only read from
     it. For a single shared setup, enable both.
   </Accordion>
-  <Accordion title="Can Pants run actions remotely on NativeLink?" id="can-pants-run-actions-remotely-on-nativelink">
+  <Accordion title="Can Pants run actions remotely on Forge?" id="can-pants-run-actions-remotely-on-forge">
     Yes (it's the same Remote Execution API), but the worker environment
     must match what Pants sends. Get remote caching working first, then
     align worker platform properties and toolchains before enabling

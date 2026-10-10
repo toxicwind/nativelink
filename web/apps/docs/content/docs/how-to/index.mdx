@@ -5,7 +5,7 @@ description: Pick the task you're doing, not the artifact you're reading about.
 
 {/* archetype: how-to (chooser), see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone with a running NativeLink who now needs it to do
+**Who this is for:** anyone with a running Forge who now needs it to do
 one specific thing differently. **What you'll have at the end:** the one page
 that does your task, rather than a tour. **Time:** as long as the task takes.
 
@@ -29,7 +29,7 @@ section is worth the detour.
 ## Pick your task [#pick-your-task]
 
 **I need my cache stored somewhere else.**
-[Storage backends](/how-to/stores) compares every place NativeLink can put
+[Storage backends](/how-to/stores) compares every place Forge can put
 bytes ([filesystem](/how-to/stores/filesystem),
 [S3 and compatibles](/how-to/stores/s3-and-compatible),
 [GCS](/how-to/stores/gcs), [Azure Blob](/how-to/stores/azure),
@@ -50,7 +50,7 @@ parts of the shipped example will mislead you.
 **I need this to be secure on the network.**
 [TLS and authentication](/how-to/tls-and-auth) covers TLS on the public
 listeners, mutual TLS as the access control, keeping the worker API off the
-public interface, and what NativeLink does not authenticate.
+public interface, and what Forge does not authenticate.
 
 **I need to move to a newer version.**
 [Upgrade to a newer version](/how-to/upgrade-versions) is the upgrade path:
@@ -59,7 +59,7 @@ what happens to the cache you already have.
 
 **I'm coming from another REAPI cache.**
 [Migrate from another REAPI cache](/how-to/migrate-an-existing-cache) puts
-NativeLink in front of your old one as a read-only diode, so you never copy the
+Forge in front of your old one as a read-only diode, so you never copy the
 data and never lose the hit rate.
 
 <NextStep href="/configuration" kind="aside" title="Configuration">

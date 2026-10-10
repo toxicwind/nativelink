@@ -1,12 +1,12 @@
 ---
 title: Runbooks
-description: "What to do when a NativeLink deployment is on fire: Redis failover, a worker OOM-killed, the disk full, and the queue backpressured. Each entry is a symptom, the signal that confirms it, the immediate action, and the change that stops it recurring."
+description: "What to do when a Forge deployment is on fire: Redis failover, a worker OOM-killed, the disk full, and the queue backpressured. Each entry is a symptom, the signal that confirms it, the immediate action, and the change that stops it recurring."
 ---
 
 {/* archetype: how-to (incident response), see /web/apps/docs/templates/how-to.mdx */}
 
 **Who this is for:** you are on call and something is broken right now.
-**What you'll have at the end:** for each of the four incidents NativeLink
+**What you'll have at the end:** for each of the four incidents Forge
 actually produces, a confirming signal, a stop-the-bleeding action, and the
 configuration change that prevents a repeat. **Time:** read once now, so you do
 not read it for the first time at 03:00.
@@ -15,7 +15,7 @@ not read it for the first time at 03:00.
   A deployment other people depend on.
 </Prerequisites>
 
-These are incident procedures. They deliberately do not explain how NativeLink
+These are incident procedures. They deliberately do not explain how Forge
 works ([Architecture](/explanations/architecture) does that) and they do not
 tune anything. When you have stopped the bleeding and want to make the system
 faster rather than merely alive, go to [Tuning](/operate/tuning).
@@ -26,7 +26,7 @@ This page assumes you already know.
 
 <Callout type="info" title="Two things to have open before you start">
 
-  The scheduler's `INFO` log. Most of NativeLink's diagnostic output is at
+  The scheduler's `INFO` log. Most of Forge's diagnostic output is at
   `INFO`, and the shipped Compose example defaults to `warn`. If you are at
   `warn` you will see a hung system and nothing else. `RUST_LOG=info` is the first move in
   almost every procedure below.
@@ -63,7 +63,7 @@ only thing that tells you it was a signal at all. From Bazel's side this looks
 like an ordinary action failure with a non-zero exit status, so **Bazel will
 not treat it as an infrastructure error and will not retry it**. On the
 scheduler it lands in
-`nativelink_execution_completed_count_total{execution_result="failure"}` like
+`forge_execution_completed_count_total{execution_result="failure"}` like
 any other non-zero exit; there is no exported metric that singles out
 signal deaths, so the log line is what you alert on.
 
@@ -85,7 +85,7 @@ That string is the single best diagnostic for a memory-pressured worker fleet.
 If you see it, you are in this case, not the first one.
 
 <Callout type="warn" title="Peak memory is a Linux-only measurement">
-  NativeLink samples per-action peak RSS only on Linux. On macOS workers
+  Forge samples per-action peak RSS only on Linux. On macOS workers
   `resource_usage` is `None`; no memory data is reported at all, so the only
   evidence you will have is the exit code and the log line.
 </Callout>
@@ -122,7 +122,7 @@ Worker <id> cannot accept work: is_paused=false, is_draining=true, inflight=0/0
 | Raise the container memory limit | Kubernetes `resources.limits.memory`, or the host | Named explicitly by the worker's own warning. |
 | Reduce per-action concurrency | Your build's toolchain flags | A single `-j` in a wrapped compiler multiplies with `max_inflight_tasks`. |
 
-NativeLink itself has **no memory configuration**. No `max_memory`, no
+Forge itself has **no memory configuration**. No `max_memory`, no
 per-action memory cap, nothing. Memory is bounded only indirectly, by store
 eviction policies and by whatever the container runtime enforces. Do not go
 looking for a config field; it does not exist.
@@ -131,16 +131,16 @@ looking for a config field; it does not exist.
 
 ### Confirm it [#confirm-it-1]
 
-Writes start failing with an OS-level message wrapped in a NativeLink err_tip:
+Writes start failing with an OS-level message wrapped in a Forge err_tip:
 `Failed to write data into filesystem store`, `Failed to flush in filesystem
 store`, `Failed to sync in filesystem store`.
 
 The gRPC code will be `Unknown`, **not** anything storage-shaped. `ENOSPC`
-arrives as `ErrorKind::StorageFull`, which NativeLink's `io::ErrorKind` to
+arrives as `ErrorKind::StorageFull`, which Forge's `io::ErrorKind` to
 gRPC-code map does not name, so it falls to the catch-all arm. No
 ENOSPC-specific handling exists anywhere in the tree.
 
-<SourceLink file="nativelink-error/src/lib.rs" symbol="into_code" />
+<SourceLink file="forge-error/src/lib.rs" symbol="into_code" />
 
 That has an unpleasant consequence: `Unknown` is **retryable**. A full disk
 gets retried through the entire retry budget before it fails, so the first
@@ -174,8 +174,8 @@ mutation (on insert and remove), so it runs as soon as traffic resumes.
 {/* lint-snippets: ignore */}
 {
   "filesystem": {
-    "content_path": "/var/lib/nativelink/content",
-    "temp_path": "/var/lib/nativelink/temp",
+    "content_path": "/var/lib/forge/content",
+    "temp_path": "/var/lib/forge/temp",
     "eviction_policy": {
       "max_bytes": 50000000000,
       "evict_bytes": 5000000000
@@ -205,7 +205,7 @@ evicted, which bounds the total at roughly `2 * max_bytes` in the worst case
 a worker, for executable inputs hardlinked out of its fast store, so this
 applies to worker fast tiers rather than to a CAS server's store.
 
-<SourceLink file="nativelink-store/src/filesystem_store.rs" symbol="ExecutableVariantRemover" />
+<SourceLink file="forge-store/src/filesystem_store.rs" symbol="ExecutableVariantRemover" />
 
 Provision accordingly: if you want a 50 GB worker cache, give it a 100 GB
 volume.
@@ -226,7 +226,7 @@ crashes repeatedly without a clean restart accumulates.
 ### What actually happens [#what-actually-happens]
 
 Both Sentinel and Cluster modes are supported; the default is `standard`. On a
-Sentinel failover the demoted master answers `-READONLY`, which NativeLink
+Sentinel failover the demoted master answers `-READONLY`, which Forge
 classifies as retryable alongside dropped connections, refusals and IO errors.
 
 Each retryable failure reconnects and sleeps 100 ms, up to 5 attempts.
@@ -237,7 +237,7 @@ have every in-flight request stampeding the new master.
 underlying Redis error. The process does not exit.**
 
 <Callout type="warn" title="A liveness probe will not catch this">
-  NativeLink serves errors during a Redis outage rather than crashing. Process
+  Forge serves errors during a Redis outage rather than crashing. Process
   liveness is unchanged and the port still accepts connections. The health
   endpoint only notices if the Redis store is itself a registered indicator (a
   leaf at the top of a named store), in which case its `PING` check fails and
@@ -259,7 +259,7 @@ a scheduler incident. Builds degrade to local execution and cache misses. Fix
 Redis at your leisure.
 
 If you are on the `redis` backend, builds hang. Failing over Redis is the fix;
-there is no NativeLink-side mitigation.
+there is no Forge-side mitigation.
 
 ### Configuration worth checking now [#configuration-worth-checking-now]
 
@@ -291,14 +291,14 @@ Actions re-queue forever.
 
 ### The mechanism [#the-mechanism]
 
-`ResourceExhausted` is NativeLink's backpressure code. When a worker returns
+`ResourceExhausted` is Forge's backpressure code. When a worker returns
 it for an action, two things happen: the action goes back to `Queued` and
 (this is the important part) **its attempt counter is not incremented**. If
 the worker still has other actions in flight it is also marked `is_paused`,
 and that flag clears as soon as any of those actions completes.
 
-<SourceLink file="nativelink-scheduler/src/simple_scheduler_state_manager.rs" symbol="due_to_backpressure" />
-<SourceLink file="nativelink-scheduler/src/api_worker_scheduler.rs" symbol="update_action" />
+<SourceLink file="forge-scheduler/src/simple_scheduler_state_manager.rs" symbol="due_to_backpressure" />
+<SourceLink file="forge-scheduler/src/api_worker_scheduler.rs" symbol="update_action" />
 
 That is deliberate. Backpressure is not the action's fault, so it should not
 burn a retry. But it means a worker that returns `ResourceExhausted`
@@ -346,7 +346,7 @@ to [The disk fills up](#the-disk-fills-up).
 
 ### Related limits that block rather than reject [#related-limits-that-block-rather-than-reject]
 
-Several NativeLink limits queue instead of erroring, which is why "hung" is a
+Several Forge limits queue instead of erroring, which is why "hung" is a
 more common symptom than "failed":
 
 | Limit | Default | Behaviour at the limit |
@@ -472,9 +472,9 @@ Actions in transit did not reach zero before we disconnected from the scheduler
 
 The third means the 10-second drain window expired with work still in transit.
 
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="CONNECTION_RETRY_DELAY_S" />
-<SourceLink file="nativelink-util/src/evicting_map.rs" symbol="should_evict" />
-<SourceLink file="nativelink-store/src/redis_store.rs" symbol="is_retryable_redis_error" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="CONNECTION_RETRY_DELAY_S" />
+<SourceLink file="forge-util/src/evicting_map.rs" symbol="should_evict" />
+<SourceLink file="forge-store/src/redis_store.rs" symbol="is_retryable_redis_error" />
 
 ## What's next [#whats-next]
 

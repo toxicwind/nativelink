@@ -6,7 +6,7 @@
   flake-root,
   ...
 }: let
-  excludes = ["nativelink-proto/genproto"];
+  excludes = ["forge-proto/genproto"];
 in {
   # Default hooks
   check-case-conflicts = {
@@ -50,7 +50,7 @@ in {
     in "${script}/bin/forbid-binary-files";
     excludes = [
       # Testdata for fastcdc.
-      "nativelink-util/tests/data/SekienAkashita.jpg"
+      "forge-util/tests/data/SekienAkashita.jpg"
       # Menlo Security case-study figures on the marketing site.
       "web/apps/web/public/assets/menlo-security-build-time-comparison.jpg"
       "web/apps/web/public/assets/menlo-security-kubernetes-topology.jpg"
@@ -167,7 +167,7 @@ in {
   formatjson5 = {
     excludes =
       excludes
-      ++ ["nativelink-config/examples/stores-config.json5"];
+      ++ ["forge-config/examples/stores-config.json5"];
     description = "Format json5 files";
     enable = true;
     entry = "${pkgs.formatjson5}/bin/formatjson5";
@@ -197,9 +197,9 @@ in {
   generate-stores-config = {
     description = "Generate stores config";
     enable = true;
-    entry = "${generate-stores-config}/bin/generate-stores-config nativelink-config/src/stores.rs nativelink-config/examples/stores-config.json5";
+    entry = "${generate-stores-config}/bin/generate-stores-config forge-config/src/stores.rs forge-config/examples/stores-config.json5";
     name = "generate-stores-config";
-    files = "nativelink-config/src/stores.rs|nativelink-config/examples/stores-config.json5";
+    files = "forge-config/src/stores.rs|forge-config/examples/stores-config.json5";
     pass_filenames = false;
   };
 

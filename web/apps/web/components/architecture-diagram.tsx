@@ -13,7 +13,7 @@ export function ArchitectureDiagram() {
         role="img"
         aria-labelledby="architecture-diagram-title"
       >
-        <title id="architecture-diagram-title">NativeLink architecture diagram</title>
+        <title id="architecture-diagram-title">Forge architecture diagram</title>
         <defs>
           <linearGradient id="arc-grad" x1="0" y1="0" x2="800" y2="0">
             <stop offset="0%" stopColor="rgb(var(--nl-color-brand))" stopOpacity="0.0" />
@@ -104,7 +104,7 @@ export function ArchitectureDiagram() {
           </text>
         </g>
 
-        {/* Middle layer — NativeLink (3 nodes) */}
+        {/* Middle layer — Forge (3 nodes) */}
         {[
           { y: 40, label: "SCHEDULER", subA: "Action dispatch", subB: "Worker assign" },
           { y: 140, label: "CAS", subA: "Content-addressed", subB: "Dedup & cache" },
@@ -221,7 +221,7 @@ export function ArchitectureDiagram() {
           letterSpacing="2"
           fill="rgb(var(--nl-color-brand))"
         >
-          NATIVELINK
+          FORGE
         </text>
         <text
           x="730"

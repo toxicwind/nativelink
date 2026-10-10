@@ -1,4 +1,4 @@
-import { Badge, Button, Counter, Eyebrow, Reveal, Section } from "@nativelink/ui";
+import { Badge, Button, Counter, Eyebrow, Reveal, Section } from "@forge/ui";
 import Image from "next/image";
 import { getContributors, getRepoStats } from "@/lib/github";
 
@@ -37,7 +37,7 @@ const channels = [
   {
     title: "Clone the repo",
     body: "Public source, with module-aware licensing. File issues, send PRs, or just star us. Every contribution gets a review.",
-    href: "https://github.com/TraceMachina/nativelink",
+    href: "https://github.com/toxicwind/forge",
     label: "View on GitHub",
     accent: "default" as const,
     icon: (
@@ -67,12 +67,12 @@ export default async function CommunityPage() {
               <h1 className="text-balance text-[44px] font-semibold leading-[1.02] tracking-[-0.04em] md:text-[68px]">
                 Join the people{" "}
                 <span className="bg-gradient-to-r from-brand to-brand-strong bg-clip-text text-transparent">
-                  building NativeLink
+                  building Forge
                 </span>
                 .
               </h1>
               <p className="mx-auto mt-6 max-w-[600px] text-[17px] leading-relaxed text-muted-foreground md:text-lg">
-                Operators, contributors, and the engineers who build NativeLink — all in
+                Operators, contributors, and the engineers who build Forge — all in
                 the same room.
               </p>
             </div>
@@ -171,7 +171,7 @@ export default async function CommunityPage() {
               From kernel-level optimizations to typo fixes — every PR gets reviewed
               and credited. Pulled live from{" "}
               <a
-                href="https://github.com/TraceMachina/nativelink/graphs/contributors"
+                href="https://github.com/toxicwind/forge/graphs/contributors"
                 target="_blank"
                 rel="noreferrer"
                 className="text-brand underline-offset-4 hover:underline"
@@ -207,7 +207,7 @@ export default async function CommunityPage() {
               ))}
               {total > 24 ? (
                 <a
-                  href="https://github.com/TraceMachina/nativelink/graphs/contributors"
+                  href="https://github.com/toxicwind/forge/graphs/contributors"
                   target="_blank"
                   rel="noreferrer"
                   className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-border-strong font-mono text-xs text-muted-foreground transition-colors hover:border-brand hover:text-brand"

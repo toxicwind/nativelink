@@ -1,0 +1,69 @@
+// Copyright 2026 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use clap::{Arg, ArgAction, Command};
+use tonic_prost_build::Config;
+
+fn main() -> std::io::Result<()> {
+    let matches = Command::new("Rust gRPC Codegen")
+        .about("Codegen grpc/protobuf bindings for rust")
+        .arg(
+            Arg::new("inputs")
+                .required(true)
+                .action(ArgAction::Append)
+                .help("Input proto files"),
+        )
+        .arg(
+            Arg::new("output_dir")
+                .short('o')
+                .required(true)
+                .long("output_dir")
+                .help("Output directory"),
+        )
+        .get_matches();
+    let paths = matches
+        .get_many::<String>("inputs")
+        .unwrap()
+        .collect::<Vec<&String>>();
+    let output_dir = PathBuf::from(matches.get_one::<String>("output_dir").unwrap());
+
+    let mut config = Config::new();
+    config.bytes(["."]);
+
+    let mut structs_with_data_to_ignore = HashMap::new();
+    structs_with_data_to_ignore.insert("BatchReadBlobsRequest", vec!["digests"]);
+    structs_with_data_to_ignore.insert("BatchReadBlobsResponse", vec!["responses"]);
+    structs_with_data_to_ignore.insert("BatchUpdateBlobsRequest", vec!["requests"]);
+    structs_with_data_to_ignore.insert("BatchUpdateBlobsResponse", vec!["responses"]);
+    structs_with_data_to_ignore.insert("ReadResponse", vec!["data"]);
+    structs_with_data_to_ignore.insert("WriteRequest", vec!["data"]);
+    structs_with_data_to_ignore.insert("ActionResult", vec!["output_files"]);
+
+    for (struct_name, fields) in &structs_with_data_to_ignore {
+        config.type_attribute(struct_name, "#[derive(::derive_more::Debug)]");
+        for field in fields {
+            config.field_attribute(format!("{struct_name}.{field}"), "#[debug(ignore)]");
+        }
+    }
+
+    config.skip_debug(structs_with_data_to_ignore.keys());
+
+    tonic_prost_build::configure()
+        .out_dir(output_dir)
+        .compile_with_config(config, &paths, &[&"forge-proto".into()])?;
+    Ok(())
+}

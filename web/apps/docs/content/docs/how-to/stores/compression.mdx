@@ -5,7 +5,7 @@ description: Cut remote cache transfer bytes for compressible artifacts with REA
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone whose clients reach NativeLink across a real
+**Who this is for:** anyone whose clients reach Forge across a real
 network and whose artifacts compress well. **What you'll have at the end:**
 zstd on the wire, with stores still holding raw bytes. **Time:** ten minutes.
 
@@ -16,11 +16,11 @@ zstd on the wire, with stores still holding raw bytes. **Time:** ten minutes.
 Build artifacts are often highly compressible (object files, archives, test
 logs), but a conventional remote cache transfers them byte-for-byte. With wire
 compression, clients and server exchange blobs as zstd-compressed streams and
-only the wire bytes shrink: NativeLink decompresses on upload and compresses on
+only the wire bytes shrink: Forge decompresses on upload and compresses on
 download at the gRPC boundary, so stores keep raw, uncompressed bytes and every
 existing read path sees ordinary blobs.
 
-NativeLink implements the server side of the REAPI
+Forge implements the server side of the REAPI
 [`compressed-blobs`](https://github.com/bazelbuild/remote-apis/blob/main/build/bazel/remote/execution/v2/remote_execution.proto)
 extension with `zstd` as the only supported non-identity compressor, matching
 what Bazel's `--remote_cache_compression` flag speaks: ByteStream reads and
@@ -31,8 +31,8 @@ accept and serve zstd-compressed payloads.
 
 - A Bazel client with `--remote_cache_compression` (available since Bazel 5).
 - Wire compression is **optional and off until it is enabled somewhere in the
-  NativeLink process**. Without the configuration below or an explicitly
-  enabled CAS `grpc` store, NativeLink does not advertise zstd, rejects
+  Forge process**. Without the configuration below or an explicitly
+  enabled CAS `grpc` store, Forge does not advertise zstd, rejects
   `compressed-blobs/zstd` requests with `InvalidArgument`, and keeps its own
   outgoing transfers on the identity path, so clients fall back to identity
   transfers.
@@ -63,13 +63,13 @@ servers: [
 ],
 ```
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CapabilitiesConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CapabilitiesConfig" />
 
 Then build with:
 
 ```sh
 bazel build //... \
-  --remote_cache=grpc://your-nativelink:50051 \
+  --remote_cache=grpc://your-forge:50051 \
   --remote_cache_compression
 ```
 
@@ -80,7 +80,7 @@ safe with a mixed fleet of clients: anything that doesn't request
 See [Servers and services](/configuration/servers-and-services) for where the
 capabilities service sits in the rest of the config.
 
-### NativeLink-to-NativeLink transfers [#nativelink-to-nativelink-transfers]
+### Forge-to-Forge transfers [#forge-to-forge-transfers]
 
 A `grpc` store with `store_type: "cas"` can compress its own uploads and
 full-blob downloads to the upstream with `experimental_remote_cache_compression`.
@@ -90,7 +90,7 @@ ranged reads stay on the identity path. The upstream instance must have
 requests fail with `InvalidArgument`.
 
 Enabling zstd on any capabilities instance or any CAS `grpc` store expresses
-process-wide intent. At config load, NativeLink then turns it on for every
+process-wide intent. At config load, Forge then turns it on for every
 other CAS `grpc` store whose `experimental_remote_cache_compression` is
 omitted, so worker-to-CAS and proxy-to-upstream transfers pick it up without
 the setting being repeated on each store. Declare the intent once and leave
@@ -129,14 +129,14 @@ stores: [
 ],
 ```
 
-To keep one link uncompressed (an older NativeLink, or a third-party cache
+To keep one link uncompressed (an older Forge, or a third-party cache
 without `compressed-blobs` support), set `experimental_remote_cache_compression:
-false` on that store. NativeLink logs a startup warning for a CAS `grpc` store
+false` on that store. Forge logs a startup warning for a CAS `grpc` store
 that opts out while zstd is enabled elsewhere, and a warning for
 `experimental_remote_cache_compression: true` on an `ac` store, where the
 setting has no effect: `ac` stores are never eligible and never inherit.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="CasConfig::apply_zstd_grpc_store_defaults" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="CasConfig::apply_zstd_grpc_store_defaults" />
 
 Compressed uploads from a `grpc` store do not resume mid-stream: a transport
 failure part-way through surfaces to the caller, and outer retries re-send the
@@ -147,7 +147,7 @@ whole blob.
 - Resource names and digests always refer to the **uncompressed** blob; only
   the bytes on the wire are compressed. ByteStream compressed writes report
   `committed_size` in compressed wire bytes, as the REAPI extension specifies.
-- Uploads are verified: NativeLink hashes the *decoded* bytes and rejects a
+- Uploads are verified: Forge hashes the *decoded* bytes and rejects a
   blob whose decompressed content doesn't match the digest or size it was
   addressed with, bounding decompression by the expected size.
 - Batch reads fall back to identity when the zstd encoding would not be
@@ -173,7 +173,7 @@ covers the wire and the other covers storage.
 <li>
 
 **Add `remote_cache_compression: true`** to the capabilities service for the
-instance, and restart NativeLink.
+instance, and restart Forge.
 
 </li>
 
@@ -208,7 +208,7 @@ don't move, your artifacts weren't compressible.
 
 <Accordion title="The client falls back to uncompressed transfers" id="the-client-falls-back-to-uncompressed-transfers">
 
-NativeLink only advertises zstd when `remote_cache_compression` is true on the
+Forge only advertises zstd when `remote_cache_compression` is true on the
 capabilities service **for that instance name**. An instance-name mismatch
 between the capabilities entry and the CAS or ByteStream entries is the usual
 cause.

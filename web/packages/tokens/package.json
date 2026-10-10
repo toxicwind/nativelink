@@ -1,5 +1,5 @@
 {
-  "name": "@nativelink/tokens",
+  "name": "@forge/tokens",
   "type": "module",
   "exports": {
     "./src/colors.css": "./src/colors.css",

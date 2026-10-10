@@ -23,4 +23,4 @@ def _kotlinc_worker_impl(ctx):
 
 The worker process is started once with `--persistent_worker`; compatible Kotlin
 compile actions reuse it until the request cap retires it, it exits on its own,
-or the NativeLink worker process shuts down.
+or the Forge worker process shuts down.

@@ -1,11 +1,11 @@
 ---
 title: History and licensing
-description: What NativeLink was built to replace, the three properties that drove the rewrite, and exactly how the source is licensed.
+description: What Forge was built to replace, the three properties that drove the rewrite, and exactly how the source is licensed.
 ---
 
 {/* archetype: explanation, see /web/apps/docs/templates/explanation.mdx */}
 
-**Who this is for:** anyone evaluating NativeLink against an existing build
+**Who this is for:** anyone evaluating Forge against an existing build
 farm, and anyone who needs to answer a licensing question precisely. **What
 you'll have at the end:** the design pressures that produced the current
 system, and a file-by-file account of what license applies. **Time:** ten
@@ -15,10 +15,10 @@ Remote build execution is not a new idea. Google shipped an internal version
 of it long before the
 [Remote Execution API](https://github.com/bazelbuild/remote-apis) was
 published, and by the early 2020s there were several open implementations of
-the published protocol. NativeLink started in December 2020 as a Rust
+the published protocol. Forge started in December 2020 as a Rust
 implementation of the CAS half of that protocol (first called Rust CAS, then
-Turbo Cache from April 2022), was renamed to NativeLink in December 2023
-(the `cas` executable became `nativelink` at the same time), and cut its
+Turbo Cache from April 2022), was renamed to Forge in December 2023
+(the `cas` executable became `forge` at the same time), and cut its
 first tagged release, 0.1.0, on 2023-12-20. The
 argument for writing a new implementation rather than running an existing
 one is the one below: the protocol is narrow enough that a rewrite is
@@ -60,7 +60,7 @@ does with the config it is handed.
 A fourth property arrived with the project rather than driving it: because
 the toolchain definitions could be shared between the local machine and the
 remote workers, the same hermetic build could run in both places. That became
-[Local Remote Execution](/explanations/lre), and it is the part of NativeLink
+[Local Remote Execution](/explanations/lre), and it is the part of Forge
 with no real equivalent elsewhere.
 
 ## Licensing, precisely [#licensing]
@@ -83,8 +83,8 @@ flag:
 
 | File or module | What it is |
 | --- | --- |
-| `nativelink-util/src/metrics.rs` | The metrics collection layer |
-| `nativelink-worker/src/persistent_worker/`: `mod.rs`, `pool.rs`, `live_worker.rs`, `protocol.rs` | Remote persistent workers |
+| `forge-util/src/metrics.rs` | The metrics collection layer |
+| `forge-worker/src/persistent_worker/`: `mod.rs`, `pool.rs`, `live_worker.rs`, `protocol.rs` | Remote persistent workers |
 
 <Callout type="info" title="Copy the header, don't recall it">
   When you add a file, copy the license header from the file next to it
@@ -99,7 +99,7 @@ cryptographically signed commits; see
 
 ## Versioning [#versioning]
 
-NativeLink versions look like SemVer and are not.
+Forge versions look like SemVer and are not.
 <SourceLink file="MODULE.bazel" symbol="module()" />
 declares `compatibility_level = 0`, which is Bazel's way of saying no
 compatibility promise is being made across versions. The config schema and
@@ -107,9 +107,9 @@ the metrics surface have both changed in minor releases; the changelog marks
 such entries as breaking.
 
 The wire protocol is the exception, and it is the one that matters for most
-deployments: NativeLink implements the Remote Execution API, which is
+deployments: Forge implements the Remote Execution API, which is
 versioned upstream and changes slowly. A client that worked against one
-NativeLink release will keep working against the next.
+Forge release will keep working against the next.
 [Release and versioning](/contribute/release-versioning) is the page for
 the details.
 
@@ -130,16 +130,16 @@ and corrections are the most welcome kind of pull request.
 ## Common questions [#common-questions]
 
 <Accordions type="multiple">
-  <Accordion title="Is NativeLink open source?" id="is-nativelink-open-source">
+  <Accordion title="Is Forge open source?" id="is-forge-open-source">
     It is source-available today and open source on a timer. The FSL 1.1
-    grant permits everything except offering NativeLink itself as a
+    grant permits everything except offering Forge itself as a
     competing commercial service, and each release converts to Apache 2.0
     two years after publication. If your concern is "can I read and modify
     the code that runs my builds", the answer is yes, without qualification.
   </Accordion>
   <Accordion title="Can I use it commercially?" id="can-i-use-it-commercially">
     Yes. Running it to build your own software is a permitted purpose,
-    commercial or not. The restriction is on reselling NativeLink as a
+    commercial or not. The restriction is on reselling Forge as a
     competing product or service. The two BUSL modules are the ones to
     check with counsel if you plan to redistribute.
   </Accordion>

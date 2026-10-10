@@ -1,11 +1,11 @@
 ---
 title: TLS and authentication
-description: Put TLS on the listeners clients reach, use mutual TLS as the access control, and understand exactly what NativeLink does and does not authenticate.
+description: Put TLS on the listeners clients reach, use mutual TLS as the access control, and understand exactly what Forge does and does not authenticate.
 ---
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone about to expose NativeLink beyond a single trusted
+**Who this is for:** anyone about to expose Forge beyond a single trusted
 network. **What you'll have at the end:** encrypted listeners, client
 certificates as the gate, and an accurate picture of what is still unguarded.
 **Time:** an hour, most of it spent on certificates.
@@ -16,7 +16,7 @@ certificates as the gate, and an accurate picture of what is still unguarded.
 
 Start with the honest version, because it changes what you build.
 
-NativeLink has no user accounts, no password, no token check and no
+Forge has no user accounts, no password, no token check and no
 authorization rules. Nothing in the binary decides whether a
 particular caller is allowed to read a particular blob. The access control you
 get is **mutual TLS** (the listener refuses connections from clients that
@@ -27,7 +27,7 @@ That is a coherent security model, and it is the one to build. It is not the
 model you would get from a system with a user table, so it pays to be explicit
 about it before you plan around a feature that does not exist.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="TlsConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="TlsConfig" />
 
 ## The three listeners have different trust levels [#the-three-listeners-have-different-trust-levels]
 
@@ -64,8 +64,8 @@ servers: [
       http: {
         socket_address: "0.0.0.0:50051",
         tls: {
-          cert_file: "/etc/nativelink/tls/server.crt",
-          key_file: "/etc/nativelink/tls/server.key",
+          cert_file: "/etc/forge/tls/server.crt",
+          key_file: "/etc/forge/tls/server.key",
         },
       },
     },
@@ -91,7 +91,7 @@ into the handshake, the server logs `Failed to accept tls stream` and drops the
 connection, and the client sees a connection error that says nothing about
 TLS.
 
-<SourceLink file="src/bin/nativelink.rs" symbol="TlsAcceptor" />
+<SourceLink file="src/bin/forge.rs" symbol="TlsAcceptor" />
 
 <Callout type="warn" title="The example certificates are examples">
   `deployment-examples/docker-compose/` ships
@@ -107,10 +107,10 @@ Adding `client_ca_file` changes the listener from encrypted to gated:
 
 ```json5
 tls: {
-  cert_file: "/etc/nativelink/tls/server.crt",
-  key_file: "/etc/nativelink/tls/server.key",
-  client_ca_file: "/etc/nativelink/tls/clients-ca.crt",
-  client_crl_file: "/etc/nativelink/tls/clients.crl",
+  cert_file: "/etc/forge/tls/server.crt",
+  key_file: "/etc/forge/tls/server.key",
+  client_ca_file: "/etc/forge/tls/clients-ca.crt",
+  client_crl_file: "/etc/forge/tls/clients.crl",
 },
 ```
 
@@ -125,11 +125,11 @@ even if the list is empty, because the moment you need it is the moment you do
 not want to be learning how it is wired.
 
 What you get from this is coarse: a client either holds a valid certificate or
-it does not. NativeLink does not read the subject, does not map it to an
+it does not. Forge does not read the subject, does not map it to an
 identity, and does not vary permissions by it. Issuing per-team or per-developer
 certificates is still worth doing, because it lets you revoke one without
 reissuing all of them, but the difference is visible to your CA, not to
-NativeLink.
+Forge.
 
 ## Point clients at the new scheme [#point-clients-at-the-new-scheme]
 
@@ -139,12 +139,12 @@ if you turned on mutual TLS:
 ```sh
 build --remote_cache=grpcs://cache.example.com:50051
 build --remote_executor=grpcs://cache.example.com:50052
-build --tls_certificate=/etc/nativelink/tls/ca.crt
-build --tls_client_certificate=/etc/nativelink/tls/client.crt
-build --tls_client_key=/etc/nativelink/tls/client.key
+build --tls_certificate=/etc/forge/tls/ca.crt
+build --tls_client_certificate=/etc/forge/tls/client.crt
+build --tls_client_key=/etc/forge/tls/client.key
 ```
 
-NativeLink is also a client of itself: a worker dials the scheduler, and a
+Forge is also a client of itself: a worker dials the scheduler, and a
 `grpc` store dials an upstream CAS. Those connections carry their own
 `tls_config`, with a different shape from the listener's:
 
@@ -158,9 +158,9 @@ NativeLink is also a client of itself: a worker dials the scheduler, and a
       {
         address: "grpcs://cas.internal.example.com:50051",
         tls_config: {
-          ca_file: "/etc/nativelink/tls/ca.crt",
-          cert_file: "/etc/nativelink/tls/client.crt",
-          key_file: "/etc/nativelink/tls/client.key",
+          ca_file: "/etc/forge/tls/ca.crt",
+          cert_file: "/etc/forge/tls/client.crt",
+          key_file: "/etc/forge/tls/client.key",
         },
       },
     ],
@@ -178,7 +178,7 @@ a warning. The scheme and the block go together: a `grpcs://` address with no
 `tls_config` is rejected at startup, and so is a `tls_config` on a `grpc://`
 address.
 
-<SourceLink file="nativelink-util/src/tls_utils.rs" symbol="endpoint_from" />
+<SourceLink file="forge-util/src/tls_utils.rs" symbol="endpoint_from" />
 
 The worker's `worker_api_endpoint` takes the same block:
 
@@ -186,9 +186,9 @@ The worker's `worker_api_endpoint` takes the same block:
 worker_api_endpoint: {
   uri: "grpcs://scheduler.internal.example.com:50061",
   tls_config: {
-    ca_file: "/etc/nativelink/tls/ca.crt",
-    cert_file: "/etc/nativelink/tls/worker.crt",
-    key_file: "/etc/nativelink/tls/worker.key",
+    ca_file: "/etc/forge/tls/ca.crt",
+    cert_file: "/etc/forge/tls/worker.crt",
+    key_file: "/etc/forge/tls/worker.key",
   },
 },
 ```
@@ -212,7 +212,7 @@ OpenTelemetry **Baggage** entry named `enduser.id`, and rejects the request with
 `FAILED_PRECONDITION` when that entry is absent:
 
 ```
-NativeLink instance configured to require this OpenTelemetry Baggage header:
+Forge instance configured to require this OpenTelemetry Baggage header:
 
     `Baggage: enduser.id=YOUR_IDENTITY`
 ```
@@ -224,11 +224,11 @@ logs can attribute a request to a person or a CI job, by refusing traffic that
 would be unattributable. That is a real operational need. Just do not put it in
 the column marked access control.
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="IdentityHeaderSpec" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="IdentityHeaderSpec" />
 
 ## Credentials to an upstream service [#credentials-to-an-upstream-service]
 
-When NativeLink proxies to something that does want a token (a hosted REAPI
+When Forge proxies to something that does want a token (a hosted REAPI
 cache, a gateway in front of one), a `grpc` store can attach headers:
 
 ```json5
@@ -250,11 +250,11 @@ fields in the config, header values are not run through `${VAR}` expansion:
 the value in the file is sent verbatim, so a secret placed here lives in the
 file and the file needs to be protected accordingly. `forward_headers` takes a
 list of header names to copy from the incoming client request instead, which is
-how a client's own credential reaches the upstream without NativeLink holding
+how a client's own credential reaches the upstream without Forge holding
 one. Forwarding is incompatible with `experimental_read_batching`, and a store
 that configures both is rejected at startup.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="GrpcSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="GrpcSpec" />
 
 ## Steps [#steps]
 
@@ -340,7 +340,7 @@ addresses, `worker_api_endpoint.uri`, and any healthcheck.
 
 The client does not trust the CA that signed the server certificate. Point it at
 the right `ca_file`, or `--tls_certificate` for Bazel. When the client is
-NativeLink itself (a `grpc` store or a worker) the error reads `invalid peer
+Forge itself (a `grpc` store or a worker) the error reads `invalid peer
 certificate: UnknownIssuer`. If the server certificate was issued by an
 intermediate, `cert_file` must contain the full chain, leaf first, because
 clients will not fetch a missing intermediate for you.
@@ -368,10 +368,10 @@ cert-manager rotation that nothing restarts will quietly expire.
 
 <Accordion title="How do I give different teams different access?" id="how-do-i-give-different-teams-different-access">
 
-You can't, inside NativeLink. It has no per-caller permissions. The
+You can't, inside Forge. It has no per-caller permissions. The
 approaches that work are running separate instances with separate stores for
 separate trust domains, or putting an authorizing proxy in front and letting
-NativeLink trust everything the proxy passes through. If you take the second
+Forge trust everything the proxy passes through. If you take the second
 route, the worker API must not be behind the same proxy.
 
 </Accordion>

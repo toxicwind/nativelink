@@ -15,7 +15,7 @@
     "node_modules",
     "dist"
   ],
-  "extends": "@nativelink/config/tsconfig/base.json",
+  "extends": "@forge/config/tsconfig/base.json",
   "include": [
     "src/**/*"
   ]

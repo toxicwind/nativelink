@@ -35,7 +35,7 @@
 // owns the generator.
 //
 // Usage, from web/:
-//   bun --filter @nativelink/docs lint:links
+//   bun --filter @forge/docs lint:links
 // or directly:
 //   node scripts/lint-links.mjs
 //

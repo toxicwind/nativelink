@@ -1,0 +1,54 @@
+// Copyright 2026 The Forge Authors. All rights reserved.
+//
+// Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    See LICENSE file for details
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::time::Duration;
+use std::time::SystemTime;
+
+use forge_error::Error;
+use forge_macro::forge_test;
+use forge_scheduler::worker_registry::WorkerRegistry;
+use forge_util::action_messages::WorkerId;
+
+#[forge_test]
+async fn update_worker_heartbeat_logging() -> Result<(), Error> {
+    let registry = WorkerRegistry::new();
+    registry
+        .update_worker_heartbeat(&"foo".to_string().into(), SystemTime::UNIX_EPOCH)
+        .await;
+    assert!(logs_contain(
+        "FLOW: Worker heartbeat updated in registry worker_id=foo now=1970-01-01T00:00:00Z"
+    ));
+    Ok(())
+}
+
+#[forge_test]
+async fn is_worker_alive_logging() -> Result<(), Error> {
+    let registry = WorkerRegistry::new();
+    let worker_id: WorkerId = "foo".to_string().into();
+    registry
+        .update_worker_heartbeat(&worker_id, SystemTime::UNIX_EPOCH)
+        .await;
+    assert!(
+        registry
+            .is_worker_alive(&worker_id, Duration::from_secs(10), SystemTime::UNIX_EPOCH)
+            .await
+    );
+    // `liveness` replaced the old `is_alive` bool: a two-state field could not
+    // express "not registered on this instance", which is what made
+    // multi-scheduler deployments time each other's actions out.
+    assert!(logs_contain(
+        "FLOW: Worker liveness check worker_id=foo last_seen=1970-01-01T00:00:00Z timeout=10s liveness=Alive"
+    ));
+    Ok(())
+}

@@ -21,8 +21,8 @@ stores: [
   {
     name: "CAS_MAIN_STORE",
     filesystem: {
-      content_path: "/var/lib/nativelink/cas/content",
-      temp_path: "/var/lib/nativelink/cas/tmp",
+      content_path: "/var/lib/forge/cas/content",
+      temp_path: "/var/lib/forge/cas/tmp",
       eviction_policy: {
         max_bytes: "50gb",
         evict_bytes: "5gb",
@@ -32,8 +32,8 @@ stores: [
   {
     name: "AC_MAIN_STORE",
     filesystem: {
-      content_path: "/var/lib/nativelink/ac/content",
-      temp_path: "/var/lib/nativelink/ac/tmp",
+      content_path: "/var/lib/forge/ac/content",
+      temp_path: "/var/lib/forge/ac/tmp",
       eviction_policy: {
         max_bytes: "5gb",
       },
@@ -42,7 +42,7 @@ stores: [
 ],
 ```
 
-Create the parent directory and start NativeLink. The store scans
+Create the parent directory and start Forge. The store scans
 `content_path` on boot and adopts every file whose name parses as a store key
 and generation (`<hash>-<size>-<generation>` under `d2/`, or
 `<key>-<generation>` under `s2/`); a file whose
@@ -59,12 +59,12 @@ for each key, subject to the eviction policy.
 Startup migrates the earlier `d/` and `s/` layout, and the older flat digest
 layout, into the new directories. A file that cannot be moved remains readable
 from its original location, and migration is retried on the next startup.
-Earlier NativeLink versions cannot read the new layout; use a separate cache
+Earlier Forge versions cannot read the new layout; use a separate cache
 directory when rolling back to an earlier version.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="FilesystemSpec" />
-<SourceLink file="nativelink-store/src/filesystem_store.rs" symbol="add_files_to_cache" />
-<SourceLink file="nativelink-store/src/filesystem_store.rs" symbol="emplace_file" />
+<SourceLink file="forge-config/src/stores.rs" symbol="FilesystemSpec" />
+<SourceLink file="forge-store/src/filesystem_store.rs" symbol="add_files_to_cache" />
+<SourceLink file="forge-store/src/filesystem_store.rs" symbol="emplace_file" />
 
 ## The two paths [#the-two-paths]
 
@@ -144,7 +144,7 @@ store's `content_path`, for the same reason. See
 <li>
 
 **Create the directories** and make sure the process user owns them:
-`mkdir -p /var/lib/nativelink/cas/content /var/lib/nativelink/cas/tmp`.
+`mkdir -p /var/lib/forge/cas/content /var/lib/forge/cas/tmp`.
 
 </li>
 
@@ -157,13 +157,13 @@ whose `max_bytes` leaves headroom on the device.
 
 <li>
 
-**Start NativeLink** and run a build against it.
+**Start Forge** and run a build against it.
 
 </li>
 
 <li>
 
-**Restart NativeLink** and run the same build again. The second run should be
+**Restart Forge** and run the same build again. The second run should be
 a cache hit.
 
 </li>
@@ -177,7 +177,7 @@ a cache hit.
 - `temp_path` is empty when no upload is in flight, and empty after a restart.
 - `du -sh` on `content_path` stabilises near `max_bytes` rather than growing
   past it.
-- A build re-run after a restart of NativeLink is a cache hit, not a rebuild.
+- A build re-run after a restart of Forge is a cache hit, not a rebuild.
 
 </VerifyBlock>
 
@@ -195,8 +195,8 @@ through to the slow store and refill the fast tier.
 Repeated missing-file warnings after recovery suggest that files are still
 being removed outside the store. Check for external cleanup of `content_path`.
 
-<SourceLink file="nativelink-store/src/filesystem_store.rs" symbol="check_duplicate_files" />
-<SourceLink file="nativelink-store/src/fast_slow_store.rs" symbol="get_part" />
+<SourceLink file="forge-store/src/filesystem_store.rs" symbol="check_duplicate_files" />
+<SourceLink file="forge-store/src/fast_slow_store.rs" symbol="get_part" />
 
 </Accordion>
 
@@ -215,7 +215,7 @@ underestimates real usage by up to 4x for small objects.
 <Accordion title="Uploads fail with a cross-device link error" id="uploads-fail-with-a-cross-device-link-error">
 
 `temp_path` and `content_path` are on different filesystems. Check with
-`df /var/lib/nativelink/cas/content /var/lib/nativelink/cas/tmp`. If the
+`df /var/lib/forge/cas/content /var/lib/forge/cas/tmp`. If the
 device column differs, move one of them.
 
 </Accordion>

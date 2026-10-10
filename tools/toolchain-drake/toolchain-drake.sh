@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2022-2024 The NativeLink Authors. All rights reserved.
+# Copyright 2022-2024 The Forge Authors. All rights reserved.
 #
 # Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License (the "License");
 # you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ fi
 # Get the sha256 value, this will fail due to empty string in the sha256 field.
 set +o pipefail
 SHA256_HASH=$(
-    nix run .#nativelink-worker-toolchain-drake.copyTo docker://localhost:5001/nativelink-toolchain-drake:latest -- --dest-tls-verify=false 2>&1 |
+    nix run .#forge-worker-toolchain-drake.copyTo docker://localhost:5001/forge-toolchain-drake:latest -- --dest-tls-verify=false 2>&1 |
         grep "got:" |
         grep -o 'sha256-[^[:space:]]*'
 )
@@ -95,15 +95,15 @@ else
     popd
 fi
 
-# Wrap it with nativelink to turn it into a worker.
-nix run .#nativelink-worker-toolchain-drake.copyTo \
-    docker://localhost:5001/nativelink-toolchain-drake:latest \
+# Wrap it with forge to turn it into a worker.
+nix run .#forge-worker-toolchain-drake.copyTo \
+    docker://localhost:5001/forge-toolchain-drake:latest \
     -- \
     --dest-tls-verify=false
 
 # Pull in to local docker and tag.
-docker pull localhost:5001/nativelink-toolchain-drake:latest
-docker tag localhost:5001/nativelink-toolchain-drake:latest "${ECR}"
+docker pull localhost:5001/forge-toolchain-drake:latest
+docker tag localhost:5001/forge-toolchain-drake:latest "${ECR}"
 
 # Push to ECR.
 ecr_login

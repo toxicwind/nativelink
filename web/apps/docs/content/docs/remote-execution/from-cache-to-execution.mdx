@@ -41,7 +41,7 @@ of RAM, a test that needs a GPU, a cross-compile that needs a specific libc:
 each can be routed to a worker that has it, without every developer
 needing that machine under their desk. This is the part that has no local
 equivalent at all, and for some teams it's the whole reason to adopt
-NativeLink.
+Forge.
 
 A third thing people expect and don't get: remote execution is not
 automatically *faster* per action. A single action that takes 200 ms locally
@@ -93,7 +93,7 @@ is blunt about why.
   receive actions to execute, which means arbitrary commands, from your
   build, running on its machine, with your CAS credentials. Bind it to a
   private network. The repo's own example config says so in a comment.
-  <SourceLink file="nativelink-config/examples/local_rbe_self_test.json5" />
+  <SourceLink file="forge-config/examples/local_rbe_self_test.json5" />
 </Callout>
 
 ## What's new in the build invocation [#whats-new-in-the-build-invocation]
@@ -102,8 +102,8 @@ Less than you'd think. Two flags and a declaration.
 
 ```bash
 bazel test \
-  --remote_cache=grpc://nativelink.internal:50051 \
-  --remote_executor=grpc://nativelink.internal:50052 \
+  --remote_cache=grpc://forge.internal:50051 \
+  --remote_executor=grpc://forge.internal:50052 \
   --remote_default_exec_properties=cpu_count=1 \
   //your:target
 ```
@@ -172,9 +172,9 @@ does next.
 
 <Accordions type="multiple">
   <Accordion title="Do I have to run the scheduler and CAS as separate processes?" id="do-i-have-to-run-the-scheduler-and-cas-as-separate-processes">
-    No. One `nativelink` process can host the CAS, the action cache, a
+    No. One `forge` process can host the CAS, the action cache, a
     scheduler, and a worker at once. That's exactly what
-    <SourceLink file="nativelink-config/examples/local_rbe_self_test.json5" />
+    <SourceLink file="forge-config/examples/local_rbe_self_test.json5" />
     does, and it's the right shape for learning. The split into separate
     processes is an operational decision you make when you want to scale or
     restart the pieces independently, not a protocol requirement. See

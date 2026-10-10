@@ -36,7 +36,7 @@ services:
       - '--storage.tsdb.retention.time=30d'
     volumes:
       - ./prometheus-config.yaml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus-recording-rules.yml:/etc/prometheus/rules/nativelink.yml:ro
+      - ./prometheus-recording-rules.yml:/etc/prometheus/rules/forge.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "9091:9090"  # Prometheus web UI (different port to avoid conflict with collector)
@@ -125,10 +125,10 @@ networks:
 
 # Usage Instructions:
 # 1. Start the stack: docker-compose up -d
-# 2. Configure NativeLink with these environment variables:
+# 2. Configure Forge with these environment variables:
 #    export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 #    export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-#    export OTEL_SERVICE_NAME=nativelink
+#    export OTEL_SERVICE_NAME=forge
 #    export OTEL_RESOURCE_ATTRIBUTES="deployment.environment=dev"
 # 3. Access services:
 #    - Prometheus: http://localhost:9091

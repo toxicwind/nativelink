@@ -1,9 +1,9 @@
 {
-  "name": "@nativelink/docs",
+  "name": "@forge/docs",
   "type": "module",
   "dependencies": {
-    "@nativelink/tokens": "workspace:*",
-    "@nativelink/ui": "workspace:*",
+    "@forge/tokens": "workspace:*",
+    "@forge/ui": "workspace:*",
     "@next/third-parties": "~16.2.11",
     "fumadocs-core": "^16",
     "fumadocs-mdx": "^15",
@@ -15,7 +15,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@nativelink/config": "workspace:*",
+    "@forge/config": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/mdx": "^2.0.13",
     "@types/node": "^26.0.0",

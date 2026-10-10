@@ -21,8 +21,8 @@ deployment: the manifests, the config changes they depend on, and the latency
 between a build backing up and a pod existing.
 
 <Callout type="info" title="Kubernetes deployments ship with Enterprise">
-  The Helm charts for running NativeLink on Kubernetes are part of
-  [NativeLink Enterprise](https://enterprise.nativelink.com). What follows is the
+  The Helm charts for running Forge on Kubernetes are part of
+  [Forge Enterprise](https://enterprise.forge.com). What follows is the
   reference for assembling worker autoscaling yourself on top of the Kustomize
   building blocks this repository ships.
 </Callout>
@@ -32,9 +32,9 @@ between a build backing up and a pod existing.
 Being blunt about this up front, because it changes how you read everything
 below.
 
-**The repository contains no autoscaling artifacts for NativeLink.** It has
+**The repository contains no autoscaling artifacts for Forge.** It has
 no `HorizontalPodAutoscaler`, no KEDA `ScaledObject`, no VPA, and no metrics
-adapter configuration for any NativeLink workload. The one HPA in the tree
+adapter configuration for any Forge workload. The one HPA in the tree
 scales the OpenTelemetry collector, and the one `PodDisruptionBudget` protects
 the same collector. Neither has anything to do with your workers.
 
@@ -53,15 +53,15 @@ section before you assume any of it drops onto the shipped manifests unchanged.
 
 ## The reaction-time budget [#the-reaction-time-budget]
 
-The signal an autoscaler reads is not emitted by NativeLink. It is derived,
+The signal an autoscaler reads is not emitted by Forge. It is derived,
 several hops downstream, and each hop adds staleness. Here is the whole chain
 with its shipped defaults.
 
 <Mermaid>
 {`flowchart LR
-  A["NativeLink<br/>OTLP periodic export<br/><b>60s default</b>"] --> B["OTel collector<br/>batch processor<br/><b>up to 10s</b>"]
+  A["Forge<br/>OTLP periodic export<br/><b>60s default</b>"] --> B["OTel collector<br/>batch processor<br/><b>up to 10s</b>"]
   B --> C["Prometheus<br/>scrape_interval<br/><b>15s</b>"]
-  C --> D["recording rule<br/>nativelink:queue_depth<br/><b>60s group interval</b>"]
+  C --> D["recording rule<br/>forge:queue_depth<br/><b>60s group interval</b>"]
   D --> E["HPA sync loop<br/><b>15s default</b>"]`}
 </Mermaid>
 
@@ -76,10 +76,10 @@ binary builds its meter provider with a periodic exporter and never sets an
 interval, so it takes the OpenTelemetry SDK default of 60 seconds. Set
 `OTEL_METRIC_EXPORT_INTERVAL` on the scheduler pod to bring it down.
 
-<SourceLink file="nativelink-util/src/telemetry.rs" symbol="init_tracing" />
+<SourceLink file="forge-util/src/telemetry.rs" symbol="init_tracing" />
 
-**The recording-rule interval is the second.** `nativelink:queue_depth` lives in
-the `nativelink_performance` group in
+**The recording-rule interval is the second.** `forge:queue_depth` lives in
+the `forge_performance` group in
 `deployment-examples/metrics/prometheus-recording-rules.yml`, and that group is
 declared `interval: 60s`. The execution group next to it uses 30s. Either move
 the rule into a group with a short interval, or skip the recording rule for
@@ -105,11 +105,11 @@ short fix and all five are prerequisites.
 | --- | --- | --- |
 | No `resources:` block on the worker container | `kubernetes/components/worker/worker.yaml` | A `Resource`-type HPA metric cannot compute utilization without requests. Scheduling is also unbounded. |
 | `servers: []` in every worker config | `kubernetes/components/worker/worker.json5`, both compose worker configs | A worker process listens on nothing, so there is no port and no path for a readiness or liveness probe. |
-| No `admin: {}` in any `kubernetes/` config | `kubernetes/nativelink/nativelink-config.json5` | The drain endpoint is never registered. Scale-in has no graceful path. |
-| No probes on any NativeLink pod | all shipped manifests | Traffic reaches a CAS that is still doing its startup scan, and rollouts have nothing to gate on. |
+| No `admin: {}` in any `kubernetes/` config | `kubernetes/forge/forge-config.json5` | The drain endpoint is never registered. Scale-in has no graceful path. |
+| No probes on any Forge pod | all shipped manifests | Traffic reaches a CAS that is still doing its startup scan, and rollouts have nothing to gate on. |
 | No PDB, `preStop`, or `terminationGracePeriodSeconds` | all shipped manifests | A scale-in or node drain kills workers mid-action on the default 30-second grace. |
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="AdminConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="AdminConfig" />
 
 ## The health endpoint does less than you expect [#the-health-endpoint-does-less-than-you-expect]
 
@@ -124,7 +124,7 @@ S3, GCS, Azure, Redis, and Mongo. Every composing store (`existence_cache`,
 children. The single exception is `cache_metrics`, which forwards registration
 to its backend.
 
-<SourceLink file="nativelink-util/src/store_trait.rs" symbol="StoreDriver" />
+<SourceLink file="forge-util/src/store_trait.rs" symbol="StoreDriver" />
 
 That has a sharp consequence. In the shipped Kubernetes config, `CAS_MAIN_STORE`
 is an `existence_cache` at the top and `AC_MAIN_STORE` is a
@@ -142,8 +142,8 @@ fall back to the trait's default, which is a full round trip: it generates
 one megabyte of deterministic data, writes it with `update_oneshot`, calls
 `has`, reads it back, and compares.
 
-<SourceLink file="nativelink-util/src/store_trait.rs" symbol="check_health" />
-<SourceLink file="nativelink-store/src/filesystem_store.rs" symbol="check_health" />
+<SourceLink file="forge-util/src/store_trait.rs" symbol="check_health" />
+<SourceLink file="forge-store/src/filesystem_store.rs" symbol="check_health" />
 
 The digest is seeded from the store name, so it is the same blob every time and
 the store does not grow. But against S3 or Azure that is a PUT, a HEAD and a
@@ -201,7 +201,7 @@ readinessProbe:
   failureThreshold: 3
 ```
 
-<SourceLink file="nativelink-worker/src/local_worker.rs" symbol="WorkerRegistration" />
+<SourceLink file="forge-worker/src/local_worker.rs" symbol="WorkerRegistration" />
 
 ## Build the deployment [#build-the-deployment]
 
@@ -226,17 +226,17 @@ env:
 ```yaml
 # a rule group of your own, evaluated fast enough to scale on
 groups:
-  - name: nativelink_autoscaling
+  - name: forge_autoscaling
     interval: 15s
     rules:
-      - record: nativelink:queue_depth_fast
+      - record: forge:queue_depth_fast
         expr: |
           sum by (instance_name) (
-            nativelink_execution_active_count{execution_stage="queued"}
+            forge_execution_active_count{execution_stage="queued"}
           )
 ```
 
-Keep the shipped `nativelink:queue_depth` for dashboards. Scale on the fast
+Keep the shipped `forge:queue_depth` for dashboards. Scale on the fast
 copy, summed without `execution_priority` so the HPA sees one series per
 instance rather than one per priority band.
 
@@ -295,7 +295,7 @@ env:
         fieldPath: metadata.name
 ```
 
-<SourceLink file="nativelink-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
+<SourceLink file="forge-config/src/cas_server.rs" symbol="LocalWorkerConfig" />
 
 This is what makes a worker id traceable back to a pod, in logs and in the
 `execution_worker_id` metric attribute. You need it for step 7.
@@ -308,8 +308,8 @@ This is what makes a worker id traceable back to a pod, in logs and in the
 
 ```yaml
 containers:
-  - name: nativelink-worker
-    image: nativelink-worker
+  - name: forge-worker
+    image: forge-worker
     ports:
       - name: health
         containerPort: 50070
@@ -382,13 +382,13 @@ for the purpose.
 # prometheus-adapter values
 rules:
   external:
-    - seriesQuery: 'nativelink:queue_depth_fast'
+    - seriesQuery: 'forge:queue_depth_fast'
       resources:
         overrides:
           namespace: {resource: "namespace"}
       name:
-        matches: "^nativelink:queue_depth_fast$"
-        as: "nativelink_queue_depth"
+        matches: "^forge:queue_depth_fast$"
+        as: "forge_queue_depth"
       metricsQuery: 'max(<<.Series>>{<<.LabelMatchers>>})'
 ```
 
@@ -396,19 +396,19 @@ rules:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: nativelink-worker
+  name: forge-worker
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: nativelink-worker
+    name: forge-worker
   minReplicas: 3
   maxReplicas: 60
   metrics:
     - type: External
       external:
         metric:
-          name: nativelink_queue_depth
+          name: forge_queue_depth
         target:
           type: AverageValue
           averageValue: "8"
@@ -461,9 +461,9 @@ The second path segment is the scheduler's `name` from the `schedulers` list
 you set `name` to the pod name in step 3, the id is discoverable: it is the
 `execution_worker_id` label on the execution series the scheduler emits for
 that worker's actions, prefixed with the pod name.
-`nativelink_execution_active_count` does not carry that label (it is
-attributed by stage only); `nativelink_execution_stage_transitions_total` and
-`nativelink_execution_completed_count_total` do. A `preStop` hook can look it
+`forge_execution_active_count` does not carry that label (it is
+attributed by stage only); `forge_execution_stage_transitions_total` and
+`forge_execution_completed_count_total` do. A `preStop` hook can look it
 up and call drain.
 
 ```yaml
@@ -476,12 +476,12 @@ lifecycle:
         - -c
         - |
           WID=$(wget -qO- "http://prometheus:9090/api/v1/query?query=\
-          nativelink_execution_stage_transitions_total%7Bexecution_worker_id%3D~%5C%22\
+          forge_execution_stage_transitions_total%7Bexecution_worker_id%3D~%5C%22\
           ${POD_NAME}-.%2A%5C%22%7D" \
             | sed -n 's/.*"execution_worker_id":"\([^"]*\)".*/\1/p' | head -1)
           if [ -n "$WID" ]; then
             wget -qO- --post-data='' \
-              "http://nativelink:50061/admin/scheduler/MAIN_SCHEDULER/set_drain_worker/$WID/1"
+              "http://forge:50061/admin/scheduler/MAIN_SCHEDULER/set_drain_worker/$WID/1"
           fi
           sleep 1500
 ```
@@ -522,12 +522,12 @@ out in parallel with your scale-in.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: nativelink-worker
+  name: forge-worker
 spec:
   minAvailable: 50%
   selector:
     matchLabels:
-      app: nativelink-worker
+      app: forge-worker
 ---
 # in the worker pod spec
 topologySpreadConstraints:
@@ -536,7 +536,7 @@ topologySpreadConstraints:
     whenUnsatisfiable: ScheduleAnyway
     labelSelector:
       matchLabels:
-        app: nativelink-worker
+        app: forge-worker
 ```
 
 The shipped worker manifest has neither, so `replicas: 3` can and does land
@@ -572,10 +572,10 @@ any socket, so during a restart the probe gets connection-refused rather than a
 
 <VerifyBlock>
 
-- `kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/nativelink_queue_depth"`
+- `kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/default/forge_queue_depth"`
   returns a value, and it changes within about thirty seconds of a build
   starting. If it is flat or missing, the adapter rule is wrong.
-- `kubectl describe hpa nativelink-worker` shows the current metric and a recent
+- `kubectl describe hpa forge-worker` shows the current metric and a recent
   scaling event, not `unable to fetch metrics`.
 - Starting a large build grows the pool, and the queue drains rather than
   plateauing. A queue that stays deep while replicas sit at `maxReplicas` means
@@ -633,7 +633,7 @@ attributes.
 
 Sum the reaction-time budget for your actual configuration. The two defaults
 that dominate are the 60-second OTLP export interval and the 60-second interval
-on the shipped `nativelink_performance` rule group. If you skipped step 1, those
+on the shipped `forge_performance` rule group. If you skipped step 1, those
 two alone put you two minutes behind.
 
 </Accordion>
@@ -697,7 +697,7 @@ two-CPU node pool, and the HPA has no visibility into that.
 <Accordion title="Scale-down never happens even when the pool is idle" id="scale-down-never-happens-even-when-the-pool-is-idle">
 
 Check whether the metric is going to zero or merely to a small non-zero value.
-`nativelink_execution_active_count` is an up-down counter; a stuck or abandoned
+`forge_execution_active_count` is an up-down counter; a stuck or abandoned
 operation can leave a queued action counted indefinitely, which pins the HPA
 above `minReplicas`. Compare the metric against the actual scheduler state before
 assuming the policy is wrong.

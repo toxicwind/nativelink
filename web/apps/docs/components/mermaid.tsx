@@ -7,7 +7,7 @@ interface MermaidProps {
 }
 
 /** Read the active theme by inspecting <html data-theme> — works regardless
- *  of which theme provider sets it (our @nativelink/ui ThemeProvider on
+ *  of which theme provider sets it (our @forge/ui ThemeProvider on
  *  marketing, next-themes via Fumadocs in docs). */
 function useThemeAttribute(): "light" | "dark" {
   const [theme, setTheme] = React.useState<"light" | "dark">("dark");

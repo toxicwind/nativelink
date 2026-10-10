@@ -1,27 +1,27 @@
-# Prometheus Deployment for NativeLink Metrics
+# Prometheus Deployment for Forge Metrics
 #
 # NOTE: This configuration uses `translation_strategy: NoUTF8EscapingWithSuffixes` which
 # adds the `_total` suffix to counter metrics when using OTLP ingestion (Prometheus v3+).
 # Recording rules and alerts using counter metrics should use the `_total` suffix
-# (e.g., `nativelink_execution_completed_count_total`).
+# (e.g., `forge_execution_completed_count_total`).
 #
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: nativelink
+  name: forge
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-config
-  namespace: nativelink
+  namespace: forge
 data:
   prometheus.yml: |
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
       external_labels:
-        cluster: 'nativelink-k8s'
+        cluster: 'forge-k8s'
         environment: 'production'
 
     # OTLP configuration (requires --web.enable-otlp-receiver flag)
@@ -41,9 +41,9 @@ data:
         - k8s.namespace.name
         - k8s.pod.name
         - k8s.statefulset.name
-        - nativelink.instance_name
-        - nativelink.worker_id
-        - nativelink.scheduler_name
+        - forge.instance_name
+        - forge.worker_id
+        - forge.scheduler_name
 
       keep_identifying_resource_attributes: true
       translation_strategy: NoUTF8EscapingWithSuffixes
@@ -59,7 +59,7 @@ data:
           - targets: ['otel-collector:9090']
         metric_relabel_configs:
           - source_labels: [__name__]
-            regex: '(nativelink_.*)'
+            regex: '(forge_.*)'
             target_label: __name__
             replacement: '${1}'
 
@@ -67,12 +67,12 @@ data:
         static_configs:
           - targets: ['localhost:9090']
 
-      # Kubernetes service discovery for NativeLink pods
-      - job_name: 'nativelink-pods'
+      # Kubernetes service discovery for Forge pods
+      - job_name: 'forge-pods'
         kubernetes_sd_configs:
           - role: pod
             namespaces:
-              names: ['nativelink']
+              names: ['forge']
         relabel_configs:
           - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
             action: keep
@@ -108,71 +108,71 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-rules
-  namespace: nativelink
+  namespace: forge
 data:
-  nativelink-rules.yml: |
+  forge-rules.yml: |
     groups:
-      - name: nativelink_alerts
+      - name: forge_alerts
         interval: 30s
         rules:
           - alert: NativeLinkHighErrorRate
             expr: |
               (1 - (
-                sum(rate(nativelink_execution_completed_count_total{execution_result="success"}[5m])) /
-                sum(rate(nativelink_execution_completed_count_total[5m]))
+                sum(rate(forge_execution_completed_count_total{execution_result="success"}[5m])) /
+                sum(rate(forge_execution_completed_count_total[5m]))
               )) > 0.05
             for: 5m
             labels:
               severity: warning
-              component: nativelink
+              component: forge
             annotations:
               summary: "High execution error rate ({{ $value | humanizePercentage }})"
-              description: "NativeLink execution error rate is above 5% for the last 5 minutes"
+              description: "Forge execution error rate is above 5% for the last 5 minutes"
 
           - alert: NativeLinkCacheMissRateHigh
             expr: |
               (1 - (
-                sum(rate(nativelink_cache_operations_total{cache_operation_result="hit"}[5m])) by (cache_type) /
-                sum(rate(nativelink_cache_operations_total{cache_operation_name="read"}[5m])) by (cache_type)
+                sum(rate(forge_cache_operations_total{cache_operation_result="hit"}[5m])) by (cache_type) /
+                sum(rate(forge_cache_operations_total{cache_operation_name="read"}[5m])) by (cache_type)
               )) > 0.5
             for: 10m
             labels:
               severity: info
-              component: nativelink
+              component: forge
             annotations:
               summary: "Cache miss rate above 50% for {{ $labels.cache_type }}"
               description: "Cache {{ $labels.cache_type }} has a miss rate above 50% for 10 minutes"
 
           - alert: NativeLinkQueueBacklog
             expr: |
-              sum(nativelink_execution_active_count{execution_stage="queued"}) > 100
+              sum(forge_execution_active_count{execution_stage="queued"}) > 100
             for: 15m
             labels:
               severity: warning
-              component: nativelink
+              component: forge
             annotations:
               summary: "Execution queue backlog above 100 actions"
               description: "{{ $value }} actions are queued for execution"
 
           - alert: NativeLinkWorkerUtilizationLow
             expr: |
-              count(nativelink_execution_active_count{execution_stage="executing"} > 0) /
-              count(count by (execution_worker_id) (nativelink_execution_active_count)) < 0.3
+              count(forge_execution_active_count{execution_stage="executing"} > 0) /
+              count(count by (execution_worker_id) (forge_execution_active_count)) < 0.3
             for: 30m
             labels:
               severity: info
-              component: nativelink
+              component: forge
             annotations:
               summary: "Worker utilization below 30%"
               description: "Only {{ $value | humanizePercentage }} of workers are active"
 
           - alert: NativeLinkCacheEvictionRateHigh
             expr: |
-              sum(rate(nativelink_cache_operations_total{cache_operation_name="evict"}[5m])) by (cache_type) > 10
+              sum(rate(forge_cache_operations_total{cache_operation_name="evict"}[5m])) by (cache_type) > 10
             for: 10m
             labels:
               severity: warning
-              component: nativelink
+              component: forge
             annotations:
               summary: "High cache eviction rate for {{ $labels.cache_type }}"
               description: "Cache {{ $labels.cache_type }} is evicting {{ $value }} items per second"
@@ -182,7 +182,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: prometheus
-  namespace: nativelink
+  namespace: forge
   labels:
     app: prometheus
 spec:
@@ -200,7 +200,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: prometheus
-  namespace: nativelink
+  namespace: forge
   labels:
     app: prometheus
 spec:
@@ -281,7 +281,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: prometheus
-  namespace: nativelink
+  namespace: forge
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -318,7 +318,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: prometheus
-    namespace: nativelink
+    namespace: forge
 
 ---
 # Ingress for external access (optional)
@@ -326,13 +326,13 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: prometheus
-  namespace: nativelink
+  namespace: forge
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
   ingressClassName: nginx
   rules:
-    - host: prometheus.nativelink.local
+    - host: prometheus.forge.local
       http:
         paths:
           - path: /

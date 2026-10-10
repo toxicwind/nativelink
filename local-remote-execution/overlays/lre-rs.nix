@@ -7,7 +7,7 @@
   rust-toolchains ? [lre.stable-rust lre.nightly-rust],
 }: let
   copyright = ''
-    # Copyright 2024 The NativeLink Authors. All rights reserved.
+    # Copyright 2024 The Forge Authors. All rights reserved.
     #
     # Licensed under the Apache License, Version 2.0 (the "License");
     # you may not use this file except in compliance with the License.
@@ -149,8 +149,8 @@
     platform(
         name = "aarch64-apple-darwin",
         exec_properties = {
-            # tag is from nix eval .#packages.aarch64-darwin.nativelink-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/nativelink-worker-lre-rs:$(nix eval --raw .#packages.aarch64-darwin.nativelink-worker-lre-rs.imageTag)",
+            # tag is from nix eval .#packages.aarch64-darwin.forge-worker-lre-rs.imageTag
+            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.aarch64-darwin.forge-worker-lre-rs.imageTag)",
         },
         parents = ["@local-remote-execution//platforms:aarch64-darwin"],
     )
@@ -159,8 +159,8 @@
         name = "aarch64-unknown-linux-gnu",
         constraint_values = ["@local-remote-execution//libc:glibc"],
         exec_properties = {
-            # tag is from nix eval .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/nativelink-worker-lre-rs:$(nix eval --raw .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag)",
+            # tag is from nix eval .#packages.aarch64-linux.forge-worker-lre-rs.imageTag
+            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.aarch64-linux.forge-worker-lre-rs.imageTag)",
         },
         parents = ["@local-remote-execution//platforms:aarch64-linux"],
     )
@@ -169,8 +169,8 @@
         name = "aarch64-unknown-linux-musl",
         constraint_values = ["@local-remote-execution//libc:musl"],
         exec_properties = {
-            # tag is from nix eval .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/nativelink-worker-lre-rs:$(nix eval --raw .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag)",
+            # tag is from nix eval .#packages.aarch64-linux.forge-worker-lre-rs.imageTag
+            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.aarch64-linux.forge-worker-lre-rs.imageTag)",
         },
         parents = ["@local-remote-execution//platforms:aarch64-linux"],
     )
@@ -179,8 +179,8 @@
         name = "x86_64-unknown-linux-gnu",
         constraint_values = ["@local-remote-execution//libc:glibc"],
         exec_properties = {
-            # tag is from nix eval .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/nativelink-worker-lre-rs:$(nix eval --raw .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag)",
+            # tag is from nix eval .#packages.x86_64-linux.forge-worker-lre-rs.imageTag
+            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.x86_64-linux.forge-worker-lre-rs.imageTag)",
         },
         parents = ["@local-remote-execution//platforms:x86_64-linux"],
     )
@@ -189,8 +189,8 @@
         name = "x86_64-unknown-linux-musl",
         constraint_values = ["@local-remote-execution//libc:musl"],
         exec_properties = {
-            # tag is from nix eval .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/nativelink-worker-lre-rs:$(nix eval --raw .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag)",
+            # tag is from nix eval .#packages.x86_64-linux.forge-worker-lre-rs.imageTag
+            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.x86_64-linux.forge-worker-lre-rs.imageTag)",
         },
         parents = ["@local-remote-execution//platforms:x86_64-linux"],
     )

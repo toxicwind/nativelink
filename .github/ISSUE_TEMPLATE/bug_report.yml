@@ -1,5 +1,5 @@
 name: Bug Report
-description: File a bug report to help us improve NativeLink
+description: File a bug report to help us improve Forge
 title: "[Bug]: "
 labels: ["type:bug"]
 body:
@@ -13,7 +13,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: What version of NativeLink are you running?
+      description: What version of Forge are you running?
       placeholder: "e.g. v1.0.0, main@abc1234, or ghcr.io image tag"
     validations:
       required: true
@@ -22,7 +22,7 @@ body:
     id: client
     attributes:
       label: Client
-      description: Which client are you using with NativeLink?
+      description: Which client are you using with Forge?
       options:
         - Bazel
         - Buck2
@@ -43,7 +43,7 @@ body:
     id: deployment
     attributes:
       label: Deployment method
-      description: How are you deploying NativeLink?
+      description: How are you deploying Forge?
       options:
         - Docker
         - Nix
@@ -86,7 +86,7 @@ body:
     id: config
     attributes:
       label: Configuration
-      description: Please paste a sanitized version of your NativeLink configuration.
+      description: Please paste a sanitized version of your Forge configuration.
       render: json5
       placeholder: "{\n  ...\n}"
 

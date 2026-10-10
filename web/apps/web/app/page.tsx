@@ -8,10 +8,10 @@ import {
   ThirdWaveLogo,
 } from "@/components/customer-logos";
 import { McpDemo } from "@/components/mcp-demo";
-import { Badge, Button, Eyebrow, HeroVisual, Marquee, Reveal, Section } from "@nativelink/ui";
+import { Badge, Button, Eyebrow, HeroVisual, Marquee, Reveal, Section } from "@forge/ui";
 
 export const metadata = {
-  title: "NativeLink — Build infrastructure for the agentic era",
+  title: "Forge — Build infrastructure for the agentic era",
 };
 
 const integrations = [
@@ -124,7 +124,7 @@ const benefits = [
 const industries = [
   {
     title: "Robotics & Autonomous Systems",
-    body: "The simulation cycle eats compute. NativeLink caches what's stable, distributes what's new, and gets robotics and AV teams from code change to track-tested in minutes instead of hours.",
+    body: "The simulation cycle eats compute. Forge caches what's stable, distributes what's new, and gets robotics and AV teams from code change to track-tested in minutes instead of hours.",
   },
   {
     title: "Semiconductors & EDA",
@@ -140,11 +140,11 @@ const industries = [
   },
   {
     title: "AI/ML Platforms",
-    body: "Model code, data pipelines, and inference services rebuild constantly. NativeLink keeps the loop tight when an AI commits ten times an hour.",
+    body: "Model code, data pipelines, and inference services rebuild constantly. Forge keeps the loop tight when an AI commits ten times an hour.",
   },
   {
     title: "Browsers & Web Platforms",
-    body: "Chromium and its descendants are some of the largest C++ codebases on the open web. NativeLink speaks Siso natively.",
+    body: "Chromium and its descendants are some of the largest C++ codebases on the open web. Forge speaks Siso natively.",
   },
 ];
 
@@ -167,14 +167,14 @@ export default function HomePage() {
                 </span>
               </h1>
               <p className="mt-6 max-w-[620px] text-[17px] leading-relaxed text-muted-foreground md:text-lg">
-                NativeLink is the parallel compute platform that keeps builds fast while your
+                Forge is the parallel compute platform that keeps builds fast while your
                 codebase and your agents multiply. Rust-powered, open source, and trusted in
                 production by thousands of developers.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Button size="lg" asChild>
                   <a
-                    href="https://github.com/TraceMachina/nativelink"
+                    href="https://github.com/toxicwind/forge"
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -230,15 +230,15 @@ export default function HomePage() {
           <div className="mx-auto mb-12 max-w-[760px] text-center">
             <Eyebrow className="mb-4">Built for AI-assisted development</Eyebrow>
             <h2 className="text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.03em] md:text-[56px]">
-              Wire NativeLink into your AI coding agent.
+              Wire Forge into your AI coding agent.
             </h2>
             <p className="mx-auto mt-6 max-w-[640px] text-base leading-relaxed text-muted-foreground md:text-lg">
-              The NativeLink MCP server gives Claude Code, Cursor, and Codex five real tools, so
+              The Forge MCP server gives Claude Code, Cursor, and Codex five real tools, so
               your agent can configure remote caching, pull docs, and tune builds without leaving
               the editor.
             </p>
             <p className="mx-auto mt-4 max-w-[640px] text-sm leading-relaxed text-muted">
-              The MCP server is part of NativeLink Enterprise and requires an Enterprise licence.
+              The MCP server is part of Forge Enterprise and requires an Enterprise licence.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Button variant="link" asChild>
@@ -277,7 +277,7 @@ export default function HomePage() {
       <Section width="narrow" className="border-b border-border/60 py-24 text-center">
         <Reveal>
           <blockquote className="text-balance border-l-4 border-foreground pl-6 text-left text-2xl font-semibold leading-[1.3] tracking-[-0.02em] md:text-[36px]">
-            "Running NativeLink in production with great results. Great work folks."
+            "Running Forge in production with great results. Great work folks."
           </blockquote>
           <p className="mt-6 font-mono text-sm text-muted-foreground">
             Mustafa Gezen — Rocky Linux
@@ -370,7 +370,7 @@ export default function HomePage() {
             <div className="mx-auto mt-6 max-w-[760px] space-y-4 text-base leading-relaxed text-muted-foreground md:text-lg">
               <p>
                 AI agents commit faster than humans can review and pull dependencies humans never
-                would. NativeLink turns every build into structured, observable data, with every
+                would. Forge turns every build into structured, observable data, with every
                 artifact hashed, every dependency traceable, and every action programmable.
               </p>
               <p>
@@ -390,7 +390,7 @@ export default function HomePage() {
       <Section width="default" className="py-28">
         <Reveal>
           <div className="mb-14 max-w-[680px]">
-            <Eyebrow className="mb-4">The NativeLink difference</Eyebrow>
+            <Eyebrow className="mb-4">The Forge difference</Eyebrow>
             <h2 className="text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.03em] md:text-5xl">
               The pieces teams need before builds become the bottleneck.
             </h2>
@@ -421,7 +421,7 @@ export default function HomePage() {
               Built for the codebases that shape the physical world
             </Eyebrow>
             <h2 className="text-balance text-4xl font-semibold leading-[1.05] tracking-[-0.03em] md:text-5xl">
-              From silicon to simulation, NativeLink runs the builds that ship and the ones agents
+              From silicon to simulation, Forge runs the builds that ship and the ones agents
               are writing next.
             </h2>
           </div>

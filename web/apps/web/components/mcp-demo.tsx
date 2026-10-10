@@ -18,12 +18,12 @@ const tools: Tool[] = [
     id: "config",
     tab: "Bazel config",
     name: "Generate optimal Bazel configuration",
-    prompt: "use nativelink to generate a bazel config for my Rust project",
+    prompt: "use forge to generate a bazel config for my Rust project",
     output: [
-      { text: "# NativeLink Configuration", tone: "comment" },
-      { text: "build --remote_cache=grpcs://cas.nativelink.internal" },
-      { text: "build --remote_header=x-nativelink-api-key=<redacted>", tone: "muted" },
-      { text: "build --remote_executor=grpcs://scheduler.nativelink.internal" },
+      { text: "# Forge Configuration", tone: "comment" },
+      { text: "build --remote_cache=grpcs://cas.forge.internal" },
+      { text: "build --remote_header=x-forge-api-key=<redacted>", tone: "muted" },
+      { text: "build --remote_executor=grpcs://scheduler.forge.internal" },
       { text: "build --remote_timeout=600" },
       { text: "build --jobs=200" },
       { text: "build --remote_download_outputs=minimal" },
@@ -36,9 +36,9 @@ const tools: Tool[] = [
     id: "docs",
     tab: "Docs",
     name: "Fetch documentation and best practices",
-    prompt: "use nativelink to fetch optimization best practices",
+    prompt: "use forge to fetch optimization best practices",
     output: [
-      { text: "# Nativelink Performance Optimization", tone: "comment" },
+      { text: "# Forge Performance Optimization", tone: "comment" },
       { text: "## Cache Optimization", tone: "brand" },
       { text: "1. Increase cache hit rate" },
       { text: "   - Use --experimental_strict_action_env", tone: "muted" },
@@ -53,7 +53,7 @@ const tools: Tool[] = [
     id: "performance",
     tab: "Performance",
     name: "Analyze build performance",
-    prompt: "use nativelink to analyze my build performance (balanced)",
+    prompt: "use forge to analyze my build performance (balanced)",
     output: [
       { text: "# Analyzing cacheHitRate, totalTime, remoteExecutionTime …", tone: "comment" },
       { text: "## Optimization Recommendations", tone: "brand" },
@@ -70,7 +70,7 @@ const tools: Tool[] = [
     id: "watch",
     tab: "Watch & build",
     name: "Watch files, build and test on change",
-    prompt: "use nativelink to watch and rebuild on file changes",
+    prompt: "use forge to watch and rebuild on file changes",
     output: [
       { text: "# Automatic Build with iBazel (Recommended)", tone: "comment" },
       { text: "## Installation", tone: "brand" },
@@ -85,7 +85,7 @@ const tools: Tool[] = [
     id: "builds",
     tab: "Recent builds",
     name: "Get information about recent builds",
-    prompt: "use nativelink to show my recent builds",
+    prompt: "use forge to show my recent builds",
     output: [
       { text: "# Recent builds (last 10) for account: <redacted>", tone: "comment" },
       { text: "[" },
@@ -133,7 +133,7 @@ export function McpDemo() {
         <span className="h-3 w-3 rounded-full bg-border-strong" />
         <span className="h-3 w-3 rounded-full bg-border-strong" />
         <span className="h-3 w-3 rounded-full bg-border-strong" />
-        <span className="ml-3 font-mono text-[11px] text-muted">nativelink-mcp · 5 tools</span>
+        <span className="ml-3 font-mono text-[11px] text-muted">forge-mcp · 5 tools</span>
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-border px-3 pt-3">

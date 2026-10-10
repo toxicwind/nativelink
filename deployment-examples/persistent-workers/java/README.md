@@ -1,6 +1,6 @@
 # Java Persistent Worker Example
 
-This example shows the NativeLink-facing part of a Java compile action that can
+This example shows the Forge-facing part of a Java compile action that can
 run through the remote persistent worker path. The action must declare that the
 tool supports Bazel's worker protocol and that it uses the proto wire format.
 
@@ -22,7 +22,7 @@ def _javac_worker_impl(ctx):
     )
 ```
 
-NativeLink computes the `WorkerKey` from the executable, startup flags before the
+Forge computes the `WorkerKey` from the executable, startup flags before the
 first `@argfile`, and `requires-worker-protocol`. The first action starts
 `javac_worker --persistent_worker`; later compatible actions send `WorkRequest`
 messages to the same process.

@@ -5,7 +5,7 @@ const withMDX = createMDX();
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@nativelink/ui"],
+  transpilePackages: ["@forge/ui"],
   // Preserve links to pages that moved during the docs migration so old,
   // already-published URLs keep resolving instead of 404ing.
   async redirects() {
@@ -99,7 +99,7 @@ const nextConfig = {
         observability: "/operate/observability#faq",
         "remote-execution": "/remote-execution/from-cache-to-execution#faq",
         rust: "/explanations/history#faq",
-        stores: "/reference/nativelink-config/store-overview#faq",
+        stores: "/reference/forge-config/store-overview#faq",
         toolchains: "/remote-execution/toolchains-and-hermeticity#faq",
         troubleshooting: "/getting-started/quickstart#faq",
       }).map(([slug, destination]) => ({

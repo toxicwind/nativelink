@@ -1,15 +1,15 @@
 #:schema tools/cargo-with-detailed-deps.json
 [workspace]
 exclude = [
-  "nativelink-config/generate-stores-config",
-  "nativelink-test/fuzz",
+  "forge-config/generate-stores-config",
+  "forge-test/fuzz",
   "tools/generate-bazel-rc",
 ]
 resolver = "2"
 
 [package]
 edition = "2024"
-name = "nativelink"
+name = "forge"
 rust-version = "1.97.1"
 version = "1.7.6"
 
@@ -25,20 +25,20 @@ opt-level = "z"
 strip = true
 
 [[bin]]
-name = "nativelink"
+name = "forge"
 
 [features]
-nix = ["nativelink-worker/nix"]
+nix = ["forge-worker/nix"]
 
 [dependencies]
-nativelink-config = { path = "nativelink-config" }
-nativelink-error = { path = "nativelink-error" }
-nativelink-proto = { path = "nativelink-proto" }
-nativelink-scheduler = { path = "nativelink-scheduler" }
-nativelink-service = { path = "nativelink-service" }
-nativelink-store = { path = "nativelink-store" }
-nativelink-util = { path = "nativelink-util" }
-nativelink-worker = { path = "nativelink-worker" }
+forge-config = { path = "forge-config" }
+forge-error = { path = "forge-error" }
+forge-proto = { path = "forge-proto" }
+forge-scheduler = { path = "forge-scheduler" }
+forge-service = { path = "forge-service" }
+forge-store = { path = "forge-store" }
+forge-util = { path = "forge-util" }
+forge-worker = { path = "forge-worker" }
 
 async-lock = { version = "3.4.0", features = ["std"], default-features = false }
 axum = { version = "0.8.3", default-features = false }

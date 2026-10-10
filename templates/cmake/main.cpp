@@ -1,6 +1,6 @@
 #include <iostream>
 
 int main() {
-    std::cout << "Hello, NativeLink!\n";
+    std::cout << "Hello, Forge!\n";
     return 0;
 }

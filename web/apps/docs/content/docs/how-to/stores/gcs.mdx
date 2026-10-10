@@ -5,7 +5,7 @@ description: "Back the cache with a GCS bucket: authentication, the resumable-up
 
 {/* archetype: how-to, see /web/apps/docs/templates/how-to.mdx */}
 
-**Who this is for:** anyone running NativeLink on Google Cloud who wants the
+**Who this is for:** anyone running Forge on Google Cloud who wants the
 durable tier to be a GCS bucket. **What you'll have at the end:** a
 bucket-backed CAS behind a local fast tier, authenticated by the ambient
 service account. **Time:** twenty minutes, most of it IAM.
@@ -29,15 +29,15 @@ stores: [
     fast_slow: {
       fast: {
         filesystem: {
-          content_path: "/var/lib/nativelink/cas/content",
-          temp_path: "/var/lib/nativelink/cas/tmp",
+          content_path: "/var/lib/forge/cas/content",
+          temp_path: "/var/lib/forge/cas/tmp",
           eviction_policy: { max_bytes: "50gb" },
         },
       },
       slow: {
         experimental_cloud_object_store: {
           provider: "gcs",
-          bucket: "my-nativelink-cas",
+          bucket: "my-forge-cas",
           key_prefix: "cas/",
           retry: { max_retries: 6, delay: 0.3, jitter: 0.5 },
         },
@@ -52,7 +52,7 @@ location is a property of the bucket, decided when you create it, and the
 client reaches it the same way wherever it lives. Put the bucket in the region
 your workers run in; cross-region reads are both slower and billed.
 
-<SourceLink file="nativelink-config/src/stores.rs" symbol="ExperimentalGcsSpec" />
+<SourceLink file="forge-config/src/stores.rs" symbol="ExperimentalGcsSpec" />
 
 ## Authentication [#authentication]
 
@@ -65,7 +65,7 @@ server on GCE, GKE or Cloud Run. Nothing secret goes in the config file.
 The service account needs to read and write objects in the bucket;
 `roles/storage.objectUser` scoped to the bucket covers it (overwriting an
 existing object in GCS also needs the delete permission that role includes).
-NativeLink itself never deletes objects; expiry is a bucket lifecycle rule.
+Forge itself never deletes objects; expiry is a bucket lifecycle rule.
 
 `authentication_required` defaults to `false`: if no credential is found, the
 store starts anyway and issues anonymous requests to `storage.googleapis.com`
@@ -73,7 +73,7 @@ store starts anyway and issues anonymous requests to `storage.googleapis.com`
 so a misconfigured credential chain fails loudly at startup rather than as a
 permission error on the first request.
 
-<SourceLink file="nativelink-store/src/gcs_client/client.rs" symbol="GcsClient" />
+<SourceLink file="forge-store/src/gcs_client/client.rs" symbol="GcsClient" />
 
 ## Options worth setting [#options-worth-setting]
 
@@ -92,7 +92,7 @@ the 2 MB default, so it can only be lowered, which trades more round trips per
 object for less memory held per in-flight upload. No setting
 raises it.
 
-<SourceLink file="nativelink-store/src/gcs_store.rs" symbol="GcsStore" />
+<SourceLink file="forge-store/src/gcs_store.rs" symbol="GcsStore" />
 
 <Callout type="warn" title="Two timeout fields are documented in milliseconds but read in seconds">
   `connection_timeout_s` and `read_timeout_s` carry a documented default of
@@ -203,7 +203,7 @@ small that everything is evicted before it's re-read.
 
 </Accordion>
 
-<Accordion title="Objects exist in the bucket but NativeLink reports them missing" id="objects-exist-in-the-bucket-but-nativelink-reports-them-missing">
+<Accordion title="Objects exist in the bucket but Forge reports them missing" id="objects-exist-in-the-bucket-but-forge-reports-them-missing">
 
 Check `consider_expired_after_s`. A non-zero value makes objects older than
 that window invisible on purpose, so they pair with a matching bucket lifecycle

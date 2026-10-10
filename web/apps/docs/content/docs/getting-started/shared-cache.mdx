@@ -1,13 +1,13 @@
 ---
 title: Shared cache
-description: Self-host NativeLink on hardware you control, with the operational checklist a team rollout actually needs.
+description: Self-host Forge on hardware you control, with the operational checklist a team rollout actually needs.
 ---
 
 <Prerequisites>
   A cache working on your own machine. The [Quickstart](/getting-started/quickstart) gets you there.
 </Prerequisites>
 
-The source-available release of NativeLink is designed to run on your
+The source-available release of Forge is designed to run on your
 own infrastructure. This page covers what changes between the
 [10-minute quickstart](/getting-started/quickstart) and a deployment that
 serves your team without 3 AM pages.
@@ -24,7 +24,7 @@ Pick on-prem when one of these is true:
   in-house silicon. On-prem lets you use anything that can run a
   Linux binary.
 - **You already operate stateful services.** If your team owns
-  Kubernetes, Postgres, S3-compatible storage, adding NativeLink is
+  Kubernetes, Postgres, S3-compatible storage, adding Forge is
   marginal work.
 
 If you'd rather not run it yourself, Enterprise offers a managed
@@ -32,7 +32,7 @@ deployment; see [Open source and Enterprise](/reference/oss-and-enterprise).
 
 ## What ships in the box [#what-ships-in-the-box]
 
-A NativeLink deployment is composed of four roles. The same binary
+A Forge deployment is composed of four roles. The same binary
 serves all of them; the JSON5 config decides which subset to run.
 
 | Role             | What it does                                              | Statefulness       |
@@ -64,7 +64,7 @@ each independently.
   <li>
     **Pick the deployment substrate.** Most teams land on one of:
     - **Kubernetes**: Helm charts for Kubernetes ship with
-      [NativeLink Enterprise](https://enterprise.nativelink.com); the `kubernetes/`
+      [Forge Enterprise](https://enterprise.forge.com); the `kubernetes/`
       directory in this repository holds only Kustomize building blocks used
       by its own examples.
     - **Bare VMs**: `systemd` units, one binary per role, with a load
@@ -89,7 +89,7 @@ each independently.
     per-hop settings.
   </li>
   <li>
-    **Wire up metrics.** NativeLink pushes OTLP metrics; there is no
+    **Wire up metrics.** Forge pushes OTLP metrics; there is no
     Prometheus scrape endpoint. Send them to an OpenTelemetry Collector
     and let Prometheus and Grafana read from there. See
     [Observability](/operate/observability).
@@ -103,10 +103,10 @@ specific version tag; there is no `latest` tag to fall back on, and
 pinning is what you want in production anyway.
 
 ```bash
-docker pull ghcr.io/tracemachina/nativelink:v1.6.5
+docker pull ghcr.io/tracemachina/forge:v1.6.5
 ```
 
-The [`/pkgs/container/nativelink`](https://github.com/TraceMachina/nativelink/pkgs/container/nativelink)
+The [`/pkgs/container/forge`](https://github.com/toxicwind/forge/pkgs/container/forge)
 page lists every published tag.
 
 ## Backups & recovery [#backups--recovery]
@@ -133,12 +133,12 @@ everything until it warms back up.
     for non-competing purposes are allowed. Metrics and remote persistent
     workers are Business Source License modules: fine for an individual
     developer's cache, but shared, production, or commercial use of those
-    modules needs NativeLink Enterprise or an intentionally
+    modules needs Forge Enterprise or an intentionally
     inexpensive commercial license. Meaningful contributors may be
     eligible for waivers; contact the maintainers before relying on one.
     [Open source and Enterprise](/reference/oss-and-enterprise) works through which files
     carry which licence and why nothing in the binary tells you; the operative
-    text is the [license page](https://nativelink.com/license).
+    text is the [license page](https://forge.com/license).
   </Accordion>
   <Accordion title="What am I actually paying for when I self-host?" id="what-am-i-actually-paying-for-when-i-self-host">
     Compute for the control plane (a few small VMs), CAS storage (the
