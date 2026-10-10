@@ -1,0 +1,16 @@
+---
+title: Weave
+description: Entity-level merge driver that pairs with Forge
+---
+
+Weave resolves false conflicts when agents edit the same file.
+Forge caches the builds that result.
+
+## Setup
+
+```bash
+cargo install --git https://github.com/toxicwind/weave weave-cli weave-driver
+weave setup
+```
+
+See the [weave docs](https://ataraxy-labs.github.io/weave/) for details.
