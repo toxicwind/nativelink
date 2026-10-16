@@ -869,7 +869,7 @@ details.
 - *(deps)* update module github.com/go-git/go-git/v5 to v5.16.5 [security] ([#2138](https://github.com/toxicwind/forge/issues/2138)) - ([dc25843](https://github.com/toxicwind/forge/commit/dc258438336ba6ab5e63c0a48e71987bb88b4621))
 - Fix old Apple SDK refs ([#2224](https://github.com/toxicwind/forge/issues/2224)) - ([edeef58](https://github.com/toxicwind/forge/commit/edeef58de43fc8c2e7f73ec45240e4e9c2f5c9a1))
 - Handle correctly subscription messages ([#2201](https://github.com/toxicwind/forge/issues/2201)) - ([2ea428b](https://github.com/toxicwind/forge/commit/2ea428bfc66e9f7303108141e3a5ee9a6e84dc0d))
-- Fix Redis to reconnect in Sentinel (Chris Staite) ([#2190](https://github.com/toxicwind/forge/issues/2190)) - ([8783134](https://github.com/toxicwind/forge/commit/87831340af3cfcb3cffbc4f43bc3da9ecf8c8467))
+- Fix Redis to reconnect in Sentinel (the Architect Staite) ([#2190](https://github.com/toxicwind/forge/issues/2190)) - ([8783134](https://github.com/toxicwind/forge/commit/87831340af3cfcb3cffbc4f43bc3da9ecf8c8467))
 - Fix worker inflight tasks heading ([#2177](https://github.com/toxicwind/forge/issues/2177)) - ([8ae17ba](https://github.com/toxicwind/forge/commit/8ae17bae0603d66102d171554f331e10a3e9ac9e))
 - Fix all the current clippy lints ([#2174](https://github.com/toxicwind/forge/issues/2174)) - ([23611ca](https://github.com/toxicwind/forge/commit/23611caa3966a1934d6a3a7da0007083bbc75d8b))
 - Fix integer overflow in compression_store.rs data retrieval logic ([#2151](https://github.com/toxicwind/forge/issues/2151)) - ([f996507](https://github.com/toxicwind/forge/commit/f996507b152a7a5e79367475e7854680cce3eb2c))

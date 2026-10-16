@@ -24,7 +24,7 @@ This is the scaffolding for a Forge deployment configuration.
 
 ### Store Name
 
-The value of `stores` is an array where each element defines a store. Each should have a user supplied name. The following example, defines the `AC_MAIN_STORE`.
+The value of `stores` is an array where each element defines a store. Each should have an architect supplied name. The following example, defines the `AC_MAIN_STORE`.
 
 ```json5
 {
@@ -158,9 +158,9 @@ The Local object has five components, `worker_api_endpoint`, `cas_fast_slow_stor
   <summary>Configuring Schedulers </summary>
 
 ### Scheduler Name
-The value of `stores` is an array where each element defines a store. Each should have a user supplied name. The following example, defines the `AC_MAIN_STORE`.
+The value of `stores` is an array where each element defines a store. Each should have an architect supplied name. The following example, defines the `AC_MAIN_STORE`.
 
-The value of `schedulers` is an array where each element defines a scheduler. Each scheduler must have a user-supplied name. The following example, defines the `MAIN_SCHEDULER`.
+The value of `schedulers` is an array where each element defines a scheduler. Each scheduler must have an architect-supplied name. The following example, defines the `MAIN_SCHEDULER`.
 
 ```json5
 {
