@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# nativelink (barn shell) — Forge build server. bin/check.
+#
+# Fast self-test (PASS/FAIL), no compile:
+#   1. Cargo workspace parses.
+#   2. The forge server binary source exists (src/bin/forge.rs).
+#   3. BUILD.bazel present (bazel path available) — informational.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "== nativelink check: start =="
+cmd="$(command -v cargo 2>/dev/null || true)"
+CARGO=""
+for c in /home/toxic/.cargo/bin/cargo "$cmd" /usr/local/bin/cargo /usr/bin/cargo; do
+  [ -n "$c" ] && [ -x "$c" ] && { CARGO="$c"; break; }
+done
+[ -n "${CARGO:-}" ] || { echo "FAIL: cargo not found"; exit 1; }
+
+"$CARGO" metadata --no-deps --format-version 1 >/dev/null 2>&1 \
+  || { echo "FAIL: Cargo workspace does not parse"; exit 1; }
+echo "OK: Cargo workspace parses"
+
+if [ -f src/bin/forge.rs ]; then
+  echo "OK: forge server binary entrypoint (src/bin/forge.rs) present"
+else
+  echo "FAIL: src/bin/forge.rs missing"; exit 1
+fi
+if [ -f BUILD.bazel ]; then
+  echo "OK: BUILD.bazel present (bazel path available)"
+fi
+echo "NATIVELINK CHECK: PASS"
+exit 0

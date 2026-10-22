@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# nativelink (barn shell) — Forge build server (Cargo edition 2024, Rust build farm). bin/run.
+#
+# Primary operation: build + serve the build farm. `cargo build --release -p forge`
+# compiles the `forge` server binary (src/bin/forge.rs). This rig surfaces the
+# build without forcing a full compile on a bare checkout: it validates the
+# Cargo workspace parses and prints the exact build/serve commands.
+#
+# Usage:
+#   bin/run            structural boot (cargo metadata, no compile)
+#   bin/run build      cargo build (release) — the primary op
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+cmd="$(command -v cargo 2>/dev/null || true)"
+CARGO=""
+for c in /home/toxic/.cargo/bin/cargo "$cmd" /usr/local/bin/cargo /usr/bin/cargo; do
+  [ -n "$c" ] && [ -x "$c" ] && { CARGO="$c"; break; }
+done
+[ -n "${CARGO:-}" ] || { echo "FAIL: cargo not found"; exit 1; }
+
+case "${1:-boot}" in
+  build)
+    echo "== nativelink run: build release forge server =="
+    exec "$CARGO" build --release -p forge
+    ;;
+  boot|*)
+    echo "== nativelink run: structural boot =="
+    "$CARGO" metadata --no-deps --format-version 1 >/dev/null 2>&1 \
+      || { echo "FAIL: cargo workspace does not parse"; exit 1; }
+    echo "OK: cargo workspace parses (crate: forge, edition 2024)"
+    echo "use: bin/run build  -> cargo build --release -p forge (the build server)"
+    echo "see src/bin/forge.rs for the forge binary entrypoint."
+    ;;
+esac
