@@ -7,5 +7,5 @@ components:
 - ../../components/worker
 
 images:
-- name: forge-worker
-  newName: forge-worker-siso-chromium
+- name: nativelink-worker
+  newName: nativelink-worker-siso-chromium

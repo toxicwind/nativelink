@@ -14,5 +14,5 @@ configMapGenerator:
         kustomize.toolkit.fluxcd.io/substitute: disabled
 
 images:
-  - name: forge-worker-init
-  - name: forge-worker
+  - name: nativelink-worker-init
+  - name: nativelink-worker

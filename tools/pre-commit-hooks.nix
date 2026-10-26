@@ -1,12 +1,9 @@
 {
   pkgs,
   nightly-rust,
-  generate-bazel-rc,
-  generate-stores-config,
-  flake-root,
   ...
 }: let
-  excludes = ["forge-proto/genproto"];
+  excludes = ["nativelink-proto/genproto" "native-cli/vendor"];
 in {
   # Default hooks
   check-case-conflicts = {
@@ -50,14 +47,7 @@ in {
     in "${script}/bin/forbid-binary-files";
     excludes = [
       # Testdata for fastcdc.
-      "forge-util/tests/data/SekienAkashita.jpg"
-      # Menlo Security case-study figures on the marketing site.
-      "web/apps/web/public/assets/menlo-security-build-time-comparison.jpg"
-      "web/apps/web/public/assets/menlo-security-kubernetes-topology.jpg"
-      # RE API Fellow figures on the marketing site.
-      "web/apps/web/public/assets/re-api-fellow-fig1-action-lifecycle.jpg"
-      "web/apps/web/public/assets/re-api-fellow-fig2-protocol-never-says-compiler.jpg"
-      "web/apps/web/public/assets/re-api-fellow-fig3-overlap-hiring.jpg"
+      "nativelink-util/tests/data/SekienAkashita.jpg"
     ];
     name = "forbid-binary-files";
     types = ["binary"];
@@ -83,18 +73,57 @@ in {
     settings.configPath = ".vale.ini";
   };
 
-  # General
-  typos = {
+  # Go
+  gci = {
+    description = "Fix go imports.";
     enable = true;
-    settings.configPath = "typos.toml";
+    entry = "${pkgs.gci}/bin/gci write";
+    inherit excludes;
+    name = "gci";
+    types = ["go"];
+  };
+  gofumpt = {
+    description = "Format Go.";
+    enable = true;
+    entry = "${pkgs.gofumpt}/bin/gofumpt -w -l";
+    inherit excludes;
+    name = "gofumpt";
+    types = ["go"];
+  };
+  # TODO(aaronmondal): This linter works in the nix developmen environment, but
+  #                    not with `nix flake check`. It's unclear how to fix this.
+  golangci-lint-in-shell = {
+    enable = true;
+    entry = let
+      script = pkgs.writeShellScript "precommit-golangci-lint" ''
+        # TODO(aaronmondal): This linter works in the nix development
+        #                    environment, but not with `nix flake check`. It's
+        #                    unclear how to fix this.
+        if [ ''${IN_NIX_SHELL} = "impure" ]; then
+          export PATH=${pkgs.go}/bin:$PATH
+          cd native-cli
+          CC=customClang ${pkgs.golangci-lint}/bin/golangci-lint run --modules-download-mode=readonly
+        fi
+      '';
+    in
+      builtins.toString script;
+    inherit excludes;
+    pass_filenames = false;
+    require_serial = true;
+    types = ["go"];
+  };
+  golines = {
+    description = "Shorten Go lines.";
+    enable = true;
+    entry = "${pkgs.golines}/bin/golines --max-len=80 -w";
+    inherit excludes;
+    name = "golines";
+    types = ["go"];
   };
 
   # Nix
   alejandra.enable = true;
-  deadnix = {
-    inherit excludes;
-    enable = true;
-  };
+  deadnix.enable = true;
   statix.enable = true;
 
   # Rust
@@ -102,33 +131,6 @@ in {
     enable = true;
     packageOverrides.cargo = nightly-rust.cargo;
     packageOverrides.rustfmt = nightly-rust.rustfmt;
-    pass_filenames = true;
-    inherit excludes;
-  };
-
-  # Taplo fmt
-  taplo = {
-    enable = true;
-    types = ["toml"];
-  };
-
-  # Taplo validate
-  taplo-validate = {
-    enable = true;
-    entry = "${pkgs.taplo}/bin/taplo validate";
-    name = "taplo validate";
-    types = ["toml"];
-  };
-
-  # Shell
-  shellcheck = {
-    enable = true;
-    excludes = [".envrc"] ++ excludes;
-  };
-  shfmt = {
-    args = ["--indent" "4" "--space-redirects"];
-    enable = true;
-    inherit excludes;
   };
 
   # Starlark
@@ -146,75 +148,5 @@ in {
     excludes = ["local-remote-execution/generated-cc/cc/cc_toolchain_config.bzl"];
     name = "buildifier lint";
     types = ["bazel"];
-  };
-
-  # bazelrc
-  generate-bazel-rc = {
-    description = "Generate bazelrc";
-    enable = true;
-    entry = "${generate-bazel-rc}/bin/generate-bazel-rc Cargo.toml .bazelrc";
-    name = "generate-bazel-rc";
-    files = "Cargo.toml|.bazelrc";
-    pass_filenames = false;
-  };
-
-  pretty-format-json = {
-    enable = true;
-    args = ["--autofix" "--top-keys" "name,type"];
-  };
-
-  # json5
-  formatjson5 = {
-    excludes =
-      excludes
-      ++ ["forge-config/examples/stores-config.json5"];
-    description = "Format json5 files";
-    enable = true;
-    entry = "${pkgs.formatjson5}/bin/formatjson5";
-    args = ["-r" "--indent" "2"];
-    types = ["json5"];
-  };
-
-  # Renovate config validator
-  renovate = {
-    description = "Validate renovate config";
-    enable = true;
-    entry = "${pkgs.renovate}/bin/renovate-config-validator";
-    args = ["--strict"];
-    files = "renovate.json5";
-  };
-
-  # Detect unused cargo deps
-  machete = {
-    description = "Detect unused cargo deps";
-    enable = true;
-    entry = "${pkgs.cargo-machete}/bin/cargo-machete";
-    args = ["--with-metadata" "."];
-    pass_filenames = false;
-  };
-
-  # Generate demo config to test stores.rs comments
-  generate-stores-config = {
-    description = "Generate stores config";
-    enable = true;
-    entry = "${generate-stores-config}/bin/generate-stores-config forge-config/src/stores.rs forge-config/examples/stores-config.json5";
-    name = "generate-stores-config";
-    files = "forge-config/src/stores.rs|forge-config/examples/stores-config.json5";
-    pass_filenames = false;
-  };
-
-  # Check licenses
-  check-license = {
-    description = "Check licenses";
-    enable = true;
-    entry = let
-      script = pkgs.writeShellScriptBin "check-license" ''
-        set -eu
-
-        ${pkgs.python3}/bin/python $(${flake-root}/bin/flake-root)/tools/check_license.py $(${flake-root}/bin/flake-root)
-      '';
-    in "${script}/bin/check-license";
-    types = ["rust"];
-    pass_filenames = false;
   };
 }

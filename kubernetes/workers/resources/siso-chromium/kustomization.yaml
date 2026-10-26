@@ -12,17 +12,17 @@ components:
 replacements:
   - source:
       kind: Kustomization
-      name: forge
+      name: nativelink
       fieldPath: metadata.name
     targets:
       - select:
           kind: Kustomization
-          name: forge-alert
+          name: nativelink-alert
         fieldPaths:
           - spec.postBuild.substitute.PLACEHOLDER_CONFIG_MAP_NAME
       - select:
           kind: Kustomization
-          name: forge
+          name: nativelink
         fieldPaths:
           - spec.postBuild.substituteFrom.0.name
 
@@ -30,13 +30,13 @@ patches:
 - patch: |-
     - op: replace
       path: /spec/postBuild/substitute/PLACEHOLDER_FLAKE_OUTPUT
-      value: github:toxicwind/forge#forge-worker-siso-chromium
+      value: github:TraceMachina/nativelink#nativelink-worker-siso-chromium
     - op: add
       path: /spec/nameSuffix
       value: -siso-chromium
   target:
     kind: Kustomization
-    name: forge-alert
+    name: nativelink-alert
 - patch: |-
     - op: replace
       path: /spec/path
@@ -45,16 +45,16 @@ patches:
       path: /spec/postBuild/substituteFrom/1
       value:
         kind: ConfigMap
-        name: forge-worker-init
+        name: nativelink-worker-init
     - op: add
       path: /spec/images
       value:
-      - name: forge-worker-init
-        newName: localhost:5001/forge-worker-init
-        newTag: ${FORGE_WORKER_INIT_TAG}
-      - name: forge-worker-siso-chromium
-        newName: localhost:5001/forge-worker-siso-chromium
-        newTag: ${FORGE_WORKER_SISO_CHROMIUM_TAG}
+      - name: nativelink-worker-init
+        newName: localhost:5001/nativelink-worker-init
+        newTag: ${NATIVELINK_WORKER_INIT_TAG}
+      - name: nativelink-worker-siso-chromium
+        newName: localhost:5001/nativelink-worker-siso-chromium
+        newTag: ${NATIVELINK_WORKER_SISO_CHROMIUM_TAG}
   target:
     kind: Kustomization
-    name: forge
+    name: nativelink

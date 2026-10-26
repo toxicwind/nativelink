@@ -1,5 +1,5 @@
 extends: existence
-message: "Remove '%s' if it's not important to the meaning of the statement."
+message: "Consider removing '%s'."
 link: https://docs.microsoft.com/en-us/style-guide/word-choice/use-simple-words-concise-sentences
 ignorecase: true
 level: warning
@@ -54,7 +54,6 @@ tokens:
   - doubtfully
   - dreamily
   - easily
-  - effectively
   - elegantly
   - energetically
   - enormously
@@ -165,7 +164,6 @@ tokens:
   - quickly
   - quietly
   - quirkily
-  - quite
   - quizzically
   - randomly
   - rapidly

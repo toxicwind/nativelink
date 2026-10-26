@@ -1,4 +1,4 @@
-# Copyright 2024 The Forge Authors. All rights reserved.
+# Copyright 2024 The NativeLink Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@
 # to those of GOOS and GOARCH.
 # See: https://gist.github.com/asukakenji/f15ba7e588ac42795f421b48b8aede63.
 
-# TODO(palfrey): Reevaluate this implementation once Bazel 8 is released
+# TODO(aaronmondal): Reevaluate this implementation once Bazel 8 is released
 #                    which adds support for platform-specific flags.
 
 platform(

@@ -6,7 +6,7 @@ resources:
   - cosign-verify.yaml
   - nix2container-copyto.yaml
   - nix2container-image-info.yaml
-  - rebuild-forge.yaml
+  - rebuild-nativelink.yaml
   - skopeo-check-hashlocked-url.yaml
   - skopeo-copy.yaml
   - trigger.yaml

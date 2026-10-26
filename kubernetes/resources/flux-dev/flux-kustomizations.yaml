@@ -16,7 +16,7 @@ spec:
   wait: true
   sourceRef:
     kind: GitRepository
-    name: forge-infra
+    name: nativelink-infra
     namespace: flux-system
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -30,11 +30,11 @@ spec:
   prune: true
   force: true
   retryInterval: 20s
-  # Don't set targetNamespace for this one as OLM manages this itself.
+  # Don't set targetNamespace for this one as OLM mangages this itself.
   wait: true
   sourceRef:
     kind: GitRepository
-    name: forge-infra
+    name: nativelink-infra
     namespace: flux-system
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
@@ -52,7 +52,7 @@ spec:
   wait: true
   sourceRef:
     kind: GitRepository
-    name: forge-infra
+    name: nativelink-infra
     namespace: flux-system
   dependsOn:
     - name: olm

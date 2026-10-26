@@ -14,5 +14,6 @@ sources:
 
 # Now configure the commands to run
 config:
+
   build-commands:
-  - echo hello.c
+  - make hello

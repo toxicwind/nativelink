@@ -6,6 +6,7 @@
   options.perSystem = flake-parts-lib.mkPerSystemOption (
     {
       config,
+      options,
       pkgs,
       ...
     }: let
@@ -16,7 +17,7 @@
         enable = lib.mkOption {
           type = lib.types.bool;
           default =
-            if pkgs.stdenv.hostPlatform.isDarwin
+            if pkgs.stdenv.isDarwin
             then true
             else false;
         };
@@ -32,8 +33,8 @@
       config.${namespace} = lib.mkIf cfg.enable {
         installationScript = let
           bazelrcContent = ''
-            build --@rules_rust//:extra_rustc_flags=-L${pkgs.libiconv}/lib
-            build --@rules_rust//:extra_exec_rustc_flags=-L${pkgs.libiconv}/lib
+            build --@rules_rust//:extra_rustc_flags=-L${pkgs.libiconv}/lib,-Lframework=${pkgs.darwin.Security}/Library/Frameworks,-Lframework=${pkgs.darwin.CF}/Library/Frameworks
+            build --@rules_rust//:extra_exec_rustc_flags=-L${pkgs.libiconv}/lib,-Lframework=${pkgs.darwin.Security}/Library/Frameworks,-Lframework=${pkgs.darwin.CF}/Library/Frameworks
           '';
         in
           import ../installation-script.nix {

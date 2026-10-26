@@ -2,8 +2,8 @@
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Provider
 metadata:
-  name: forge-webhook
+  name: nativelink-webhook
   namespace: ci
 spec:
   type: generic
-  address: http://el-forge-rebuild.ci.svc.cluster.local:8080
+  address: http://el-nativelink-rebuild.ci.svc.cluster.local:8080

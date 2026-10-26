@@ -10,13 +10,13 @@ patches:
 - patch: |-
     - op: replace
       path: /spec/postBuild/substitute/PLACEHOLDER_FLAKE_OUTPUT
-      value: github:toxicwind/forge#forge-worker-init
+      value: github:TraceMachina/nativelink#nativelink-worker-init
     - op: replace
       path: /spec/postBuild/substitute/PLACEHOLDER_CONFIG_MAP_NAME
-      value: forge-worker-init
+      value: nativelink-worker-init
     - op: add
       path: /spec/nameSuffix
       value: -worker-init
   target:
     kind: Kustomization
-    name: forge-alert
+    name: nativelink-alert

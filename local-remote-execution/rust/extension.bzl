@@ -1,4 +1,4 @@
-# Copyright 2024 The Forge Authors. All rights reserved.
+# Copyright 2024 The NativeLink Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
-# TODO(palfrey): Using module extensions here isn't optimal as it doesn't
+# TODO(aaronmondal): Using module extensions here isn't optimal as it doesn't
 #                    allow overriding tools via environment variables.
 #                    Unfortunately rules_rust's rust_toolchain currently
 #                    requires tools to be declared via labels to filegroups,
@@ -30,32 +30,42 @@ def _lre_rs_impl(_mctx):
     new_local_repository(
         name = "lre-rs-stable-aarch64-darwin",
         build_file = "@local-remote-execution//rust:aarch64-darwin.BUILD.bazel",
-        path = "/nix/store/0ivm7k16v2x6gv292j95mwaksn34h64j-rust-default-1.97.1",
+        path = "/nix/store/8v5slgb251n1gwzmcavq77jm1m16zdz8-rust-default-1.86.0",
     )
     new_local_repository(
         name = "lre-rs-nightly-aarch64-darwin",
         build_file = "@local-remote-execution//rust:aarch64-darwin.BUILD.bazel",
-        path = "/nix/store/ihl785r1qvhliiih0gl2c2hb1cw8vj3d-rust-default-1.100.0-nightly-2026-08-26",
+        path = "/nix/store/w15wh2agj3l08m3cc7zsrhrqx74bva3l-rust-default-1.88.0-nightly-2025-04-03",
     )
     new_local_repository(
         name = "lre-rs-stable-aarch64-linux",
         build_file = "@local-remote-execution//rust:aarch64-linux.BUILD.bazel",
-        path = "/nix/store/38rjkxgh6415377x0vr9p2yrhcrwz3vh-rust-default-1.97.1",
+        path = "/nix/store/ib984g7vhr4gxqm3hig9sr3963c29y9l-rust-default-1.86.0",
     )
     new_local_repository(
         name = "lre-rs-nightly-aarch64-linux",
         build_file = "@local-remote-execution//rust:aarch64-linux.BUILD.bazel",
-        path = "/nix/store/qsc3qlkqm70anx9dgimcsgrgv6hbyc67-rust-default-1.100.0-nightly-2026-08-26",
+        path = "/nix/store/pn9hsdishqpz5r9fl1aixv0wisy3x1fb-rust-default-1.88.0-nightly-2025-04-03",
+    )
+    new_local_repository(
+        name = "lre-rs-stable-x86_64-darwin",
+        build_file = "@local-remote-execution//rust:x86_64-darwin.BUILD.bazel",
+        path = "/nix/store/lzr96nsxyf8dkkl3xm1hdcdgziph90qn-rust-default-1.86.0",
+    )
+    new_local_repository(
+        name = "lre-rs-nightly-x86_64-darwin",
+        build_file = "@local-remote-execution//rust:x86_64-darwin.BUILD.bazel",
+        path = "/nix/store/0k9lkk1n1dp40w8rk4bj45zcx4h6bfdm-rust-default-1.88.0-nightly-2025-04-03",
     )
     new_local_repository(
         name = "lre-rs-stable-x86_64-linux",
         build_file = "@local-remote-execution//rust:x86_64-linux.BUILD.bazel",
-        path = "/nix/store/16iqjcbihzjbj6hdr7iqwdqzgwrwgrzr-rust-default-1.97.1",
+        path = "/nix/store/flg5c544fxfl8b73kk4qnqfm8f4bil8j-rust-default-1.86.0",
     )
     new_local_repository(
         name = "lre-rs-nightly-x86_64-linux",
         build_file = "@local-remote-execution//rust:x86_64-linux.BUILD.bazel",
-        path = "/nix/store/ynvh9map0qv132chm5wdif3ymqk6x1d7-rust-default-1.100.0-nightly-2026-08-26",
+        path = "/nix/store/mp8b542n4zg3i56wdind6q254imwrv8d-rust-default-1.88.0-nightly-2025-04-03",
     )
 
 lre_rs = module_extension(implementation = _lre_rs_impl)

@@ -7,7 +7,7 @@
   rust-toolchains ? [lre.stable-rust lre.nightly-rust],
 }: let
   copyright = ''
-    # Copyright 2024 The Forge Authors. All rights reserved.
+    # Copyright 2024 The NativeLink Authors. All rights reserved.
     #
     # Licensed under the Apache License, Version 2.0 (the "License");
     # you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
   systems = [
     "aarch64-darwin"
     "aarch64-linux"
+    "x86_64-darwin"
     "x86_64-linux"
   ];
   channels = [
@@ -55,16 +56,15 @@
       ${" "}           "bin/*.so",
       ${" "}           "lib/*.so",
       ${" "}           "lib/rustlib/${target}/codegen-backends/*.so",
+      ${" "}           "lib/rustlib/${target}/bin/rust-lld",
       ${" "}           "lib/rustlib/${target}/lib/*.so",
-      ${" "}       ] + ["lib/rustlib/${target}/bin/rust-lld"],
-      ${" "}       allow_empty = True),'';
+      ${" "}       ], allow_empty = True),'';
 
     # Generate stdlib select entry for a target
     mkStdlibSelectEntry = target:
       ''
         ${" "}       "@local-remote-execution//rust/triple:${target}": glob([
         ${" "}           "lib/rustlib/${target}/lib/*.rlib",
-        ${" "}           "lib/rustlib/${target}/lib/*.rmeta",  # See https://github.com/bazelbuild/rules_rust/issues/3859
         ${" "}           "lib/rustlib/${target}/lib/*.so",
         ${" "}           "lib/rustlib/${target}/lib/*.a",''
       + (lib.optionalString (builtins.match ".*-musl" target != null)
@@ -126,7 +126,7 @@
 
     load("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
-    # TODO(palfrey): Using module extensions here isn't optimal as it doesn't
+    # TODO(aaronmondal): Using module extensions here isn't optimal as it doesn't
     #                    allow overriding tools via environment variables.
     #                    Unfortunately rules_rust's rust_toolchain currently
     #                    requires tools to be declared via labels to filegroups,
@@ -143,14 +143,14 @@
     ${copyright}
     # Some toolchains, like the darwin ones, don't have an actual container image.
     # We still map them to the output of the tag of the corresponding theoretical
-    # worker image so that bare metal workers can advertise exact
+    # worker image so that bare metal metal workers can advertise exact
     # exec_properties to schedulers.
 
     platform(
         name = "aarch64-apple-darwin",
         exec_properties = {
-            # tag is from nix eval .#packages.aarch64-darwin.forge-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.aarch64-darwin.forge-worker-lre-rs.imageTag)",
+            # nix eval .#packages.aarch64-darwin.nativelink-worker-lre-rs.imageTag
+            "lre-rs": $(nix eval .#packages.aarch64-darwin.nativelink-worker-lre-rs.imageTag),
         },
         parents = ["@local-remote-execution//platforms:aarch64-darwin"],
     )
@@ -159,8 +159,8 @@
         name = "aarch64-unknown-linux-gnu",
         constraint_values = ["@local-remote-execution//libc:glibc"],
         exec_properties = {
-            # tag is from nix eval .#packages.aarch64-linux.forge-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.aarch64-linux.forge-worker-lre-rs.imageTag)",
+            # nix eval .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag
+            "lre-rs": $(nix eval .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag),
         },
         parents = ["@local-remote-execution//platforms:aarch64-linux"],
     )
@@ -169,18 +169,27 @@
         name = "aarch64-unknown-linux-musl",
         constraint_values = ["@local-remote-execution//libc:musl"],
         exec_properties = {
-            # tag is from nix eval .#packages.aarch64-linux.forge-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.aarch64-linux.forge-worker-lre-rs.imageTag)",
+            # nix eval .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag
+            "lre-rs": $(nix eval .#packages.aarch64-linux.nativelink-worker-lre-rs.imageTag),
         },
         parents = ["@local-remote-execution//platforms:aarch64-linux"],
+    )
+
+    platform(
+        name = "x86_64-apple-darwin",
+        exec_properties = {
+            # nix eval .#packages.x86_64-darwin.nativelink-worker-lre-rs.imageTag
+            "lre-rs": $(nix eval .#packages.x86_64-darwin.nativelink-worker-lre-rs.imageTag),
+        },
+        parents = ["@local-remote-execution//platforms:x86_64-darwin"],
     )
 
     platform(
         name = "x86_64-unknown-linux-gnu",
         constraint_values = ["@local-remote-execution//libc:glibc"],
         exec_properties = {
-            # tag is from nix eval .#packages.x86_64-linux.forge-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.x86_64-linux.forge-worker-lre-rs.imageTag)",
+            # nix eval .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag
+            "lre-rs": $(nix eval .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag),
         },
         parents = ["@local-remote-execution//platforms:x86_64-linux"],
     )
@@ -189,8 +198,8 @@
         name = "x86_64-unknown-linux-musl",
         constraint_values = ["@local-remote-execution//libc:musl"],
         exec_properties = {
-            # tag is from nix eval .#packages.x86_64-linux.forge-worker-lre-rs.imageTag
-            "container-image": "ghcr.io/tracemachina/forge-worker-lre-rs:$(nix eval --raw .#packages.x86_64-linux.forge-worker-lre-rs.imageTag)",
+            # nix eval .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag
+            "lre-rs": $(nix eval .#packages.x86_64-linux.nativelink-worker-lre-rs.imageTag),
         },
         parents = ["@local-remote-execution//platforms:x86_64-linux"],
     )
@@ -202,6 +211,10 @@
 
     cat > ''${SRC_ROOT}/rust/aarch64-linux.BUILD.bazel << EOF
     ${buildFile "aarch64-linux"}
+    EOF
+
+    cat > ''${SRC_ROOT}/rust/x86_64-darwin.BUILD.bazel << EOF
+    ${buildFile "x86_64-darwin"}
     EOF
 
     cat > ''${SRC_ROOT}/rust/x86_64-linux.BUILD.bazel << EOF

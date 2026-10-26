@@ -12,7 +12,7 @@ spec:
       type: string
       description: >
         A fully qualified image url which includes the hash like:
-          `ghcr.io/tracemachina/forge@sha256xxxxxxxxx`
+          `ghcr.io/tracemachina/nativelink@sha256xxxxxxxxx`
 
         Don't pass images by tag here. It would make the verification result
         useless as a tagged image could be changed between the time of

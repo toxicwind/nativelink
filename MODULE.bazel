@@ -1,154 +1,70 @@
 module(
-    name = "forge",
-    version = "1.7.6",
+    name = "nativelink",
+    version = "0.6.0",
+    compatibility_level = 0,
 )
 
-bazel_dep(name = "rules_cc", version = "0.2.22")
-bazel_dep(name = "platforms", version = "1.1.0")
-bazel_dep(name = "bazel_skylib", version = "1.9.0")
-bazel_dep(name = "rules_python", version = "2.0.0")
-bazel_dep(name = "rules_shell", version = "0.8.0")
+bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "platforms", version = "0.0.11")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "rules_python", version = "1.2.0")
+bazel_dep(name = "rules_shell", version = "0.4.0")
 
-# hermetic-llvm: zero-sysroot, fully hermetic LLVM cross-compilation toolchain.
-# Inside Nix, lre.bazelrc registers @local-remote-execution//generated-cc/...
-# via --extra_toolchains, which outranks the MODULE.bazel registration below,
-# so Nix users keep getting LRE-CC unchanged. Outside Nix (no lre.bazelrc),
-# these hermetic toolchains replace the host autodetect path.
-bazel_dep(name = "llvm", version = "0.8.18")
-
-register_toolchains("@llvm//toolchain:all")
-
-# We use the Nix Python install, as per https://rules-python.readthedocs.io/en/latest/toolchains.html#local-toolchain
-# Can't use the rules_python download versions as it breaks with the genrule stuff in forge-proto
-# Also, this way around we get a Nix-locked Python binary
-local_runtime_repo = use_repo_rule(
-    "@rules_python//python/local_toolchains:repos.bzl",
-    "local_runtime_repo",
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    configure_coverage_tool = True,
+    # TODO(aaronmondal): Fix or remove legacy container pipelines so that they
+    #                    run rootless.
+    ignore_root_user_error = True,
+    python_version = "3.12",
 )
+use_repo(python, python = "python_versions")
 
-local_runtime_toolchains_repo = use_repo_rule(
-    "@rules_python//python/local_toolchains:repos.bzl",
-    "local_runtime_toolchains_repo",
-)
-
-local_runtime_repo(
-    name = "local_python3",
-    dev_dependency = True,
-    interpreter_path = "python3",
-    on_failure = "fail",
-)
-
-local_runtime_toolchains_repo(
-    name = "local_python_toolchains",
-    dev_dependency = True,
-    runtimes = ["local_python3"],
-)
-
-register_toolchains(
-    "@local_python_toolchains//:all",
-    dev_dependency = True,
-)
-
-bazel_dep(name = "rules_rs", version = "0.0.108")
-
-# AWS-LC, built with Bazel's own C++ toolchain instead of aws-lc-sys's cargo
-# build script. The build script compiles against the host's glibc headers
-# even when the target is musl, which leaves `__isoc23_*` symbols dangling at
-# link time; the rules_rs recipe below swaps that script for this module plus
-# pregenerated bindings. aws-lc-rs is only linked for the JWT signing behind
-# gcloud-auth's `jwt-aws-lc-rs` feature (see forge-store/Cargo.toml).
-bazel_dep(name = "aws-lc", version = "5.1.0.bcr.2")
-
-rules_rust_bindgen = use_extension("@rules_rs//rs:rules_rust_bindgen.bzl", "rules_rust_bindgen")
-use_repo(rules_rust_bindgen, "rules_rust_bindgen")
-
-register_toolchains("@rules_rust_bindgen//:all")
-
-# Pin rules_rust to the hermeticbuild fork
-# (see https://github.com/hermeticbuild/rules_rs/blob/v0.0.108/rs/rules_rust.bzl)
-# so all `@rules_rust//...` references resolve to the patched ruleset. The
-# bazel_dep + archive_override is the form that keeps `@rules_rust` visible to
-# subsequent `use_extension(...)` calls in this MODULE.bazel — the alternative
-# (relying solely on use_repo from the rules_rs extension) doesn't expose the
-# repo at the module level.
-#
-# The local musl-platforms patch is still applied because the hermeticbuild
-# fork does not list x86_64/aarch64-unknown-linux-musl as supported triples in
-# rust/platform/triple_mappings.bzl.
-bazel_dep(name = "rules_rust", version = "0.74.0")
+bazel_dep(name = "rules_rust", version = "0.59.2")
 archive_override(
     module_name = "rules_rust",
-    integrity = "sha256-HlMDBHp6cs2qM2B6HiIXUctf4WG/qWKVhm3Kilsmyto=",
+    integrity = "sha256-CeF7R8AVBGVjGqMZ8nQnYKQ+3tqy6cAS+R0K4u/wImg=",
     patch_strip = 1,
     patches = ["//tools:rules_rust-musl-platforms.diff"],
-    strip_prefix = "rules_rust-d11dcf615d6eddeb48d524d464563ca06c3b2a98",
     urls = [
-        "https://github.com/hermeticbuild/rules_rust/archive/d11dcf615d6eddeb48d524d464563ca06c3b2a98.tar.gz",
+        "https://github.com/bazelbuild/rules_rust/releases/download/0.59.2/rules_rust-0.59.2.tar.gz",
     ],
 )
 
-# Route any rules_rs internal `@rules_rust` references through the same
-# top-level bazel_dep so the entire build sees one rules_rust.
-rules_rust_ext = use_extension("@rules_rs//rs:rules_rust.bzl", "rules_rust")
-
-override_repo(
-    rules_rust_ext,
-    rules_rust = "rules_rust",
-)
-
-crate = use_extension("@rules_rs//rs:extensions.bzl", "crate")
+crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
 crate.from_cargo(
     name = "crates",
-    cargo_lock = "//:Cargo.lock",
-    cargo_toml = "//:Cargo.toml",
-    # In legacy-platform-label mode rules_rs collapses every *-musl triple
-    # onto its *-gnu sibling (same label). Listing both produces duplicate
-    # select() keys in the generated BUILD files, so musl is intentionally
-    # omitted here — the underlying linux-gnu deps cover both libc variants
-    # for our crate set, and the LRE musl toolchains still build correctly.
-    platform_triples = [
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = [
+        "//:Cargo.toml",
+        "//nativelink-config:Cargo.toml",
+        "//nativelink-error:Cargo.toml",
+        "//nativelink-macro:Cargo.toml",
+        "//nativelink-metric:Cargo.toml",
+        "//nativelink-metric/nativelink-metric-macro-derive:Cargo.toml",
+        "//nativelink-metric-collector:Cargo.toml",
+        "//nativelink-proto:Cargo.toml",
+        "//nativelink-scheduler:Cargo.toml",
+        "//nativelink-service:Cargo.toml",
+        "//nativelink-store:Cargo.toml",
+        "//nativelink-util:Cargo.toml",
+        "//nativelink-worker:Cargo.toml",
+    ],
+    supported_platform_triples = [
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl",
         "arm-unknown-linux-gnueabi",
         "armv7-unknown-linux-gnueabi",
         "x86_64-apple-darwin",
         "x86_64-pc-windows-msvc",
         "x86_64-unknown-linux-gnu",
-    ],
-    # The LRE Rust toolchains in //local-remote-execution/rust still register
-    # against @rules_rust//rust:toolchain_type, so crate_universe must render
-    # selects against legacy @rules_rust//rust/platform:* labels.
-    use_legacy_rules_rust_platforms = True,
-)
-crate.annotation(
-    crate = "zstd-sys",
-    gen_build_script = "on",
-)
-
-# Hermetic aws-lc-sys, as recommended by rules_rs (see the `aws-lc` bazel_dep
-# above). The build-script replacement lives in
-# @rules_rs//3rd_party/aws-lc-sys and links the crate against @aws-lc.
-crate.annotation(
-    crate = "aws-lc-rs",
-    gen_build_script = "off",
-)
-crate.annotation(
-    additive_build_file = "@rules_rs//3rd_party/aws-lc-sys:additive.BUILD.bazel",
-    crate = "aws-lc-sys",
-    extra_aliased_targets = {"aws_lc_sys_build_info": "aws_lc_sys_build_info"},
-    gen_build_script = "off",
-    rustc_flags = ["--cfg=use_bindgen_pregenerated"],
-    deps = [
-        "@crates//:aws_lc_sys_build_info",
-        # glibc-named libc symbols AWS-LC references when linked against musl.
-        "@forge//forge-store:aws_lc_musl_shims",
+        "x86_64-unknown-linux-musl",
     ],
 )
 use_repo(crate, "crates")
 
-inject_repo(crate, "aws-lc")
-
-# Forge uses Local Remote Execution for Rust by default which automatically
+# NativeLink uses Local Remote Execution for Rust by default which automatically
 # handles Rust toolchain configuration via Nix.
 #
 # If you build outside of Nix you'll have to register these toolchains
@@ -157,50 +73,47 @@ inject_repo(crate, "aws-lc")
 #
 # WARNING: This configuration exists entirely as a convenience option and
 #          migration and is not a supported way of building production
-#          grade forge executables. It may be removed at any point in time.
+#          grade nativelink executables. It may be removed at any point in time.
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
     edition = "2024",
 
     # These should always follow the versions from LRE.
-    rust_analyzer_version = "nightly/2026-08-26",
-    rustfmt_version = "nightly/2026-08-26",
+    rust_analyzer_version = "nightly/2025-04-03",
+    rustfmt_version = "nightly/2025-04-03",
     sha256s = {
-        # Update the shas with update-module-hashes
-        # BEGIN SHAS
-        "2026-08-26/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz": "2e4205600ef051b515e5af045d5e9daeb63abd8ad0feda719a15a00ba51835af",
-        "2026-08-26/clippy-nightly-x86_64-unknown-linux-gnu.tar.xz": "9f2fda00812ca4a7f229f6c163de410bb9281e6749468fae4a60c7a8f5c0f593",
-        "2026-08-26/llvm-tools-nightly-x86_64-unknown-linux-gnu.tar.xz": "70bb016b04d046c3c9e4ef4a44a6dce3c93f13ebc84df43250559bc389bfd4e6",
-        "2026-08-26/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz": "356096b4058463e151b94bcf39ad5acfeb5afc4c3553dc71b7eafc868d415808",
-        "2026-08-26/rustc-nightly-aarch64-apple-darwin.tar.xz": "36350952bd979f04b99dbd23d30e7f273ebf3013ff9e39149f3956ea7ef8fc8a",
-        "2026-08-26/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz": "7e878ee96083cead25fb1f5755e8c4bad0f8c3acf8b7bc6fd07532cc672c952e",
-        "2026-08-26/rustfmt-nightly-aarch64-apple-darwin.tar.xz": "07eb90895af653ad857d081954d95cd7ef44cff911228370e4d35962796963e6",
-        "2026-08-26/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz": "e0c21e33071676ce246099fa07ecf54ba27538a019ddb0074f8a2c7bef3f2bbf",
-        "cargo-1.97.1-aarch64-apple-darwin.tar.xz": "2d84a74e9558192a7de674aca6aa3ab7464bed2df97e0377156ddb7e09a0fd7a",
-        "cargo-1.97.1-x86_64-unknown-linux-gnu.tar.xz": "e1be5f5ff7f7f80ca506fb65770b759edbdc6d303781ed71c5de8ec8a8394779",
-        "clippy-1.97.1-aarch64-apple-darwin.tar.xz": "5e44c0ac5ca9b6f14a3c9031a61f583348b902f908f46e95717aef1dbd2807db",
-        "clippy-1.97.1-x86_64-unknown-linux-gnu.tar.xz": "3441df8fb54db985f8c8a3e8356b8874a3f92cc8cca8565cfe36f1dc15935e72",
-        "llvm-tools-1.97.1-aarch64-apple-darwin.tar.xz": "2160fccee889a092a281bd6d90c09519ca75ab9ed34d9d86301f4fb9602382f8",
-        "llvm-tools-1.97.1-x86_64-unknown-linux-gnu.tar.xz": "3e7a1c596a42dea6bf625ec6f006ce2fbcf5d1ff892f082828eb182a5d483b95",
-        "rust-std-1.97.1-aarch64-apple-darwin.tar.xz": "a4895f5c6995e83cab8687e46b14324592398049def71ce75ca308c981cf200d",
-        "rust-std-1.97.1-x86_64-unknown-linux-gnu.tar.xz": "1c1e704ae80126b7de34f72ea2825f7fd01736dec20732faed47374b95282fba",
-        "rustc-1.97.1-aarch64-apple-darwin.tar.xz": "6076cad38ccabaa24325f26a74080a363a2633a9cd34c473a8977255d8a593cb",
-        "rustc-1.97.1-x86_64-unknown-linux-gnu.tar.xz": "9819d0a32d56bd339585319c80260e332779f5541fd66838ab7e016d6c814819",
-        # END SHAS
+        "2025-04-03/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz": "adfe5bd8fb807bfd8fee2ede9d88853837ba9dcf14dd701edeb33a8c9d84a6f2",
+        "2025-04-03/clippy-nightly-x86_64-unknown-linux-gnu.tar.xz": "06839db5cd1810032a3115211b558b257c75f8459645265e310f0c518c9ad2d8",
+        "2025-04-03/llvm-tools-nightly-x86_64-unknown-linux-gnu.tar.xz": "e2adf4c25541e7abf7e0c4e6586c94ac662fb9ae3e78b1f7310789bfc1cb5860",
+        "2025-04-03/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz": "6b3b7dc16ccb0204bcc2fc381ffe69d1eaddf326583c11d24699797ebd0778c6",
+        "2025-04-03/rustc-nightly-aarch64-apple-darwin.tar.xz": "6538a7232af263e84a4aac73d6858b6e9b44478bd48f16b1c53c027ab0278ad1",
+        "2025-04-03/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz": "2418663236236373c3d278e6e602ef5ad3158b9cebd5c1095f7916dbd9c9b891",
+        "2025-04-03/rustfmt-nightly-aarch64-apple-darwin.tar.xz": "52e7e729422369382a32a29ab3b208dfe79027d83416e136c100ab31bed74caf",
+        "2025-04-03/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz": "f8876b429b1ad9dfd5ece1e47947b39b20a0ecc56b1c76a614c4af5797152d86",
+        "cargo-1.86.0-aarch64-apple-darwin.tar.xz": "3cb13873d48c3e1e4cc684d42c245226a11fba52af6b047c3346ed654e7a05c0",
+        "cargo-1.86.0-x86_64-unknown-linux-gnu.tar.xz": "c5c1590f7e9246ad9f4f97cfe26ffa92707b52a769726596a9ef81565ebd908b",
+        "clippy-1.86.0-aarch64-apple-darwin.tar.xz": "239fa3a604b124f0312f2af08537874a1227dba63385484b468cca62e7c4f2f2",
+        "clippy-1.86.0-x86_64-unknown-linux-gnu.tar.xz": "02aaff2c1407d2da8dba19aa4970dd873e311902b120a66cbcdbe51eb8836edf",
+        "llvm-tools-1.86.0-aarch64-apple-darwin.tar.xz": "04d3618c686845853585f036e3211eb9e18f2d290f4610a7a78bdc1fcce1ebd9",
+        "llvm-tools-1.86.0-x86_64-unknown-linux-gnu.tar.xz": "282145ab7a63c98b625856f44b905b4dc726b497246b824632a5790debe95a78",
+        "rust-std-1.86.0-aarch64-apple-darwin.tar.xz": "0fb121fb3b8fa9027d79ff598500a7e5cd086ddbc3557482ed3fdda00832c61b",
+        "rust-std-1.86.0-x86_64-unknown-linux-gnu.tar.xz": "67be7184ea388d8ce0feaf7fdea46f1775cfc2970930264343b3089898501d37",
+        "rustc-1.86.0-aarch64-apple-darwin.tar.xz": "23b8f52102249a47ab5bc859d54c9a3cb588a3259ba3f00f557d50edeca4fde9",
+        "rustc-1.86.0-x86_64-unknown-linux-gnu.tar.xz": "4438b809ce4a083af31ed17aeeedcc8fc60ccffc0625bef1926620751b6989d7",
     },
     versions = [
-        "1.97.1",
-        "nightly/2026-08-26",
+        "1.86.0",
+        "nightly/2025-04-03",
     ],
 )
 use_repo(rust, "rust_toolchains")
 
-bazel_dep(name = "toolchains_protoc", version = "0.4.3")
+bazel_dep(name = "toolchains_protoc", version = "0.3.7")
 
 protoc = use_extension("@toolchains_protoc//protoc:extensions.bzl", "protoc")
 protoc.toolchain(
     google_protobuf = "com_google_protobuf",
-    version = "v30.2",
+    version = "v29.3",
 )
 
 # Local remote execution.

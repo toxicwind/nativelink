@@ -1,8 +1,8 @@
 ---
-name: forge
+name: nativelink
 org: TraceMachina
 runtime: go
-description: The development cluster for Forge.
+description: The development cluster for NativeLink.
 organization:
   pulumi:tags:
     company: "Trace Machina, Inc."

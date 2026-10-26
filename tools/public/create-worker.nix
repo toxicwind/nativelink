@@ -31,8 +31,8 @@
       ln -s /bin/env $out/usr/bin/env
     '';
 
-    user = "forge";
-    group = "forge";
+    user = "nativelink";
+    group = "nativelink";
     uid = "1000";
     gid = "1000";
 
@@ -73,12 +73,12 @@
       gname = group;
     };
   in
-    # Create a container image from a base image with the forge executable
+    # Create a container image from a base image with the nativelink executable
     # added and set as entrypoint. This allows arbitrary base images to be
-    # "enriched" with forge to create worker images for cloud deployments.
+    # "enriched" with nativelink to create worker images for cloud deployments.
     image:
       nix2container.buildImage {
-        name = "forge-worker-${image.imageName}";
+        name = "nativelink-worker-${image.imageName}";
         fromImage = image;
         maxLayers = 20;
         copyToRoot = [
@@ -106,12 +106,12 @@
           User = user;
           WorkingDir = "/home/${user}";
           Labels = {
-            "org.opencontainers.image.description" = "Forge worker generated from ${image.imageName}.";
-            "org.opencontainers.image.documentation" = "https://github.com/toxicwind/forge";
-            "org.opencontainers.image.licenses" = "FSL-1.1-Apache-2.0";
+            "org.opencontainers.image.description" = "NativeLink worker generated from ${image.imageName}.";
+            "org.opencontainers.image.documentation" = "https://github.com/TraceMachina/nativelink";
+            "org.opencontainers.image.licenses" = "Apache-2.0";
             "org.opencontainers.image.revision" = "${self.rev or self.dirtyRev or "dirty"}";
-            "org.opencontainers.image.source" = "https://github.com/toxicwind/forge";
-            "org.opencontainers.image.title" = "Forge worker for ${image.imageName}";
+            "org.opencontainers.image.source" = "https://github.com/TraceMachina/nativelink";
+            "org.opencontainers.image.title" = "NativeLink worker for ${image.imageName}";
             "org.opencontainers.image.vendor" = "Trace Machina, Inc.";
           };
         };

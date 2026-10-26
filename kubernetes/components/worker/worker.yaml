@@ -2,34 +2,34 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: forge-worker
+  name: nativelink-worker
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: forge-worker
+      app: nativelink-worker
   template:
     metadata:
       labels:
-        app: forge-worker
+        app: nativelink-worker
     spec:
       initContainers:
-        - name: forge-worker-init
+        - name: nativelink-worker-init
           # This image will be edited by kustomize.
-          image: forge-worker-init
-          args: ["/shared/forge"]
+          image: nativelink-worker-init
+          args: ["/shared/nativelink"]
           volumeMounts:
             - name: shared
               mountPath: /shared
       containers:
-        - name: forge-worker
+        - name: nativelink-worker
           # This image will be edited by kustomize.
-          image: forge-worker
+          image: nativelink-worker
           env:
             - name: RUST_LOG
               value: info
-            - name: FORGE_ENDPOINT
-              value: forge
+            - name: NATIVELINK_ENDPOINT
+              value: nativelink
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://otel-collector-collector.default.svc:4317
             - name: OTEL_EXPORTER_OTLP_COMPRESSION
@@ -40,7 +40,7 @@ spec:
               subPath: worker.json5
             - name: shared
               mountPath: /shared
-          command: ["/shared/forge"]
+          command: ["/shared/nativelink"]
           args: ["/worker.json5"]
       volumes:
         - name: shared
@@ -52,8 +52,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: forge-worker
+  name: nativelink-worker
 spec:
   selector:
-    app: forge-worker
+    app: nativelink-worker
   clusterIP: None

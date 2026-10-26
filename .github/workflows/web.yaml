@@ -1,21 +1,21 @@
 ---
-name: Build Forge Web
+name: Deploy NativeLink Web
 on:
   push:
     branches: [main]
     paths:
-      - 'web/**'
+      - 'web/platform/**'
       - '**/*.md'
-      - 'forge-config/**'
+      - 'nativelink-config/**'
       - 'tools/**'
       - '**/*.lock'
       - '**/*.nix'
   pull_request:
     branches: [main]
     paths:
-      - 'web/**'
+      - 'web/platform/**'
       - '**/*.md'
-      - 'forge-config/**'
+      - 'nativelink-config/**'
       - 'tools/**'
       - '**/*.lock'
       - '**/*.nix'
@@ -23,14 +23,16 @@ on:
 permissions: read-all
 
 jobs:
-  build:
+  deploy:
     strategy:
       fail-fast: false
       matrix:
         os:
           - ubuntu-24.04
-    name: Web Build / ${{ matrix.os }}
+          - macos-15
+    name: Web Platform Deployment / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    environment: production
 
     permissions:
       id-token: write
@@ -38,24 +40,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: >- # v6.0.2
-          actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: >- # v4.2.2
+          actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Prepare Worker
         uses: ./.github/actions/prepare-nix
-        with:
-          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
 
       - name: Test Build
         if: github.event_name == 'pull_request'
-        working-directory: web
+        working-directory: web/platform
         run: |
           nix develop --impure --command bash -c "
-            bun install && bun run build
+            bun setup && bun docs && bun run build
           "
 
-      - name: Teardown Worker
-        uses: ./.github/actions/end-nix
-        if: always()
-        with:
-          forge_attic_token: ${{ secrets.FORGE_ATTIC_TOKEN }}
+      - name: Production deployment
+        if: matrix.os == 'ubuntu-24.04' && github.ref == 'refs/heads/main'
+        working-directory: web/platform
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+        run: |
+          nix develop --impure --command bash -c "
+            bun prod --project=nativelink --org=nativelink \
+            --token=$DENO_DEPLOY_TOKEN \
+          "

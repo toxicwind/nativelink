@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: forge-worker-lre-rs
+  name: nativelink-worker-lre-rs
 spec:
   replicas: 1
   template:
@@ -11,14 +11,14 @@ spec:
         - name: setup-entrypoint
           image: nixpkgs/nix-flakes:latest
           command: ["/bin/sh", "-c"]
-          # The kind setup mounts the forge repository into the kind nodes
+          # The kind setup mounts the nativelink repository into the kind nodes
           # at `/mnt/src_root`. This ensures that the tags between the worker
           # configs and bazel toolchains match when this setup is run in CI.
           args:
             - |
               git config --global --add safe.directory "*"
-              FORGE_WORKER_LRE_RS=$(nix eval /mnt/src_root#forge-worker-lre-rs.imageTag --raw) &&
-              printf '#!/bin/sh\nexport FORGE_WORKER_LRE_RS=%s\nexec "$@"' "$FORGE_WORKER_LRE_RS" > /entrypoint/entrypoint.sh &&
+              NATIVELINK_WORKER_LRE_RS=$(nix eval /mnt/src_root#nativelink-worker-lre-rs.imageTag --raw) &&
+              printf '#!/bin/sh\nexport NATIVELINK_WORKER_LRE_RS=%s\nexec "$@"' "$NATIVELINK_WORKER_LRE_RS" > /entrypoint/entrypoint.sh &&
               chmod +x /entrypoint/entrypoint.sh
           volumeMounts:
             - name: entrypoint
@@ -26,12 +26,12 @@ spec:
             - name: mnt
               mountPath: /mnt
       containers:
-        - name: forge-worker
+        - name: nativelink-worker
           volumeMounts:
             - name: entrypoint
               mountPath: /entrypoint
           command: ["/entrypoint/entrypoint.sh"]
-          args: ["/shared/forge", "/worker.json5"]
+          args: ["/shared/nativelink", "/worker.json5"]
       volumes:
         - name: entrypoint
           emptyDir: {}

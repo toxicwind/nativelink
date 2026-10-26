@@ -29,7 +29,7 @@ spec:
         set -e
 
         # Transform the key to a format that flux accepts. The transformation
-        # here looks like `forge-worker` -> `FORGE_WORKER_TAG`.
+        # here looks like `nativelink-worker` -> `NATIVELINK_WORKER_TAG`.
         TRANSFORMED_KEY=$(echo "$(params.imageName)" | tr '[:lower:]' '[:upper:]' | tr '-' '_')_TAG
 
         # Check if the ConfigMap exists

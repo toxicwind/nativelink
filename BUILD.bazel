@@ -10,18 +10,20 @@ exports_files(
 )
 
 rust_binary(
-    name = "forge",
+    name = "nativelink",
     srcs = [
-        "src/bin/forge.rs",
+        "src/bin/nativelink.rs",
     ],
     deps = [
-        "//forge-config",
-        "//forge-error",
-        "//forge-scheduler",
-        "//forge-service",
-        "//forge-store",
-        "//forge-util",
-        "//forge-worker",
+        "//nativelink-config",
+        "//nativelink-error",
+        "//nativelink-metric",
+        "//nativelink-metric-collector",
+        "//nativelink-scheduler",
+        "//nativelink-service",
+        "//nativelink-store",
+        "//nativelink-util",
+        "//nativelink-worker",
         "@crates//:async-lock",
         "@crates//:axum",
         "@crates//:clap",
@@ -29,96 +31,65 @@ rust_binary(
         "@crates//:hyper",
         "@crates//:hyper-util",
         "@crates//:mimalloc",
+        "@crates//:opentelemetry",
+        "@crates//:opentelemetry_sdk",
         "@crates//:parking_lot",
-        "@crates//:rustls-pki-types",
+        "@crates//:rustls-pemfile",
+        "@crates//:scopeguard",
+        "@crates//:serde_json",
+        "@crates//:serde_json5",
         "@crates//:tokio",
         "@crates//:tokio-rustls",
         "@crates//:tonic",
         "@crates//:tower",
         "@crates//:tracing",
-    ],
-)
-
-rust_binary(
-    name = "redis_store_tester",
-    srcs = [
-        "src/bin/redis_store_tester.rs",
-    ],
-    deps = [
-        "//forge-config",
-        "//forge-error",
-        "//forge-store",
-        "//forge-util",
-        "@crates//:bytes",
-        "@crates//:clap",
-        "@crates//:futures",
-        "@crates//:rand",
-        "@crates//:redis",
-        "@crates//:tokio",
-        "@crates//:tracing",
-    ],
-)
-
-rust_binary(
-    name = "cas_speed_check",
-    srcs = [
-        "src/bin/cas_speed_check.rs",
-    ],
-    deps = [
-        "//forge-error",
-        "//forge-proto",
-        "//forge-util",
-        "@crates//:clap",
-        "@crates//:hex",
-        "@crates//:rand",
-        "@crates//:sha2",
-        "@crates//:tokio",
-        "@crates//:tonic",
-        "@crates//:tracing",
+        "@crates//:tracing-subscriber",
     ],
 )
 
 filegroup(
     name = "docs",
     srcs = [
-        "//forge-config:docs",
-        "//forge-error:docs",
-        "//forge-macro:docs",
-        "//forge-proto:docs",
-        "//forge-scheduler:docs",
-        "//forge-service:docs",
-        "//forge-store:docs",
-        "//forge-util:docs",
-        "//forge-worker:docs",
+        "//nativelink-config:docs",
+        "//nativelink-error:docs",
+        "//nativelink-macro:docs",
+        "//nativelink-proto:docs",
+        "//nativelink-scheduler:docs",
+        "//nativelink-service:docs",
+        "//nativelink-store:docs",
+        "//nativelink-util:docs",
+        "//nativelink-worker:docs",
     ],
 )
 
 test_suite(
     name = "unit_tests",
     tests = [
-        "//forge-config:unit_test",
-        "//forge-error:unit_test",
-        "//forge-macro:unit_test",
-        "//forge-metric:unit_test",
-        "//forge-scheduler:unit_test",
-        "//forge-service:unit_test",
-        "//forge-store:unit_test",
-        "//forge-util:unit_test",
-        "//forge-worker:unit_test",
+        "//nativelink-config:unit_test",
+        "//nativelink-error:unit_test",
+        "//nativelink-macro:unit_test",
+        "//nativelink-metric:unit_test",
+        "//nativelink-metric-collector:unit_test",
+        "//nativelink-scheduler:unit_test",
+        "//nativelink-service:unit_test",
+        "//nativelink-store:unit_test",
+        "//nativelink-util:unit_test",
+        "//nativelink-worker:unit_test",
     ],
 )
 
 test_suite(
     name = "doctests",
     tests = [
-        "//forge-config:doc_test",
-        "//forge-error:doc_test",
-        "//forge-macro:doc_test",
-        "//forge-scheduler:doc_test",
-        "//forge-service:doc_test",
-        "//forge-store:doc_test",
-        "//forge-util:doc_test",
-        "//forge-worker:doc_test",
+        "//nativelink-config:doc_test",
+        "//nativelink-error:doc_test",
+        "//nativelink-macro:doc_test",
+        "//nativelink-proto:doc_test",
+        "//nativelink-scheduler:doc_test",
+        "//nativelink-service:doc_test",
+        "//nativelink-store:doc_test",
+        "//nativelink-util:doc_test",
+        "//nativelink-worker:doc_test",
     ],
 )
 
@@ -132,13 +103,4 @@ sh_test(
     name = "dummy_test",
     timeout = "short",
     srcs = [":dummy_test_sh"],
-)
-
-# Large deterministic output used by integration_tests/chunking_cache_test.sh
-# to exercise --experimental_remote_cache_chunking (must exceed the chunking
-# threshold of 4x the average chunk size).
-genrule(
-    name = "chunking_test_artifact",
-    outs = ["chunking_test_artifact.txt"],
-    cmd = "seq 1 1000000 > \"$@\"",
 )

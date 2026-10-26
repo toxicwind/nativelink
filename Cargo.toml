@@ -1,17 +1,11 @@
-#:schema tools/cargo-with-detailed-deps.json
 [workspace]
-exclude = [
-  "forge-config/generate-stores-config",
-  "forge-test/fuzz",
-  "tools/generate-bazel-rc",
-]
 resolver = "2"
 
 [package]
+name = "nativelink"
+version = "0.6.0"
 edition = "2024"
-name = "forge"
-rust-version = "1.97.1"
-version = "1.7.6"
+rust-version = "1.86.0"
 
 [profile.release]
 lto = true
@@ -19,68 +13,58 @@ lto = true
 # Prefer this profile in CI, for instance via `cargo test --all --profile=smol`.
 # It reduces the size of the `target` directory from ~12GB to ~1GB.
 [profile.smol]
-debug = false
 inherits = "dev"
 opt-level = "z"
 strip = true
+debug = false
 
 [[bin]]
-name = "forge"
+name = "nativelink"
 
 [features]
-nix = ["forge-worker/nix"]
+nix = ["nativelink-worker/nix"]
 
 [dependencies]
-forge-config = { path = "forge-config" }
-forge-error = { path = "forge-error" }
-forge-proto = { path = "forge-proto" }
-forge-scheduler = { path = "forge-scheduler" }
-forge-service = { path = "forge-service" }
-forge-store = { path = "forge-store" }
-forge-util = { path = "forge-util" }
-forge-worker = { path = "forge-worker" }
-
+nativelink-error = { path = "nativelink-error" }
+nativelink-config = { path = "nativelink-config" }
+nativelink-scheduler = { path = "nativelink-scheduler" }
+nativelink-service = { path = "nativelink-service" }
+nativelink-store = { path = "nativelink-store" }
+nativelink-util = { path = "nativelink-util" }
+nativelink-worker = { path = "nativelink-worker" }
+nativelink-metric = { path = "nativelink-metric" }
+nativelink-metric-collector = { path = "nativelink-metric-collector" }
 async-lock = { version = "3.4.0", features = ["std"], default-features = false }
 axum = { version = "0.8.3", default-features = false }
-bytes = { version = "1.10.1", default-features = false }
-clap = { version = "4.5.35", features = [
-  "color",
-  "derive",
-  "error-context",
-  "help",
-  "std",
-  "suggestions",
-  "usage",
-], default-features = false }
+clap = { version = "4.5.35", features = ["derive"] }
 futures = { version = "0.3.31", default-features = false }
-hex = { version = "0.4.3", default-features = false }
-hyper = { version = "1.6.0", default-features = false }
-hyper-util = { version = "0.1.11", default-features = false, features = [
-  "tracing",
-] }
-mimalloc = { version = "0.1.48", default-features = false, features = ["v3"] }
-rand = { version = "0.9.0", default-features = false, features = [
-  "thread_rng",
-] }
-rustls-pki-types = { version = "1.13.1", features = [
+hyper = "1.6.0"
+hyper-util = "0.1.11"
+mimalloc = "0.1.44"
+parking_lot = "0.12.3"
+rustls-pemfile = { version = "2.2.0", features = [
   "std",
 ], default-features = false }
-sha2 = { version = "0.10.8", default-features = false }
-tokio = { version = "1.52.2", features = [
+scopeguard = { version = "1.2.0", default-features = false }
+serde_json5 = "0.2.1"
+tokio = { version = "1.44.1", features = [
   "fs",
-  "io-util",
   "rt-multi-thread",
   "signal",
+  "io-util",
 ], default-features = false }
 tokio-rustls = { version = "0.26.2", default-features = false, features = [
   "ring",
 ] }
-tonic = { version = "0.14.0", features = [
-  "tls-ring",
+tonic = { version = "0.13.0", features = [
   "transport",
+  "tls-ring",
 ], default-features = false }
 tower = { version = "0.5.2", default-features = false }
 tracing = { version = "0.1.41", default-features = false }
+opentelemetry_sdk = { version = "0.29.0", default-features = false }
+tracing-subscriber = { version = "0.3.19", default-features = false }
+opentelemetry = { version = "0.29.1", default-features = false }
 
 [workspace.cargo-features-manager.keep]
 async-lock = ["std"]
@@ -91,10 +75,11 @@ blake3 = ["std"]
 pretty_assertions = ["std"]
 redis-test = ["aio"]
 serial_test = ["async"]
-tokio = ["fs", "io-util", "rt-multi-thread", "signal"]
+tokio = ["fs", "rt-multi-thread", "signal", "io-util"]
 tokio-stream = ["fs"]
-tonic = ["tls", "transport"]
-uuid = ["serde", "v4"]
+tonic-build = ["prost"]
+tonic = ["transport", "tls"]
+uuid = ["v4", "serde"]
 
 [workspace.lints.rust]
 ambiguous-glob-reexports = "deny"
@@ -117,11 +102,9 @@ overlapping-range-endpoints = "deny"
 suspicious-double-ref-op = "deny"
 unconditional-recursion = "deny"
 unexpected-cfgs = "deny"
-unknown-lints = "allow"                     # FIXME(palfrey): Needed for unused_async_trait_impl because it's nightly-only
 unnameable-test-items = "deny"
 unsafe-op-in-unsafe-fn = "deny"
 unstable-syntax-pre-expansion = "deny"
-unused-imports = "deny"
 
 keyword-idents = "warn"
 let-underscore = "warn"
@@ -131,6 +114,7 @@ missing-abi = "warn"
 missing-copy-implementations = "warn"
 missing-debug-implementations = "warn"
 noop-method-call = "warn"
+single-use-lifetimes = "warn"
 trivial-casts = "warn"
 trivial-numeric-casts = "warn"
 unreachable-pub = "warn"
@@ -141,80 +125,7 @@ unused-qualifications = "warn"
 variant-size-differences = "warn"
 
 [workspace.lints.clippy]
-
-# Global configuration
-all = { level = "deny", priority = -1 }
-nursery = { level = "deny", priority = -1 }
-pedantic = { level = "deny", priority = -1 }
-
-# Restriction Denies with default priority
 alloc-instead-of-core = "deny"
-as-underscore = "deny"
-await-holding-lock = "deny"
-bind-instead-of-map = "deny"
-cast_possible_wrap = { level = "deny", priority = 1 }
-collapsible-if = "deny"
-disallowed-methods = "deny"
-doc-markdown = "deny"
-elidable-lifetime-names = "deny"
-explicit-into-iter-loop = "deny"
-future-not-send = "deny"
-ignored-unit-patterns = "deny"
-implicit-clone = "deny"
-implicit-hasher = "deny"
-items-after-statements = "deny"
-manual-is-variant-and = "deny"
-map-unwrap-or = "deny"
-new-ret-no-self = "deny"
-or-fun-call = "deny"
-print-stdout = "deny"
-ptr-arg = "deny"
-redundant-closure = "deny"
-redundant-closure-for-method-calls = "deny"
-semicolon-if-nothing-returned = "deny"
-similar-names = "deny"
-single-char-pattern = "deny"
-single-match-else = "deny"
-string-lit-as-bytes = "deny"
-todo = "deny"
-unchecked-time-subtraction = "deny"
-unnecessary-semicolon = "deny"
-use-debug = "deny"
-used-underscore-binding = "deny"
-useless-format = "deny"
+std-instead-of-core = "deny"
 
-# Restriction Warnings with default priority
-dbg-macro = "warn"
-get-unwrap = "allow"                    # TODO(jhpratt) Flip
-missing-docs-in-private-items = "allow" # TODO(jhpratt) Flip
-unimplemented = "warn"
-unwrap-in-result = "allow"              # TODO(jhpratt) Flip
-unwrap-used = "allow"                   # TODO(jhpratt) Flip
-
-# Nursery denies we want once they get out of Nursery
-missing-const-for-fn = "deny"
-
-# Nursery overrides that are either buggy or we want to fix
-cognitive-complexity = { level = "allow", priority = 1 }        # TODO(palfrey) Flip
-iter-with-drain = { level = "allow", priority = 1 }             # TODO(jhpratt) Flip
-option-if-let-else = { level = "allow", priority = 1 }          # rust-lang/rust-clippy#8829
-redundant-pub-crate = { level = "allow", priority = 1 }         # rust-lang/rust-clippy#5369
-significant-drop-tightening = { level = "allow", priority = 1 } # TODO(jhpratt) Flip
-std-instead-of-core = "allow"                                   # TODO(palfrey): see https://github.com/rust-lang/rust-clippy/pull/16964 fixed in 1.98
-too-long-first-doc-paragraph = { level = "allow" }              # TODO(jhpratt) Flip
-uninhabited-references = { level = "allow", priority = 1 }      # rust-lang/rust-clippy#11984
-
-# TODO(palfrey): Remove these to get to pedantic.
-cast_possible_truncation = { level = "deny", priority = 1 }
-cast_precision_loss = { level = "allow", priority = 1 }
-cast_sign_loss = { level = "allow", priority = 1 }
-large_futures = { level = "allow", priority = 1 }
-missing_errors_doc = { level = "allow", priority = 1 }
-missing_fields_in_debug = { level = "allow", priority = 1 }
-missing_panics_doc = { level = "allow", priority = 1 }
-must_use_candidate = { level = "allow", priority = 1 }
-ref_option = { level = "allow", priority = 1 }
-too_many_lines = { level = "allow", priority = 1 }
-unused_async = { level = "allow", priority = 1 }
-unused_async_trait_impl = { level = "allow", priority = 1 } # TODO(palfrey): nightly only, remove when we upgrade Rust above 1.97.1
-unused_self = { level = "allow", priority = 1 }
+all = { level = "warn", priority = -1 }

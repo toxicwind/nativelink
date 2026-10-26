@@ -1,4 +1,4 @@
-# Copyright 2024 The Forge Authors. All rights reserved.
+# Copyright 2024 The NativeLink Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,42 +39,34 @@ load("@rules_rust//rust:toolchain.bzl", "rust_stdlib_filegroup")
 filegroup(
     name = "rustc_lib",
     srcs = select({
-        "@local-remote-execution//rust/triple:aarch64-unknown-linux-gnu": glob(
-            [
-                "bin/*.so",
-                "lib/*.so",
-                "lib/rustlib/aarch64-unknown-linux-gnu/codegen-backends/*.so",
-                "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.so",
-            ] + ["lib/rustlib/aarch64-unknown-linux-gnu/bin/rust-lld"],
-            allow_empty = True,
-        ),
-        "@local-remote-execution//rust/triple:aarch64-unknown-linux-musl": glob(
-            [
-                "bin/*.so",
-                "lib/*.so",
-                "lib/rustlib/aarch64-unknown-linux-musl/codegen-backends/*.so",
-                "lib/rustlib/aarch64-unknown-linux-musl/lib/*.so",
-            ] + ["lib/rustlib/aarch64-unknown-linux-musl/bin/rust-lld"],
-            allow_empty = True,
-        ),
-        "@local-remote-execution//rust/triple:x86_64-unknown-linux-gnu": glob(
-            [
-                "bin/*.so",
-                "lib/*.so",
-                "lib/rustlib/x86_64-unknown-linux-gnu/codegen-backends/*.so",
-                "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.so",
-            ] + ["lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld"],
-            allow_empty = True,
-        ),
-        "@local-remote-execution//rust/triple:x86_64-unknown-linux-musl": glob(
-            [
-                "bin/*.so",
-                "lib/*.so",
-                "lib/rustlib/x86_64-unknown-linux-musl/codegen-backends/*.so",
-                "lib/rustlib/x86_64-unknown-linux-musl/lib/*.so",
-            ] + ["lib/rustlib/x86_64-unknown-linux-musl/bin/rust-lld"],
-            allow_empty = True,
-        ),
+        "@local-remote-execution//rust/triple:aarch64-unknown-linux-gnu": glob([
+            "bin/*.so",
+            "lib/*.so",
+            "lib/rustlib/aarch64-unknown-linux-gnu/codegen-backends/*.so",
+            "lib/rustlib/aarch64-unknown-linux-gnu/bin/rust-lld",
+            "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.so",
+        ], allow_empty = True),
+        "@local-remote-execution//rust/triple:aarch64-unknown-linux-musl": glob([
+            "bin/*.so",
+            "lib/*.so",
+            "lib/rustlib/aarch64-unknown-linux-musl/codegen-backends/*.so",
+            "lib/rustlib/aarch64-unknown-linux-musl/bin/rust-lld",
+            "lib/rustlib/aarch64-unknown-linux-musl/lib/*.so",
+        ], allow_empty = True),
+        "@local-remote-execution//rust/triple:x86_64-unknown-linux-gnu": glob([
+            "bin/*.so",
+            "lib/*.so",
+            "lib/rustlib/x86_64-unknown-linux-gnu/codegen-backends/*.so",
+            "lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld",
+            "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.so",
+        ], allow_empty = True),
+        "@local-remote-execution//rust/triple:x86_64-unknown-linux-musl": glob([
+            "bin/*.so",
+            "lib/*.so",
+            "lib/rustlib/x86_64-unknown-linux-musl/codegen-backends/*.so",
+            "lib/rustlib/x86_64-unknown-linux-musl/bin/rust-lld",
+            "lib/rustlib/x86_64-unknown-linux-musl/lib/*.so",
+        ], allow_empty = True),
     }),
     visibility = ["//visibility:public"],
 )
@@ -82,44 +74,28 @@ filegroup(
 rust_stdlib_filegroup(
     name = "rust_std",
     srcs = select({
-        "@local-remote-execution//rust/triple:aarch64-unknown-linux-gnu": glob(
-            [
-                "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.rlib",
-                "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.rmeta",  # See https://github.com/bazelbuild/rules_rust/issues/3859
-                "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.so",
-                "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.a",
-            ],
-            allow_empty = True,
-        ),
-        "@local-remote-execution//rust/triple:aarch64-unknown-linux-musl": glob(
-            [
-                "lib/rustlib/aarch64-unknown-linux-musl/lib/*.rlib",
-                "lib/rustlib/aarch64-unknown-linux-musl/lib/*.rmeta",  # See https://github.com/bazelbuild/rules_rust/issues/3859
-                "lib/rustlib/aarch64-unknown-linux-musl/lib/*.so",
-                "lib/rustlib/aarch64-unknown-linux-musl/lib/*.a",
-                "lib/rustlib/aarch64-unknown-linux-musl/lib/self-contained/**",
-            ],
-            allow_empty = True,
-        ),
-        "@local-remote-execution//rust/triple:x86_64-unknown-linux-gnu": glob(
-            [
-                "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.rlib",
-                "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.rmeta",  # See https://github.com/bazelbuild/rules_rust/issues/3859
-                "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.so",
-                "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.a",
-            ],
-            allow_empty = True,
-        ),
-        "@local-remote-execution//rust/triple:x86_64-unknown-linux-musl": glob(
-            [
-                "lib/rustlib/x86_64-unknown-linux-musl/lib/*.rlib",
-                "lib/rustlib/x86_64-unknown-linux-musl/lib/*.rmeta",  # See https://github.com/bazelbuild/rules_rust/issues/3859
-                "lib/rustlib/x86_64-unknown-linux-musl/lib/*.so",
-                "lib/rustlib/x86_64-unknown-linux-musl/lib/*.a",
-                "lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/**",
-            ],
-            allow_empty = True,
-        ),
+        "@local-remote-execution//rust/triple:aarch64-unknown-linux-gnu": glob([
+            "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.rlib",
+            "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.so",
+            "lib/rustlib/aarch64-unknown-linux-gnu/lib/*.a",
+        ], allow_empty = True),
+        "@local-remote-execution//rust/triple:aarch64-unknown-linux-musl": glob([
+            "lib/rustlib/aarch64-unknown-linux-musl/lib/*.rlib",
+            "lib/rustlib/aarch64-unknown-linux-musl/lib/*.so",
+            "lib/rustlib/aarch64-unknown-linux-musl/lib/*.a",
+            "lib/rustlib/aarch64-unknown-linux-musl/lib/self-contained/**",
+        ], allow_empty = True),
+        "@local-remote-execution//rust/triple:x86_64-unknown-linux-gnu": glob([
+            "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.rlib",
+            "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.so",
+            "lib/rustlib/x86_64-unknown-linux-gnu/lib/*.a",
+        ], allow_empty = True),
+        "@local-remote-execution//rust/triple:x86_64-unknown-linux-musl": glob([
+            "lib/rustlib/x86_64-unknown-linux-musl/lib/*.rlib",
+            "lib/rustlib/x86_64-unknown-linux-musl/lib/*.so",
+            "lib/rustlib/x86_64-unknown-linux-musl/lib/*.a",
+            "lib/rustlib/x86_64-unknown-linux-musl/lib/self-contained/**",
+        ], allow_empty = True),
     }),
     visibility = ["//visibility:public"],
 )

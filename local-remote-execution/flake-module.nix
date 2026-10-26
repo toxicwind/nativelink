@@ -6,6 +6,7 @@
   options.perSystem = flake-parts-lib.mkPerSystemOption (
     {
       config,
+      options,
       pkgs,
       ...
     }: let
@@ -36,7 +37,7 @@
             inherit (lre-cc.meta) Env;
             ```
 
-            To add a tool to the local execution environment without adding it to
+            To add a tool to the local execution environment withoug adding it to
             the remote environment:
 
             ```nix
@@ -103,9 +104,9 @@
               "aarch64-linux" = "aarch64-unknown-linux-gnu";
               "x86_64-darwin" = "x86_64-apple-darwin";
               "x86_64-linux" = "x86_64-unknown-linux-gnu";
-            }.${
-              system
-            } or (throw "Unsupported Nix exec platform: ${system}");
+            }
+            .${system}
+            or (throw "Unsupported Nix exec platform: ${system}");
 
           nixExecToDefaultRustTarget = p: let
             inherit (p.stdenv.targetPlatform) system;
@@ -115,15 +116,15 @@
               "aarch64-linux" = "aarch64-unknown-linux-musl";
               "x86_64-darwin" = "x86_64-apple-darwin";
               "x86_64-linux" = "x86_64-unknown-linux-musl";
-            }.${
-              system
-            } or (throw "Unsupported Nix target platform: ${system}");
+            }
+            .${system}
+            or (throw "Unsupported Nix target platform: ${system}");
 
           # These flags cause a Bazel build to use LRE toolchains regardless of whether
           # the build is running in local or remote configuration.
           #
           # To make a remote executor compatible, make the remote execution image (for
-          # instance `forge-worker-lre-cc` available to the build.
+          # instance `nativelink-worker-lre-cc` available to the build.
           #
           # To make local execution compatible, add the `lre.installationscript` to the
           # flake's `mkShell.shellhook`:
@@ -140,7 +141,7 @@
             [
               # Global configuration.
 
-              # TODO(palfrey): Remove after resolution of:
+              # TODO(aaronmondal): Remove after resolution of:
               #                    https://github.com/bazelbuild/bazel/issues/7254
               "--define=EXECUTOR=remote"
 
@@ -151,26 +152,25 @@
                     # Explicitly duplicate the host as an execution platform. This way
                     # local execution is treated the same as remote execution.
                     "@local-remote-execution//rust/platforms:${nixExecToRustExec pkgs}"
-                    "@local-remote-execution//rust/platforms:${nixExecToDefaultRustTarget pkgs}"
                   ]
-                  ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-                    # TODO(palfrey): Reimplement rbe-configs-gen for C++ so that we
+                  ++ lib.optionals pkgs.stdenv.isLinux [
+                    # TODO(aaronmondal): Reimplement rbe-configs-gen for C++ so that we
                     #                    can support more execution and target platforms.
                     "@local-remote-execution//generated-cc/config:platform"
                   ])
               }"
             ]
             # C++.
-            # TODO(palfrey): At the moment lre-cc only supports x86_64-linux.
+            # TODO(aaronmondal): At the moment lre-cc only supports x86_64-linux.
             #                    Extend this to more nix systems.
             # See: https://github.com/bazelbuild/bazel/issues/19714#issuecomment-1745604978
-            ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+            ++ lib.optionals pkgs.stdenv.isLinux [
               "--action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1"
 
               # The C++ toolchain running on the execution platform.
               "--extra_toolchains=@local-remote-execution//generated-cc/config:cc-toolchain"
 
-              # TODO(palfrey): Support different target platforms in lre-cc and add
+              # TODO(aaronmondal): Support different target platforms in lre-cc and add
               #                    `--platforms` settings here.
             ]
             # Rust.
@@ -179,13 +179,13 @@
               # platforms corresponding to the host. When using remote executors that
               # differ from the platform corresponding to the host this should be extended
               # via manual `--extra_toolchains` arguments.
-              "--extra_toolchains=@local-remote-execution//rust:rust-${pkgs.stdenv.hostPlatform.system}"
-              "--extra_toolchains=@local-remote-execution//rust:rustfmt-${pkgs.stdenv.hostPlatform.system}"
+              "--extra_toolchains=@local-remote-execution//rust:rust-${pkgs.system}"
+              "--extra_toolchains=@local-remote-execution//rust:rustfmt-${pkgs.system}"
 
               # Defaults for rust target platforms. This is a convenience setting that
               # may be overridden by manual `--platforms` arguments.
               #
-              # TODO(palfrey): At the moment these platforms are "rust-specific".
+              # TODO(aaronmondal): At the moment these platforms are "rust-specific".
               #                    Generalize this to all languages.
               "--platforms=@local-remote-execution//rust/platforms:${nixExecToDefaultRustTarget pkgs}"
             ];

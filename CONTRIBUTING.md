@@ -1,11 +1,11 @@
-# Contributing to Forge
+# Contributing to NativeLink
 
-Forge welcomes contribution from everyone. Here are the guidelines if you
+NativeLink welcomes contribution from everyone. Here are the guidelines if you
 are thinking of helping us:
 
 ## Contributions
 
-Contributions to Forge or its dependencies should be made in the form of
+Contributions to NativeLink or its dependencies should be made in the form of
 GitHub pull requests. Each pull request will be reviewed by a core contributor
 (someone with permission to land patches) and either landed in the main tree or
 given feedback for changes that would be required. All contributions should
@@ -15,45 +15,9 @@ Should you wish to work on an issue, please claim it first by commenting on
 the GitHub issue that you want to work on it. This is to prevent duplicated
 efforts from contributors on the same issue.
 
-## AI-assisted contributions
-
-Forge builds infrastructure for coding agents, so we won't pretend they
-don't write code. Agents are welcome contributors when a person stands behind
-the change. Four rules, in the spirit of the projects whose contribution
-culture we admire:
-
-1. **You must understand your change.** Using an agent to write code is fine;
-   interrogate it about the codebase until you grasp every edge case and
-   effect of the diff. Submitting code you cannot explain is not fine. A
-   reviewer may ask about any line, and "the agent wrote it" is not an answer.
-2. **Disclose it.** The pull request template has an "AI assistance" section.
-   Say which tools helped and how much: none, autocomplete, an agent drafted
-   it and you reworked it, an agent wrote it and you reviewed every line.
-   "None" is a complete answer. The section is required, and the PR template
-   check asks for it.
-3. **No slop.** Unreviewed generated code, generated issue or discussion text
-   that no person edited, and generated media (artwork, video, audio) are
-   closed without review. Write issues and comments in your own voice;
-   generated prose runs long, sounds confident, and often misses the point.
-   Repeated submissions of this kind cost the ability to contribute.
-4. **Agents follow `AGENTS.md`.** It maps the repository, names the checks,
-   and says which document must follow which change. An agent working here
-   runs the same checks a person would before opening a pull request, and
-   never opens one on its own initiative.
-
-Maintainers use agents at their discretion; the difference is that they have
-already shown they understand the code. None of this is an anti-AI stance.
-Review attention is the scarcest resource an open project has, and generated
-text made it cheap to produce contributions that look finished and are not.
-The rules keep the reviewer's time for changes a person is answerable for.
-
-Everything the repository offers an agent (the `llms.txt` files at the
-repository root and the skills under `.claude/skills/`) is listed at
-https://forge.com/agents and in [`AGENTS.md`](AGENTS.md).
-
 ## Git setup
 
-Forge has a somewhat specific contribution process to ensure consistent
+NativeLink has a somewhat specific contribution process to ensure consistent
 quality across all commits. If anything in the following guide is unclear to you
 please raise an issue so that we can clarify this document.
 
@@ -62,33 +26,33 @@ please raise an issue so that we can clarify this document.
    - https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent
    - https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account
 
-2. Fork the `toxicwind/forge` repository by clicking on the `Fork`
+2. Fork the `TraceMachina/nativelink` repository by clicking on the `Fork`
    button.
 
 3. Clone your fork:
 
    ```bash
-   git clone git@github.com:yourusername/forge
+   git clone git@github.com:yourusername/nativelink
    ```
 
 > [!WARNING]
 > Don't use
 >
 > ```bash
-> git clone git@github.com:toxicwind/forge
+> git clone git@github.com:TraceMachina/nativelink
 > ```
 
 4. `cd` into the cloned repository:
 
    ```bash
-   cd forge
+   cd nativelink
    ```
 
-5. Add `toxicwind/forge` as a `remote` repository and call it
+5. Add `TraceMachina/nativelink` as a `remote` repository and call it
    `upstream`:
 
    ```bash
-   git remote add upstream git@github.com:toxicwind/forge
+   git remote add upstream git@github.com:TraceMachina/nativelink
    ```
 
 > [!TIP]
@@ -96,10 +60,10 @@ please raise an issue so that we can clarify this document.
 > should look like this:
 >
 > ```bash
-> origin   git@github.com:yourusername/forge (fetch)
-> origin   git@github.com:yourusername/forge (push)
-> upstream     git@github.com:toxicwind/forge (fetch)
-> upstream     git@github.com:toxicwind/forge (push)
+> origin   git@github.com:yourusername/nativelink (fetch)
+> origin   git@github.com:yourusername/nativelink (push)
+> upstream     git@github.com:TraceMachina/nativelink (fetch)
+> upstream     git@github.com:TraceMachina/nativelink (push)
 > ```
 
 6. Finally, configure `git` to sign your commits with the keys you set up
@@ -123,8 +87,8 @@ please raise an issue so that we can clarify this document.
 
 ## Local development setup
 
-Forge ships almost all of its tooling in a nix flake which is configured
-via a [`flake.nix`](https://github.com/tracemachina/forge/tree/main/flake.nix) file in the root of the repository. While it's
+NativeLink ships almost all of its tooling in a nix flake which is configured
+via a [`flake.nix`](https://github.com/tracemachina/nativelink/tree/main/flake.nix) file in the root of the repository. While it's
 possible to work on some parts of the codebase without this environment, it'll
 make your life much easier since it lets you reproduce most of CI locally.
 
@@ -140,13 +104,13 @@ make your life much easier since it lets you reproduce most of CI locally.
 
    # Restart your terminal.
 
-   # When you `cd` into the forge repository, you should see a message
+   # When you `cd` into the nativelink repository, you should see a message
    # asking you to run `direnv allow`. Do this and you're good to go.
    ```
 
 > [!NOTE]
 > If you don't want to use `direnv`, you'll need to enter the flake manually
-> with `nix develop` every time you enter the `forge` directory, switch
+> with `nix develop` every time you enter the `nativelink` directory, switch
 > branches or make changes to the nix files.
 
 > [!TIP]
@@ -165,12 +129,12 @@ make your life much easier since it lets you reproduce most of CI locally.
 ## Common workflows
 
 These are some common workflows that you'll encounter during development on
-Forge.
+NativeLink.
 
 ### Creating pull requests
 
-Forge doesn't allow direct commits or human-created side branches in the
-`toxicwind/forge` repository. This holds for contributors in the
+NativeLink doesn't allow direct commits or human-created side branches in the
+`TraceMachina/nativelink` repository. This holds for contributors in the
 `TraceMachina` organization. To create a pull request:
 
 1. Ensure that your personal fork is up-to-date with upstream:
@@ -236,8 +200,8 @@ Forge doesn't allow direct commits or human-created side branches in the
    git push --set-upstream origin some-feature
    ```
 
-5. Go to https://github.com/toxicwind/forge/pulls where you should see a
-   button that you can click to create a new pull request from your
+5. Go to https://github.com/TraceMachina/nativelink/pulls where you should see a
+   button that you can click to create to create a new pull request from your
    fork to the main repository.
 
 6. Once you opened the pull request, click on the purple `Reviewable` button in
@@ -307,8 +271,20 @@ When working on Rust code `bazel test` commands automatically run `rustfmt` on
 all source files. If you get errors from these checks, run the `rustfmt` Bazel
 target to format the sources.
 
+For Bash/Zsh:
+
 ```bash
-bazel run --config=rustfmt @rules_rust//:rustfmt
+bazel run \
+  --@rules_rust//:rustfmt.toml=//:.rustfmt.toml \
+  @rules_rust//:rustfmt
+```
+
+For Windows PowerShell:
+
+```powershell
+bazel run `
+  --@rules_rust//:rustfmt.toml=//:.rustfmt.toml `
+  @rules_rust//:rustfmt
 ```
 
 ### Running pre-commit hooks
@@ -326,7 +302,7 @@ add the changed files manually to the staging area.
 
 ### Setting up rust-analyzer
 
-[rust-analyzer](https://rust-analyzer.github.io/) works reasonably well out of the box due to picking up the manifest for the `forge` crate, but it isn't integrated with Bazel by default. In order to generate a project configuration for rust-analyzer,
+[rust-analyzer](https://rust-analyzer.github.io/) works reasonably well out of the box due to picking up the manifest for the `nativelink` crate, but it isn't integrated with Bazel by default. In order to generate a project configuration for rust-analyzer,
 run the `@rules_rust//tools/rust_analyzer:gen_rust_project` target:
 
 ```sh
@@ -357,12 +333,12 @@ If you use VS Code, you can configure the following `tasks.json` file to automat
       "runOptions": {
         "runOn": "folderOpen"
       },
-      "dependsOn": "Build forge"
+      "dependsOn": "Build nativelink"
     },
     {
-      "label": "Build forge",
+      "label": "Build nativelink",
       "command": "bazel",
-      "args": ["build", "//:forge"],
+      "args": ["build", "//:nativelink"],
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -387,7 +363,7 @@ And to configure rust-analyzer to use that project, set this in your `.vscode/se
 ## Generating documentation
 
 Automatically generated documentation is still under construction. To view the
-documentation for the `forge-*` crates, run the `docs` command in the nix
+documentation for the `nativelink-*` crates, run the `docs` command in the nix
 flake:
 
 ```bash
@@ -401,7 +377,7 @@ To build individual crate-level docs:
 bazel build docs
 
 # A single crate
-bazel build forge-config:docs
+bazel build nativelink-config:docs
 ```
 
 To run documentation tests with Bazel:
@@ -412,56 +388,15 @@ bazel test doctests
 
 ## Writing documentation
 
-Forge largely follows the [Microsoft Style Guide](https://learn.microsoft.com/en-us/style-guide/welcome/).
+NativeLink largely follows the [Microsoft Style Guide](https://learn.microsoft.com/en-us/style-guide/welcome/).
 
-Forge implements its documentation style guide via Vale. The pre-commit
+NativeLink implements its documentation style guide via Vale. The pre-commit
 hooks forbid errors but permit warnings and suggestions. To view all of Vale's
 suggestions invoke it directly:
 
 ```bash
 vale somefile
 ```
-
-## Contributing to Docs or the Website
-
-The documentation site (docs.forge.com) and the marketing site
-(forge.com) live in the `web/` directory — a Bun + Turborepo workspace
-with two Next.js apps: `web/apps/docs` (the docs, built with Fumadocs) and
-`web/apps/web` (the website). This replaces the old `web/platform` layout;
-the `bun setup`, `bun docs`, and `bun preview` commands from that era no
-longer exist.
-
-The `web/` workspace is **not** part of the Bazel build — it's built with
-Bun only. Install Bun (https://bun.sh, or `pkgs.bun` is available in the nix
-dev shell), then:
-
-```bash
-cd web
-bun install
-
-# Live dev server for just the docs at http://localhost:3001
-bun dev:docs
-
-# Production build + preview of both apps, the successor to the old
-# `rm -r dist && bun run build` and `bun preview`. DOCS_URL is baked into
-# the marketing app's /docs redirect at build time.
-DOCS_URL=http://localhost:3001 bun run build
-bun --filter @forge/web start    # forge.com build on port 3000
-bun --filter @forge/docs start   # docs build on port 3001
-```
-
-Docs content is MDX under `web/apps/docs/content/docs/`. Every page needs
-`title` and `description` frontmatter; sidebar order comes from each
-section's `meta.json` (the top-level `content/docs/meta.json` orders the
-sections themselves). Authoring conventions, available MDX components, and
-style rules are documented on the site itself under
-Contribute → [Working on documentation](https://docs.forge.com/contribute/docs)
-— which is also the page to update if this workflow changes.
-
-The configuration reference pages under
-`web/apps/docs/content/docs/reference/forge-config/` are autogenerated
-from the Rust config crate — don't edit them by hand; regenerate with
-`bun --filter @forge/docs gen:config-reference` from `web/`.
 
 ## Creating releases
 
@@ -474,42 +409,13 @@ most automatically generated changelogs provide.
 
    - `MODULE.bazel`
    - `Cargo.toml`
-   - The `Cargo.toml` of every `forge-*` crate — including nested ones
-     like `forge-metric/forge-metric-macro-derive/Cargo.toml` —
-     and the regenerated lock files (`Cargo.lock`,
-     `forge-test/fuzz/Cargo.lock`)
+   - `nativelink-*/Cargo.toml`
 
-   As a sanity check, a standard release touches 17 files.
+2. Run `git cliff --tag=0.x.y > CHANGELOG.md` to update the changelog. You might
+   need to make manual adjustments to `cliff.toml` if `git-cliff` doesn't put a
+   commit in the right subsection.
 
-2. Update the changelog by prepending the new release section to the existing
-   `CHANGELOG.md`. Don't regenerate the whole file — that rewrites previous
-   release entries and drops manual curation.
-
-   First make sure your local tags match upstream, since `--unreleased` means
-   "commits not contained in any tag":
-
-   ```bash
-   git fetch upstream --tags
-   ```
-
-   Sanity check which commits will form the new release section:
-
-   ```bash
-   git log --oneline "$(git describe --tags --abbrev=0)"..HEAD
-   ```
-
-   Then prepend the new section:
-
-   ```bash
-   git cliff --unreleased --tag=v1.x.y --prepend CHANGELOG.md
-   ```
-
-   Verify with `git diff CHANGELOG.md` that the change is purely additive:
-   only added lines, with all previous release entries untouched. You might
-   need to make manual adjustments to `cliff.toml` if `git-cliff` doesn't put
-   a commit in the right subsection.
-
-3. Create the commit and PR. Call it `Release Forge v1.x.y`.
+3. Create the commit and PR. Call it `Release NativeLink v0.x.y`.
 
 4. Once the PR is merged, update your local repository and origin:
 
@@ -524,15 +430,15 @@ most automatically generated changelogs provide.
    `v` prefix:
 
    ```bash
-   git tag -s v1.x.y
+   git tag -s v0.x.y
 
-   # tag message should be: v1.x.y
+   # tag message should be: v0.x.y
    ```
 
 6. Push the signed tag to the origin repository:
 
    ```bash
-   git push origin v1.x.y
+   git push origin v0.x.y
    ```
 
 7. Pushing the tag triggers an additional GHA workflow which should create the
@@ -540,59 +446,15 @@ most automatically generated changelogs provide.
    the CI job in your fork passes, push the tag to upstream:
 
    ```bash
-   git push upstream v1.x.y
+   git push upstream v0.x.y
    ```
 
-8. Regenerate the latest config reference docs now that the upstream tag exists.
-   Pushing the tag upstream triggers the
-   [`Regenerate config reference`](.github/workflows/config-reference.yaml)
-   workflow, which regenerates the docs and opens a PR against `main` with
-   auto-merge enabled. Check that the PR appeared and merged; if the workflow
-   failed, either re-run it from `Actions → Regenerate config reference → Run
-   workflow` (entering the tag) or fall back to the manual procedure below.
-
-   Passing the new tag updates `web/apps/docs/lib/config-versions.ts`, which
-   determines the latest version shown in the docs UI, rewrites
-   `web/apps/docs/content/docs/reference/forge-config/index.mdx` from that
-   tag, and creates a versioned page for the previous latest release. You do not
-   need to regenerate every historical version.
-
-   ```bash
-   git fetch --tags upstream
-   cd web
-   bun --filter @forge/docs gen:config-reference v1.x.y
-   cd ..
-   ```
-
-   Confirm that `web/apps/docs/lib/config-versions.ts` marks `v1.x.y` as the
-   latest release and that
-   `web/apps/docs/content/docs/reference/forge-config/index.mdx` says it was
-   sourced from `forge-config @ v1.x.y`. Then run the docs lint and commit
-   the generated docs update:
-
-   ```bash
-   nix develop -c vale web/apps/docs/content/docs/reference/forge-config/*.mdx
-   ```
-
-9. The images for the release are now being created. Go to the
-   [Tags](https://github.com/toxicwind/forge/tags) tab in GitHub and
-   double-check that the tag has a green `Verified` marker next to it. If it
-   does, select `Create a release from tag` and create release notes. You can
-   use previous release notes as template by clicking on the "Edit" button on a
-   previous release and copy-pasting the contents into the new release notes.
-
-   Attribute every entry to its author. Keep the same category headings as the
-   changelog and write each line as `<summary> by @author in (#PR) - (short-sha)`,
-   then close the notes with a `New Contributors` section and a `Full Changelog`
-   link. To pull the author list and first-time contributors for the range, run:
-
-   ```bash
-   gh api -X POST repos/toxicwind/forge/releases/generate-notes \
-     -f tag_name=v1.x.y -f previous_tag_name=v1.x.z
-   ```
-
-   Fold that output into the categorized notes rather than pasting it verbatim,
-   since the changelog groups commits by type.
+8. The images for the release are now being created. Go to the [Tags](https://github.com/TraceMachina/nativelink/tags)
+   tab in GitHub and double-check that the tag has a green `Verified` marker
+   next to it. If it does, select `Create a release from tag` and create release
+   notes. You can use previous release notes as template by clicking on the
+   "Edit" button on a previous release and copy-pasting the contents into the
+   new release notes.
 
    Make sure to include migration instructions for all breaking changes.
 
@@ -600,52 +462,19 @@ most automatically generated changelogs provide.
    changes`. This is a fairly free-form section that doesn't have any explicit
    requirements other than being a best-effort summary of notable changes.
 
-10. Once all notes are in line, click `Publish Release`.
-
-11. Publishing the release triggers the
-    [`Signed release artifacts`](.github/workflows/release.yaml) workflow. It
-    builds the `forge` binary for every supported target, signs each asset
-    with keyless Sigstore cosign, generates an SBOM, and produces SLSA Build
-    Level 3 provenance, attaching all of it to the GitHub Release. These signed
-    assets are what the OpenSSF Scorecard `Signed-Releases` check inspects — the
-    cosign signatures on the GHCR container images are not visible to that check.
-
-    Wait for the workflow to finish, then confirm the release page lists, for
-    each target, a `*.tar.gz` plus its `*.sig`/`*.pem`, an `*.spdx.json` SBOM,
-    and a `*.intoto.jsonl` provenance file. You can verify any asset locally:
-
-    ```bash
-    # Verify the SLSA provenance covers the artifact.
-    slsa-verifier verify-artifact forge-1.x.y-x86_64-unknown-linux-musl.tar.gz \
-      --provenance-path forge-1.x.y.intoto.jsonl \
-      --source-uri github.com/toxicwind/forge \
-      --source-tag v1.x.y
-
-    # Verify the cosign signature.
-    cosign verify-blob forge-1.x.y-x86_64-unknown-linux-musl.tar.gz \
-      --signature forge-1.x.y-x86_64-unknown-linux-musl.tar.gz.sig \
-      --certificate forge-1.x.y-x86_64-unknown-linux-musl.tar.gz.pem \
-      --certificate-identity-regexp '^https://github.com/toxicwind/forge/' \
-      --certificate-oidc-issuer https://token.actions.githubusercontent.com
-    ```
-
-    If a release ever ships without signed assets (for example a release created
-    before this workflow existed), re-run the workflow manually against the tag:
-    `Actions → Signed release artifacts → Run workflow`, entering the tag (e.g.
-    `v1.x.y`). It will rebuild, re-sign, and attach the assets to that existing
-    release.
+9. Once all notes are in line, click `Publish Release`.
 
 ## Conduct
 
-Forge Code of Conduct is available in the
-[CODE_OF_CONDUCT](https://github.com/tracemachina/forge/tree/main/CODE_OF_CONDUCT.md) file.
+NativeLink Code of Conduct is available in the
+[CODE_OF_CONDUCT](https://github.com/tracemachina/nativelink/tree/main/CODE_OF_CONDUCT.md) file.
 
 ## Generating code coverage
 
 You can generate branch-based coverage reports via:
 
 ```
-nix build .#forgeCoverageForHost
+nix run .#nativelinkCoverageForHost
 ```
 
 The `result` symlink contains a webpage with the visualized report.

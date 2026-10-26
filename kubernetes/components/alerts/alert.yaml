@@ -2,7 +2,7 @@
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Alert
 metadata:
-  name: forge-alert
+  name: nativelink-alert
   namespace: ci
 spec:
   eventSeverity: info
@@ -11,7 +11,7 @@ spec:
       name: '*'
       namespace: default
   providerRef:
-    name: forge-webhook
+    name: nativelink-webhook
   eventMetadata:
     flakeOutput: ${PLACEHOLDER_FLAKE_OUTPUT}
     configMapName: ${PLACEHOLDER_CONFIG_MAP_NAME}
