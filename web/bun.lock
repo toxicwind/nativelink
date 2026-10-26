@@ -11,11 +11,11 @@
       },
     },
     "apps/docs": {
-      "name": "@nativelink/docs",
+      "name": "@forge/docs",
       "version": "0.0.0",
       "dependencies": {
-        "@nativelink/tokens": "workspace:*",
-        "@nativelink/ui": "workspace:*",
+        "@forge/tokens": "workspace:*",
+        "@forge/ui": "workspace:*",
         "@next/third-parties": "~16.2.11",
         "fumadocs-core": "^16",
         "fumadocs-mdx": "^15",
@@ -27,7 +27,7 @@
         "react-dom": "^19.0.0",
       },
       "devDependencies": {
-        "@nativelink/config": "workspace:*",
+        "@forge/config": "workspace:*",
         "@tailwindcss/postcss": "^4.0.0",
         "@types/mdx": "^2.0.13",
         "@types/node": "^26.0.0",
@@ -38,13 +38,13 @@
       },
     },
     "apps/web": {
-      "name": "@nativelink/web",
+      "name": "@forge/web",
       "version": "0.0.0",
       "dependencies": {
+        "@forge/tokens": "workspace:*",
+        "@forge/ui": "workspace:*",
         "@mdx-js/loader": "^3.1.0",
         "@mdx-js/react": "^3.1.0",
-        "@nativelink/tokens": "workspace:*",
-        "@nativelink/ui": "workspace:*",
         "@next/mdx": "~16.2.11",
         "@next/third-parties": "~16.2.11",
         "geist": "^1.5.1",
@@ -55,7 +55,7 @@
         "react-dom": "^19.0.0",
       },
       "devDependencies": {
-        "@nativelink/config": "workspace:*",
+        "@forge/config": "workspace:*",
         "@tailwindcss/postcss": "^4.0.0",
         "@types/mdx": "^2.0.13",
         "@types/node": "^26.0.0",
@@ -66,15 +66,15 @@
       },
     },
     "packages/config": {
-      "name": "@nativelink/config",
+      "name": "@forge/config",
       "version": "0.0.0",
     },
     "packages/tokens": {
-      "name": "@nativelink/tokens",
+      "name": "@forge/tokens",
       "version": "0.0.0",
     },
     "packages/ui": {
-      "name": "@nativelink/ui",
+      "name": "@forge/ui",
       "version": "0.0.0",
       "dependencies": {
         "@radix-ui/react-slot": "^1.1.1",
@@ -84,7 +84,7 @@
         "tailwind-merge": "^3.0.0",
       },
       "devDependencies": {
-        "@nativelink/config": "workspace:*",
+        "@forge/config": "workspace:*",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "typescript": "^7.0.0",
@@ -190,6 +190,16 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg=="],
 
+    "@forge/config": ["@forge/config@workspace:packages/config"],
+
+    "@forge/docs": ["@forge/docs@workspace:apps/docs"],
+
+    "@forge/tokens": ["@forge/tokens@workspace:packages/tokens"],
+
+    "@forge/ui": ["@forge/ui@workspace:packages/ui"],
+
+    "@forge/web": ["@forge/web@workspace:apps/web"],
+
     "@fumadocs/tailwind": ["@fumadocs/tailwind@0.0.5", "", { "peerDependencies": { "@tailwindcss/oxide": "^4.0.0", "tailwindcss": "^4.0.0" }, "optionalPeers": ["@tailwindcss/oxide", "tailwindcss"] }, "sha512-ENKPWUDRmriccsrUDE4bDBq3FNr/ms3BP2rWlsAEMV1yP23pcCaan+ceGfeBUsAQjw7sj9Q3R4Kl3g/TCStPzQ=="],
 
     "@iconify/types": ["@iconify/types@2.0.0", "", {}, "sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg=="],
@@ -267,16 +277,6 @@
     "@mdx-js/react": ["@mdx-js/react@3.1.1", "", { "dependencies": { "@types/mdx": "^2.0.0" }, "peerDependencies": { "@types/react": ">=16", "react": ">=16" } }, "sha512-f++rKLQgUVYDAtECQ6fn/is15GkEH9+nZPM3MS0RcxVqoTfawHvDlSCH7JbMhAM6uJ32v3eXLvLmLvjGu7PTQw=="],
 
     "@mermaid-js/parser": ["@mermaid-js/parser@1.2.1", "", { "dependencies": { "@chevrotain/types": "~11.1.2" } }, "sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw=="],
-
-    "@nativelink/config": ["@nativelink/config@workspace:packages/config"],
-
-    "@nativelink/docs": ["@nativelink/docs@workspace:apps/docs"],
-
-    "@nativelink/tokens": ["@nativelink/tokens@workspace:packages/tokens"],
-
-    "@nativelink/ui": ["@nativelink/ui@workspace:packages/ui"],
-
-    "@nativelink/web": ["@nativelink/web@workspace:apps/web"],
 
     "@next/env": ["@next/env@16.3.8", "", {}, "sha512-Al9zqHVV7TJv0eFuOU4U7Lvv74PTih4Ch63sk2xCIpSTkE3udFnaOcnzP2lQVymiL7yS9Cj2iClUXlR3EQ5sEw=="],
 

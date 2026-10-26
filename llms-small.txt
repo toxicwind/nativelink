@@ -355,17 +355,17 @@ history. Privacy requests go to privacy@tracemachina.com.
 
 **Blog**: every post, newest first. The full text of each is in /llms-full.txt.
 
-- [The Inaugural RE API Fellow](https://forge.com/resources/blog/re-api-fellow) (2026-09-08): When people first see the open source Forge repository on GitHub, they think about CI: continuous integration, the practice of building and testing software every time someone pushes a change.…
+- [The Inaugural RE API Fellow](https://forge.com/resources/blog/re-api-fellow) (2026-09-08): When people first see the open source Forge repository on GitHub, they think about CI: continuous integration, the practice of building and testing software every time someone pushes a change. It's…
 - [How Menlo Security Cut Chromium Build Times from 4.5 Hours to 25 Minutes with Forge](https://forge.com/resources/blog/case-study-menlo-security) (2026-08-28): "Forge is the simplest way to get fast builds with Chromium." Christopher Staite, Principal Engineer, Menlo Security
 - [From One Robot to 1,000 with rules_omniverse](https://forge.com/resources/blog/rules-omniverse-0-3-0) (2026-08-27): Today we are releasing our first official Bazel ruleset for physical AI. It is built to carry robotics work from research to production.
 - [Case Study: LastMile AI](https://forge.com/resources/blog/case-study-last-mile-ai) (2025-09-25): LastMile AI is an AI startup creating tools to enable developers to build AI agents. The team comes from backgrounds in top research and engineering organizations, building infrastructure and devel…
 - [Supercharge Your C/C++ Builds without Migrating to Bazel: A Tutorial for CMake, Forge and BuildStream](https://forge.com/resources/blog/accelerating-cmake-with-forge) (2025-08-12): Slow build times can be a major drag on developer productivity. Waiting for your code to compile and build can interrupt your flow and waste valuable time. Lots of companies have moved to Bazel and…
+- [Trust Root Support in Forge](https://forge.com/resources/blog/adding-trust-roots-to-forge) (2025-05-15): Open source thrives on community contributions, and today’s story is a perfect example of why. External engineer Sam Eskandar identified a pain point in Forge's TLS configuration and delivered a cl…
 - [Fine-tune a Language Model on x86 CPUs using Bazel and Forge](https://forge.com/resources/blog/finetune-with-bazel-forge) (2025-05-15): The future of AI development belongs not necessarily to those with the most powerful infrastructure but to those who can extract maximum value from available resources. This tutorial emphasizes CPU…
-- [Trust Root Support in Forge](https://forge.com/resources/blog/adding-trust-roots-to-forge) (2025-05-15): Open source thrives on community contributions, and today’s story is a perfect example of why. External engineer Sam Eskandar identified a pain point in Forge's TLS configuration and delivered…
-- [Thirdwave Automation and Forge](https://forge.com/resources/blog/case-study-thirdwave-automation) (2025-03-06): “Our business relies on delivering autonomous systems with an exceptional level of safety. With Forge’s massively-parallel cloud service, we can now iterate faster and continuously learn from…
+- [Thirdwave Automation and Forge](https://forge.com/resources/blog/case-study-thirdwave-automation) (2025-03-06): “Our business relies on delivering autonomous systems with an exceptional level of safety. With Forge’s massively-parallel cloud service, we can now iterate faster and continuously learn from our t…
 - [Fortune 50 Manufacturer Uses Forge For 20x Accelerated Build Speed and 30x Improved Storage Density](https://forge.com/resources/blog/case-study-fortune-50-manufacturer) (2025-01-21): A Fortune 50 Manufacturer builds a Chromium-based browser, and it has been an integral part of their product lineup, requiring robust and efficient build infrastructure to keep up with its evolving…
-- [Forge for Semiconductors](https://forge.com/resources/blog/semiconductors) (2024-12-04): Forge has become a critical architectural component for companies developing custom silicon. From the outset, our mission was to build an open-source simulation platform designed to scale with…
-- [Forge - The free & open source simulation infrastructure platform written in Rust](https://forge.com/resources/blog/Forge) (2024-09-17): Today, we're excited to release Forge–a Rust implementation of Bazel's Remote Build Execution protocol (RBE) and Content Addressable Storage (CAS) designed to run your code and get out of the…
+- [Forge for Semiconductors](https://forge.com/resources/blog/semiconductors) (2024-12-04): Forge has become a critical architectural component for companies developing custom silicon. From the outset, our mission was to build an open-source simulation platform designed to scale with cutt…
+- [Forge - The free & open source simulation infrastructure platform written in Rust](https://forge.com/resources/blog/Forge) (2024-09-17): Today, we're excited to release Forge–a Rust implementation of Bazel's Remote Build Execution protocol (RBE) and Content Addressable Storage (CAS) designed to run your code and get out of the way.…
 - [TraceMachina: Seed Funding](https://forge.com/resources/blog/tracemachina-seedfunding) (2024-09-10): Trace Machina secures funding and launches Forge out of stealth to deliver simulation infrastructure for safety-critical technologies
 - [Case Study: CIQ](https://forge.com/resources/blog/case-study-ciq) (2024-08-13): CIQ is an enterprise company that specializes in Linux distribution, computing infrastructure, and cluster management and provisioning systems. They have a deep running commitment to supporting ope…
 
@@ -1323,7 +1323,7 @@ Yes, for permitted use. Most of the monorepo is
     workers are Business Source License modules: fine for an individual
     developer's cache, but shared, production, or commercial use of those
     modules needs Forge Enterprise or an intentionally
-    inexpensive com…
+    inexpensive commerci…
 
 # https://docs.forge.com/remote-execution
 
@@ -2112,7 +2112,7 @@ bytes ([filesystem](/how-to/stores/filesystem),
 [S3 and compatibles](/how-to/stores/s3-and-compatible),
 [GCS](/how-to/stores/gcs), [Azure Blob](/how-to/stores/azure),
 [OCI](/how-to/stores/oci-object-storage), [Redis](/how-to/stores/redis) and
-[Mongo](/how-to/stores/mongo)) on durability, latency and c…
+[Mongo](/how-to/stores/mongo)) on durability, latency and cost.
 
 # https://docs.forge.com/how-to/stores
 
@@ -2583,7 +2583,7 @@ zstd on the wire, with stores still holding raw bytes. **Time:** ten minutes.
   Forge process**. Without the configuration below or an explicitly
   enabled CAS `grpc` store, Forge does not advertise zstd, rejects
   `compressed-blobs/zstd` requests with `InvalidArgument`, and keeps its own
-  outgoing transfers on the identity path,…
+  outgoing transfers on the identity path, so client…
 
 ## Enabling it
 
@@ -3210,7 +3210,7 @@ No. The binary has no scrape endpoint, at any configuration, and
     receiver is HTTP-only and Forge's exporters are gRPC-only. Run a
     collector and scrape its Prometheus exporter; the shipped collector also
     forwards into Prometheus's OTLP receiver, with the renaming described in
-    [what happens if you skip the collector](#wha…
+    [what happens if you skip the collector](#what-hap…
 
 ## What's next
 
@@ -3808,7 +3808,7 @@ the ten that give the program its shape; the other two are
 `forge-metric-macro-derive` (the proc macro behind `forge-metric`)
 and `forge-redis-tester` (a fake Redis used by the store crate and by
 tests). `forge-macro` is a test-only proc macro that no library crate
-depends on.
+depends on. An arrow points from a crate to a crate that depends on it.
 
 ## Configuration is JSON5, and it is validated early
 
@@ -4448,7 +4448,7 @@ an Apache 2.0 future grant. Its restriction is narrower than most people
 expect on first reading: it permits everything except a **Competing Use**,
 which the licence defines as making the software available to others in a
 commercial product or service that substitutes for Forge, substitutes for
-something Trace Machina already offers us…
+something Trace Machina already offers using i…
 
 ## The Business Source Licensed modules
 
@@ -5289,7 +5289,8 @@ rules are in
 [`CONTRIBUTING.md`](https://github.com/toxicwind/forge/blob/main/CONTRIBUTING.md#ai-assisted-contributions)
 and are short: the person submitting the change must understand it well
 enough to answer for any line; the pull request template's "AI assistance"
-section must say which tools helped and how much ("None" is a comple…
+section must say which tools helped and how much ("None" is a complete
+answe…
 
 ## How the corpus is ordered
 
