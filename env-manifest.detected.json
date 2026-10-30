@@ -1,0 +1,971 @@
+{
+  "product": "nativelink",
+  "path": "/home/toxic/pens/barn/products/nativelink",
+  "files": 1386,
+  "detected_at": "2026-10-30T06:10:49.380727Z",
+  "env_vars": {
+    "AZURE_CAS_SAS_URL": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "BASE_URL": [
+      "web/apps/docs/app/sitemap.ts",
+      "web/apps/web/app/robots.ts",
+      "web/apps/web/app/sitemap.ts"
+    ],
+    "BAZEL_LOG": [
+      "tools/bazel-retry.sh"
+    ],
+    "BUILDX_NO_CACHE": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh",
+      "tools/toolchain-forge/toolchain-forge.sh",
+      "tools/toolchain-nativelink/toolchain-nativelink.sh"
+    ],
+    "CARGO_TARGET_DIR": [
+      "web/apps/docs/scripts/gen-config-reference.mjs"
+    ],
+    "CAS_ENDPOINT": [
+      "forge-config/src/stores.rs",
+      "nativelink-config/src/stores.rs",
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "CONTACT_EMAIL": [
+      "web/apps/web/app/agents/page.tsx",
+      "web/apps/web/lib/llms.ts"
+    ],
+    "DOCS": [
+      "web/apps/web/app/agents/page.tsx",
+      "web/apps/web/lib/llms.ts"
+    ],
+    "DOCS_DEV_URL": [
+      "web/apps/web/next.config.mjs"
+    ],
+    "DOCS_URL": [
+      "web/apps/docs/app/[[...slug]]/page.tsx",
+      "web/apps/web/next.config.mjs"
+    ],
+    "ECR": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh",
+      "tools/toolchain-forge/toolchain-forge.sh",
+      "tools/toolchain-nativelink/toolchain-nativelink.sh"
+    ],
+    "ECR_PROFILE": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh",
+      "tools/toolchain-forge/toolchain-forge.sh",
+      "tools/toolchain-nativelink/toolchain-nativelink.sh"
+    ],
+    "ECR_PUBLISH": [
+      "tools/toolchain-buck2/toolchain-buck2.sh"
+    ],
+    "ECR_REGION": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh",
+      "tools/toolchain-forge/toolchain-forge.sh",
+      "tools/toolchain-nativelink/toolchain-nativelink.sh"
+    ],
+    "ECR_USER": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh",
+      "tools/toolchain-forge/toolchain-forge.sh",
+      "tools/toolchain-nativelink/toolchain-nativelink.sh"
+    ],
+    "EMPTY_VAR": [
+      "forge-config/tests/deserialization_test.rs",
+      "nativelink-config/tests/deserialization_test.rs"
+    ],
+    "ENV_VAR": [
+      "forge-config/src/stores.rs"
+    ],
+    "FLAKE_NIX_FILE": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh"
+    ],
+    "FORCE_COLOR": [
+      "web/apps/docs/.next/build/chunks/node_modules_20v-8wl._.js",
+      "web/apps/web/.next/build/chunks/node_modules_20v-8wl._.js"
+    ],
+    "FORGE_CAS_MEMORY_CONTENT_LIMIT": [
+      "forge-config/src/stores.rs",
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "FORGE_DIR": [
+      "integration_tests/chunking_cache_test.sh"
+    ],
+    "FORGE_REPO_ROOT": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "GITHUB_TOKEN": [
+      "web/apps/web/.next/server/chunks/ssr/_1573u9a._.js",
+      "web/apps/web/lib/github.ts"
+    ],
+    "GREEN": [
+      "deployment-examples/docker-compose/test-multi-worker-bazel.sh"
+    ],
+    "HOME": [
+      "deploy/chromium-example/build_chromium_tests.sh",
+      "scripts/upstream-merge.sh"
+    ],
+    "IGNORE_MARKER": [
+      "web/apps/docs/scripts/lint-snippets.mjs"
+    ],
+    "IMAGE_DIGEST": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh"
+    ],
+    "JEST_WORKER_ID": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__0167nzz._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__0167nzz._.js"
+    ],
+    "LANG": [
+      "web/apps/docs/.next/build/chunks/node_modules_20v-8wl._.js",
+      "web/apps/web/.next/build/chunks/node_modules_20v-8wl._.js"
+    ],
+    "MAX_WAIT": [
+      "deployment-examples/docker-compose/test-multi-worker-bazel.sh"
+    ],
+    "METRICS_RS": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "MONGO_URI": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "NATIVELINK": [
+      "deploy/chromium-example/build_chromium_tests.sh"
+    ],
+    "NATIVELINK_CAS_MEMORY_CONTENT_LIMIT": [
+      "nativelink-config/src/stores.rs"
+    ],
+    "NEXT_DEBUG_BUILD": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_DEPLOYMENT_ID": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_OTEL_FETCH_DISABLED": [
+      "web/apps/docs/.next/server/chunks/[root-of-the-server]__15bjnu5._.js",
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/chunks/[root-of-the-server]__0l3yhx4._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_OTEL_PERFORMANCE_PREFIX": [
+      "web/apps/docs/.next/server/chunks/[root-of-the-server]__15bjnu5._.js",
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/chunks/[root-of-the-server]__0l3yhx4._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_OTEL_VERBOSE": [
+      "web/apps/docs/.next/server/chunks/[root-of-the-server]__15bjnu5._.js",
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/chunks/[root-of-the-server]__0l3yhx4._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_PHASE": [
+      "web/apps/docs/.next/server/edge/chunks/node_modules_next_dist_esm_1yqwv8h._.js",
+      "web/apps/web/.next/server/edge/chunks/node_modules_next_dist_esm_1m40smm._.js"
+    ],
+    "NEXT_PRIVATE_DEBUG_CACHE": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_PRIVATE_RESPONSE_CACHE_MAX_SIZE": [
+      "web/apps/docs/.next/server/chunks/[root-of-the-server]__15bjnu5._.js",
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/chunks/[root-of-the-server]__0l3yhx4._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_PRIVATE_RESPONSE_CACHE_TTL": [
+      "web/apps/docs/.next/server/chunks/[root-of-the-server]__15bjnu5._.js",
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/chunks/[root-of-the-server]__0l3yhx4._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_PRIVATE_TEST_PROXY": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NEXT_SSG_FETCH_METRICS": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "NL_LOCAL_UPLOADS": [
+      "integration_tests/chunking_cache_test.sh"
+    ],
+    "NL_TLS_CERT": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "NL_TLS_KEY": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "NL_WORKER_IMAGE": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "NODE_ENV": [
+      "web/apps/web/app/lab/page.tsx",
+      "web/apps/web/next.config.mjs"
+    ],
+    "NO_COLOR": [
+      "web/apps/docs/.next/build/chunks/node_modules_20v-8wl._.js",
+      "web/apps/web/.next/build/chunks/node_modules_20v-8wl._.js"
+    ],
+    "OCI_ACCESS_KEY_ID": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "OCI_SECRET_ACCESS_KEY": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "OUTPUT": [
+      "local-remote-execution/generated-cc/cc/cc_wrapper.sh"
+    ],
+    "POD_NAME": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "PORT": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js"
+    ],
+    "PRICING_EMAIL": [
+      "web/apps/web/app/pricing/page.tsx"
+    ],
+    "PWD": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "R2_ACCESS_KEY_ID": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "R2_ACCOUNT_ID": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "R2_SECRET_ACCESS_KEY": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "RED": [
+      "deployment-examples/docker-compose/test-multi-worker-bazel.sh"
+    ],
+    "REDIS_PASSWORD": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "REDIS_USER": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "REFERENCE_BASE": [
+      "web/apps/docs/scripts/gen-config-reference.mjs"
+    ],
+    "REPO": [
+      "web/apps/docs/scripts/gen-llms.mjs",
+      "web/apps/web/app/agents/page.tsx",
+      "web/apps/web/lib/llms.ts"
+    ],
+    "REPO_URL": [
+      "web/apps/docs/lib/source-ref.ts"
+    ],
+    "RESEND_API_KEY": [
+      "web/platform/utils/resend.ts"
+    ],
+    "SCHEDULER_ENDPOINT": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "SHA256_HASH": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh"
+    ],
+    "SITE": [
+      "web/apps/docs/scripts/gen-llms.mjs",
+      "web/apps/web/lib/llms.ts"
+    ],
+    "SLACK_URL": [
+      "web/apps/web/lib/llms.ts"
+    ],
+    "SOURCE_REF": [
+      "web/apps/docs/components/source-link.tsx",
+      "web/apps/docs/lib/source-ref.ts"
+    ],
+    "SRC": [
+      "scripts/upstream-merge.sh"
+    ],
+    "SRC_ROOT": [
+      "tools/toolchain-buck2/toolchain-buck2.sh",
+      "tools/toolchain-drake/toolchain-drake.sh"
+    ],
+    "TERM": [
+      "web/apps/docs/.next/build/chunks/node_modules_20v-8wl._.js",
+      "web/apps/web/.next/build/chunks/node_modules_20v-8wl._.js"
+    ],
+    "TEST_BAD_BOOL": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "TEST_DURATION": [
+      "forge-config/tests/deserialization_test.rs",
+      "nativelink-config/tests/deserialization_test.rs"
+    ],
+    "TEST_GOOD_BOOL": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "TEST_GRPC_REMOTE_CACHE_COMPRESSION": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "TEST_NUMBER": [
+      "forge-config/tests/deserialization_test.rs",
+      "nativelink-config/tests/deserialization_test.rs"
+    ],
+    "TEST_NUMERIC": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "TEST_SIZE": [
+      "forge-config/tests/deserialization_test.rs",
+      "nativelink-config/tests/deserialization_test.rs"
+    ],
+    "TEST_STRING": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "TEST_TMPDIR": [
+      "tools/tsan.sh"
+    ],
+    "TEST_VAR": [
+      "forge-config/tests/deserialization_test.rs",
+      "nativelink-config/tests/deserialization_test.rs"
+    ],
+    "TEST_VAR1": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "TEST_VAR2": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "TMPDIR": [
+      "run_integration_tests.sh",
+      "tools/tsan.sh"
+    ],
+    "TURBOPACK": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "UNDEFINED_ENV_VAR": [
+      "forge-config/tests/deserialization_test.rs"
+    ],
+    "UNDEFINED_VAR": [
+      "forge-config/tests/deserialization_test.rs",
+      "nativelink-config/tests/deserialization_test.rs"
+    ],
+    "VAR": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js"
+    ],
+    "VERCEL": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js"
+    ],
+    "VERCEL_BRANCH_URL": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js"
+    ],
+    "VERCEL_ENV": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js"
+    ],
+    "VERCEL_GIT_COMMIT_SHA": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "VERCEL_GIT_REPO_OWNER": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "VERCEL_GIT_REPO_SLUG": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "VERCEL_PROJECT_PRODUCTION_URL": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js"
+    ],
+    "VERCEL_URL": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js"
+    ],
+    "YELLOW": [
+      "deployment-examples/docker-compose/test-multi-worker-bazel.sh"
+    ],
+    "__NEXT_BUILD_ID": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "__NEXT_EXPERIMENTAL_HTTPS": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js"
+    ],
+    "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "__NEXT_PREVIEW_MODE_ID": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "__NEXT_PREVIEW_MODE_SIGNING_KEY": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "__NEXT_TEST_MAX_ISR_CACHE": [
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "__NEXT_VERBOSE_LOGGING": [
+      "web/apps/docs/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/docs/.next/server/edge/chunks/[root-of-the-server]__1m3yzs8._.js",
+      "web/apps/web/.next/server/chunks/ssr/[root-of-the-server]__02zj8y0._.js",
+      "web/apps/web/.next/server/edge/chunks/[root-of-the-server]__1bwzoqt._.js"
+    ],
+    "allowed": [
+      "web/apps/docs/scripts/lint-boundaries.mjs"
+    ],
+    "altText": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "anchor": [
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/docs/scripts/lint-links.mjs"
+    ],
+    "asset": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "assetName": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "assetsDir": [
+      "web/platform/utils/md_to_mdx_aot.ts"
+    ],
+    "attempt": [
+      "tools/bazel-retry.sh"
+    ],
+    "base": [
+      "web/apps/docs/components/source-link.tsx",
+      "web/packages/ui/src/components/ask-ai.tsx"
+    ],
+    "basePath": [
+      "web/packages/ui/src/components/logo.tsx"
+    ],
+    "blockType": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "body": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "builder": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "checked": [
+      "web/apps/docs/scripts/lint-boundaries.mjs",
+      "web/apps/docs/scripts/lint-links.mjs",
+      "web/apps/docs/scripts/lint-navigation.mjs",
+      "web/apps/docs/scripts/lint-snippets.mjs"
+    ],
+    "checkedAccordions": [
+      "web/apps/docs/scripts/lint-anchors.mjs"
+    ],
+    "checkedHeadings": [
+      "web/apps/docs/scripts/lint-anchors.mjs"
+    ],
+    "chunkPath": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "cleanedContentText": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "commit": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs",
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "contextDir": [
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__1jelsdb._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0qxha8t._.js"
+    ],
+    "css": [
+      "web/apps/docs/.next/build/chunks/node_modules_20v-8wl._.js",
+      "web/apps/web/.next/build/chunks/node_modules_20v-8wl._.js"
+    ],
+    "customClass": [
+      "web/platform/src/components/qwik/components/codeTabs.tsx",
+      "web/platform/src/components/qwik/components/text.tsx",
+      "web/platform/src/components/qwik/components/video.tsx"
+    ],
+    "date": [
+      "web/apps/web/lib/llms.ts"
+    ],
+    "delay": [
+      "tools/bazel-retry.sh"
+    ],
+    "desc": [
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "description": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "detail": [
+      "web/apps/docs/scripts/lint-navigation.mjs"
+    ],
+    "docsDir": [
+      "web/platform/utils/md_to_mdx_aot.ts"
+    ],
+    "docsRoot": [
+      "web/platform/starlight.conf.ts"
+    ],
+    "docsUrl": [
+      "web/packages/ui/src/components/ask-ai.tsx"
+    ],
+    "entry": [
+      "web/apps/docs/scripts/gen-llms.mjs"
+    ],
+    "enumName": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "err": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/platform/utils/md_to_mdx_aot.ts"
+    ],
+    "event": [
+      "web/apps/docs/.next/build/chunks/node_modules_20v-8wl._.js",
+      "web/apps/web/.next/build/chunks/node_modules_20v-8wl._.js"
+    ],
+    "existingVersion": [
+      "web/apps/docs/scripts/gen-config-reference.mjs"
+    ],
+    "external": [
+      "web/apps/docs/.next/next-server.js.nft.json",
+      "web/apps/docs/.next/server/app/[[...slug]]/page.js.nft.json",
+      "web/apps/docs/.next/server/app/_global-error/page.js.nft.json",
+      "web/apps/docs/.next/server/app/_not-found/page.js.nft.json",
+      "web/apps/docs/.next/server/app/api/search/route.js.nft.json",
+      "web/apps/docs/.next/server/app/icon.svg/route.js.nft.json",
+      "web/apps/docs/.next/server/app/sitemap.xml/route.js.nft.json",
+      "web/apps/web/.next/next-server.js.nft.json",
+      "web/apps/web/.next/server/app/_global-error/page.js.nft.json",
+      "web/apps/web/.next/server/app/_not-found/page.js.nft.json",
+      "web/apps/web/.next/server/app/agents/page.js.nft.json",
+      "web/apps/web/.next/server/app/careers/member-of-technical-staff/page.js.nft.json",
+      "web/apps/web/.next/server/app/careers/page.js.nft.json",
+      "web/apps/web/.next/server/app/community/page.js.nft.json",
+      "web/apps/web/.next/server/app/company/page.js.nft.json",
+      "web/apps/web/.next/server/app/contact/page.js.nft.json",
+      "web/apps/web/.next/server/app/icon.svg/route.js.nft.json",
+      "web/apps/web/.next/server/app/lab/page.js.nft.json",
+      "web/apps/web/.next/server/app/license/page.js.nft.json",
+      "web/apps/web/.next/server/app/page.js.nft.json",
+      "web/apps/web/.next/server/app/pricing/page.js.nft.json",
+      "web/apps/web/.next/server/app/product/page.js.nft.json",
+      "web/apps/web/.next/server/app/resources/blog/[slug]/page.js.nft.json",
+      "web/apps/web/.next/server/app/resources/blog/page.js.nft.json",
+      "web/apps/web/.next/server/app/resources/page.js.nft.json",
+      "web/apps/web/.next/server/app/robots.txt/route.js.nft.json",
+      "web/apps/web/.next/server/app/security/page.js.nft.json",
+      "web/apps/web/.next/server/app/sitemap.xml/route.js.nft.json",
+      "web/apps/web/.next/server/app/terms/page.js.nft.json"
+    ],
+    "field": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "fieldName": [
+      "web/platform/utils/metaphase.ts"
+    ],
+    "file": [
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__1jelsdb._.js",
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0qxha8t._.js"
+    ],
+    "finalTypeName": [
+      "web/platform/utils/metaphase.ts"
+    ],
+    "fixedAnchors": [
+      "web/apps/docs/scripts/lint-anchors.mjs"
+    ],
+    "fixedFiles": [
+      "web/apps/docs/scripts/lint-anchors.mjs"
+    ],
+    "flag": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "fromPath": [
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0dhog6e._.js"
+    ],
+    "get": [
+      "web/platform/utils/resend.ts"
+    ],
+    "githubBase": [
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "headingId": [
+      "web/platform/utils/metaphase.ts"
+    ],
+    "helper": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "here": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "href": [
+      "web/apps/docs/scripts/lint-links.mjs"
+    ],
+    "html": [
+      "tools/cargo-with-detailed-deps.json",
+      "web/.turbo/cache/f9be9b17f41862c6-manifest.json"
+    ],
+    "imageUrl": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "index": [
+      "web/platform/src/components/react/faq.tsx"
+    ],
+    "inlined": [
+      "web/apps/docs/scripts/gen-llms.mjs"
+    ],
+    "insert": [
+      "forge-worker/src/running_actions_manager.rs"
+    ],
+    "instantiationReason": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "into_iter": [
+      "forge-worker/src/running_actions_manager.rs"
+    ],
+    "iter": [
+      "forge-worker/src/persistent_worker/live_worker.rs",
+      "forge-worker/src/persistent_worker/pool.rs"
+    ],
+    "keys": [
+      "forge-worker/src/running_actions_manager.rs"
+    ],
+    "kind": [
+      "web/apps/docs/lib/source-ref.ts"
+    ],
+    "label": [
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0dhog6e._.js"
+    ],
+    "line": [
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/docs/scripts/lint-boundaries.mjs",
+      "web/apps/docs/scripts/lint-links.mjs"
+    ],
+    "linkUrl": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "loaderPaths": [
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0dhog6e._.js"
+    ],
+    "mdx": [
+      "web/apps/docs/.next/server/chunks/_01v09da._.js",
+      "web/apps/docs/.next/server/chunks/_13dvbky._.js",
+      "web/apps/docs/.next/server/chunks/ssr/_11dvjpx._.js",
+      "web/apps/docs/.source/browser.ts",
+      "web/apps/docs/.source/server.ts"
+    ],
+    "message": [
+      "web/apps/docs/scripts/lint-boundaries.mjs",
+      "web/apps/docs/scripts/lint-links.mjs",
+      "web/apps/docs/scripts/lint-navigation.mjs"
+    ],
+    "meta": [
+      "web/.turbo/cache/f9be9b17f41862c6-manifest.json"
+    ],
+    "moduleId": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "name": [
+      "web/apps/docs/scripts/gen-config-reference.mjs",
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs",
+      "web/apps/web/scripts/gen-llms.ts"
+    ],
+    "near": [
+      "web/apps/docs/scripts/lint-links.mjs"
+    ],
+    "never": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs",
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs"
+    ],
+    "newVersion": [
+      "web/apps/docs/scripts/gen-config-reference.mjs"
+    ],
+    "origin": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "outputFilePath": [
+      "web/platform/utils/md_to_mdx_aot.ts"
+    ],
+    "outputPath": [
+      "web/platform/utils/metaphase_aot.ts"
+    ],
+    "owner": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "pageUrl": [
+      "web/apps/docs/app/[[...slug]]/page.tsx"
+    ],
+    "path": [
+      "web/apps/docs/components/source-link.tsx",
+      "web/apps/docs/scripts/gen-llms.mjs"
+    ],
+    "primary": [
+      "web/apps/docs/scripts/lint-navigation.mjs"
+    ],
+    "prom": [
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs"
+    ],
+    "prune": [
+      "scripts/upstream-merge.sh"
+    ],
+    "pubDate": [
+      "web/apps/web/lib/posts.ts"
+    ],
+    "reactId": [
+      "web/apps/docs/components/mermaid.tsx"
+    ],
+    "ref": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs",
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "refs": [
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs"
+    ],
+    "rel": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs",
+      "web/apps/docs/scripts/lint-boundaries.mjs",
+      "web/apps/docs/scripts/lint-links.mjs",
+      "web/apps/docs/scripts/lint-navigation.mjs"
+    ],
+    "repo": [
+      "web/apps/docs/scripts/gen-changelog.mjs",
+      "web/apps/web/lib/github.ts"
+    ],
+    "req": [
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "resolved": [
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__0dhog6e._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0dhog6e._.js"
+    ],
+    "rest": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "rootDir": [
+      "web/platform/utils/md_to_mdx_aot.ts"
+    ],
+    "route": [
+      "web/apps/docs/scripts/lint-links.mjs"
+    ],
+    "rsc": [
+      "web/.turbo/cache/f9be9b17f41862c6-manifest.json",
+      "web/apps/docs/.next/prerender-manifest.json"
+    ],
+    "section": [
+      "web/apps/docs/scripts/lint-navigation.mjs"
+    ],
+    "segments": [
+      "web/.turbo/cache/f9be9b17f41862c6-manifest.json"
+    ],
+    "sha": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "siteUrl": [
+      "web/packages/ui/src/components/ask-ai.tsx"
+    ],
+    "sizes": [
+      "web/apps/web/scripts/gen-llms.ts"
+    ],
+    "skipped": [
+      "web/apps/docs/scripts/lint-anchors.mjs",
+      "web/apps/docs/scripts/lint-snippets.mjs"
+    ],
+    "slug": [
+      "web/apps/docs/next.config.mjs"
+    ],
+    "sort": [
+      "forge-worker/src/persistent_worker/pool.rs"
+    ],
+    "sourceData": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "sourcePath": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "sourceType": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "speed": [
+      "web/packages/ui/src/components/marquee.tsx"
+    ],
+    "srcBase": [
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "state": [
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__0m3l310._.js",
+      "web/apps/docs/.next/build/chunks/[root-of-the-server]__1nvwxt6._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__0fy95ld._.js",
+      "web/apps/web/.next/build/chunks/[root-of-the-server]__1nvwxt6._.js"
+    ],
+    "struct": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs"
+    ],
+    "summary": [
+      "web/apps/docs/scripts/gen-config-reference.mjs"
+    ],
+    "switcher": [
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "tag": [
+      "web/apps/docs/scripts/gen-config-reference.mjs"
+    ],
+    "tagOrFunction": [
+      "web/apps/docs/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/docs/.next/server/chunks/ssr/[turbopack]_runtime.js",
+      "web/apps/web/.next/build/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/[turbopack]_runtime.js",
+      "web/apps/web/.next/server/chunks/ssr/[turbopack]_runtime.js"
+    ],
+    "target": [
+      "web/apps/docs/scripts/lint-links.mjs",
+      "web/apps/web/next.config.mjs",
+      "web/packages/ui/src/lib/nav.ts"
+    ],
+    "targetFile": [
+      "web/apps/docs/scripts/gen-changelog.mjs"
+    ],
+    "targetId": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "template": [
+      "web/apps/docs/.next/build/chunks/node_modules_20v-8wl._.js",
+      "web/apps/web/.next/build/chunks/node_modules_20v-8wl._.js"
+    ],
+    "title": [
+      "web/platform/utils/md_to_mdx.ts"
+    ],
+    "total": [
+      "web/apps/docs/scripts/gen-metrics-reference.mjs",
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs"
+    ],
+    "type": [
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "url": [
+      "web/apps/docs/scripts/gen-changelog.mjs",
+      "web/apps/docs/scripts/gen-llms.mjs",
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs",
+      "web/apps/web/lib/llms.ts",
+      "web/platform/utils/metaphase.ts"
+    ],
+    "urlPrefix": [
+      "web/apps/docs/scripts/gen-llms.mjs"
+    ],
+    "varName": [
+      "web/apps/web/app/lab/page.tsx"
+    ],
+    "variantContent": [
+      "web/platform/utils/metaphase.ts"
+    ],
+    "version": [
+      "web/apps/docs/scripts/gen-changelog.mjs",
+      "web/apps/docs/scripts/lib/metrics-to-mdx.mjs",
+      "web/apps/docs/scripts/lib/schema-to-mdx.mjs"
+    ],
+    "worktreeLabel": [
+      "web/apps/docs/scripts/gen-config-reference.mjs"
+    ]
+  }
+}
