@@ -1,0 +1,30 @@
+{
+  "name": "nativelink",
+  "version": "0.10.0",
+  "description": "An efficient, high-performance build cache and remote execution system",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {},
+  "scripts": {
+    "dev": "bun --hot run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "lint": "biome check .",
+    "fmt": "biome format --write .",
+    "build": "bun build src/index.ts --target bun --outdir ./dist"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.0.0",
+    "bun-types": "latest",
+    "typescript": "^5.3.3",
+    "@biomejs/biome": "^1.5.3"
+  },
+  "dependencies": {
+    "nativelink-client": "workspace:*",
+    "nativelink-server": "workspace:*"
+  },
+  "private": true
+}
