@@ -38,7 +38,7 @@ DOC="docs/UPSTREAM-MERGE.md"
 GUIDELLM="/home/toxic/.local/bin/guidellm"
 
 # The four benchmark-quality commits. If these stop resolving, history was
-# rewritten and that is the one failure this estate must never have.
+# rewritten and that is the one failure this Pens must never have.
 OUR_COMMITS=(74ec8623 bb96157f 99540b90 6b40c21e)
 UPSTREAM_URL="https://github.com/vllm-project/guidellm"
 

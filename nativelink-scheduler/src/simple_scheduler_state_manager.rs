@@ -30,7 +30,7 @@ use nativelink_util::action_messages::{
 use nativelink_util::instant_wrapper::InstantWrapper;
 use nativelink_util::known_platform_property_provider::KnownPlatformPropertyProvider;
 use nativelink_util::operation_state_manager::{
-    ActionStateResult, ActionStateResultStream, ClientStateManager, MatchingEngineStateManager,
+    ActionStateResult, ActionStateResultStream, ClientStateManager, MatchingEnginpensManager,
     OperationFilter, OperationStageFlags, OrderDirection, UpdateOperationType, WorkerStateManager,
 };
 use nativelink_util::origin_event::OriginMetadata;
@@ -830,7 +830,7 @@ where
 }
 
 #[async_trait]
-impl<T, I, NowFn> MatchingEngineStateManager for SimpleSchedulerStateManager<T, I, NowFn>
+impl<T, I, NowFn> MatchingEnginpensManager for SimpleSchedulerStateManager<T, I, NowFn>
 where
     T: AwaitedActionDb,
     I: InstantWrapper,

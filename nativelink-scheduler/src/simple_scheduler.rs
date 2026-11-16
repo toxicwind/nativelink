@@ -25,7 +25,7 @@ use nativelink_util::action_messages::{ActionInfo, ActionState, OperationId, Wor
 use nativelink_util::instant_wrapper::InstantWrapper;
 use nativelink_util::known_platform_property_provider::KnownPlatformPropertyProvider;
 use nativelink_util::operation_state_manager::{
-    ActionStateResult, ActionStateResultStream, ClientStateManager, MatchingEngineStateManager,
+    ActionStateResult, ActionStateResultStream, ClientStateManager, MatchingEnginpensManager,
     OperationFilter, OperationStageFlags, OrderDirection, UpdateOperationType,
 };
 use nativelink_util::origin_context::ActiveOriginContext;
@@ -115,7 +115,7 @@ impl ActionStateResult for SimpleSchedulerActionStateResult {
 pub struct SimpleScheduler {
     /// Manager for matching engine side of the state manager.
     #[metric(group = "matching_engine_state_manager")]
-    matching_engine_state_manager: Arc<dyn MatchingEngineStateManager>,
+    matching_engine_state_manager: Arc<dyn MatchingEnginpensManager>,
 
     /// Manager for client state of this scheduler.
     #[metric(group = "client_state_manager")]
@@ -209,7 +209,7 @@ impl SimpleScheduler {
         async fn match_action_to_worker(
             action_state_result: &dyn ActionStateResult,
             workers: &ApiWorkerScheduler,
-            matching_engine_state_manager: &dyn MatchingEngineStateManager,
+            matching_engine_state_manager: &dyn MatchingEnginpensManager,
             platform_property_manager: &PlatformPropertyManager,
             maybe_origin_event_tx: Option<&mpsc::Sender<OriginEvent>>,
         ) -> Result<(), Error> {

@@ -3919,7 +3919,7 @@ and
 
 Every store type, every field and every default is in the generated
 [store configuration reference](/reference/forge-config/store-overview). This
-page deliberately does not restate field names, because the reference is
+page deliberately does not rpens field names, because the reference is
 generated from the Rust types and this page is not.
 
 ## Common questions
@@ -5028,7 +5028,7 @@ Three of them exist, and they are not interchangeable.
 ## The scheduler traits are split by caller
 
 No `ActionScheduler` trait exists. The state layer is split into
-`ClientStateManager`, `WorkerStateManager` and `MatchingEngineStateManager`
+`ClientStateManager`, `WorkerStateManager` and `MatchingEnginpensManager`
 in
 ,
 plus `WorkerScheduler`, `KnownPlatformPropertyProvider` and
