@@ -1,0 +1,82 @@
+// Estate NativeLink realization: REAPI executor (worker). CAS/AC stores are
+// gRPC-backed by BuildBuddy (flux REAPI cache, :25218). Scheduler/client
+// frontend :25155, worker_api :25157. BuildBuddy = control-plane+cache;
+// NativeLink = remote-execution engine. Schema: nativelink 0.6.0
+// (ServicesConfig = maps keyed by instance_name, NOT arrays).
+{
+  stores: [
+    {
+      name: "BB_AC_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [{ address: "grpc://127.0.0.1:${BUILDBUDDY_GRPC_PORT}" }],
+        store_type: "ac",
+      },
+    },
+    {
+      name: "BB_CAS_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [{ address: "grpc://127.0.0.1:${BUILDBUDDY_GRPC_PORT}" }],
+        store_type: "cas",
+      },
+    },
+    {
+      name: "CAS_FAST_SLOW_STORE",
+      fast_slow: {
+        fast: {
+          filesystem: {
+            content_path: "/home/toxic/.cache/nativelink/content_path-cas",
+            temp_path: "/home/toxic/.cache/nativelink/tmp_path-cas",
+            eviction_policy: { max_bytes: 20000000000 }, // 20 GB
+          },
+        },
+        slow: { ref_store: { name: "BB_CAS_STORE" } },
+      },
+    },
+  ],
+  workers: [
+    {
+      local: {
+        worker_api_endpoint: { uri: "grpc://127.0.0.1:${NATIVELINK_WORKER_PORT}" },
+        cas_fast_slow_store: "CAS_FAST_SLOW_STORE",
+        upload_action_result: { ac_store: "BB_AC_STORE" },
+        work_directory: "/home/toxic/.cache/nativelink/work",
+        platform_properties: {
+          cpu_count: { query_cmd: "nproc" },
+          OSFamily: { values: [""] },
+        },
+      },
+    },
+  ],
+  schedulers: [
+    {
+      name: "MAIN_SCHEDULER",
+      simple: {
+        supported_platform_properties: {
+          cpu_count: "minimum",
+          OSFamily: "priority",
+        },
+      },
+    },
+  ],
+  servers: [
+    // Scheduler dispatch + client REAPI frontend on 25155
+    {
+      listener: { http: { socket_address: "127.0.0.1:${NATIVELINK_FRONTEND_PORT}" } },
+      services: {
+        ac: { "": { ac_store: "BB_AC_STORE" } },
+        execution: { "": { cas_store: "BB_CAS_STORE", scheduler: "MAIN_SCHEDULER" } },
+        capabilities: { "": { remote_execution: { scheduler: "MAIN_SCHEDULER" } } },
+      },
+    },
+    // Worker API + health on 25157
+    {
+      listener: { http: { socket_address: "127.0.0.1:${NATIVELINK_WORKER_PORT}" } },
+      services: {
+        worker_api: { scheduler: "MAIN_SCHEDULER" },
+        health: { path: "/health" },
+      },
+    },
+  ],
+}
