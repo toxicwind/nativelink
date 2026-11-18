@@ -19105,7 +19105,7 @@ one store be named by several others without duplicating it, and it is why
 
 Every store type, every field and every default is in the generated
 [store configuration reference](/reference/forge-config/store-overview). This
-page deliberately does not rpens field names, because the reference is
+page deliberately does not restate field names, because the reference is
 generated from the Rust types and this page is not.
 
 For choosing a backend rather than understanding the model, start at
@@ -19170,7 +19170,7 @@ into three traits in
 
 **`ClientStateManager`** is the client's view: submit an action, subscribe to
 its progress. **`WorkerStateManager`** is the worker's view: report that an
-operation changed state. **`MatchingEnginpensManager`** is the matcher's
+operation changed state. **`MatchingEngineStateManager`** is the matcher's
 view: list actions that could be dispatched, assign one to a worker.
 
 Two more sit beside them: `WorkerScheduler`, which owns worker lifecycle, and
@@ -22452,7 +22452,7 @@ explaining that a serial sweep would blow the kubelet's probe timeout.
 ## The scheduler traits are split by caller [#the-scheduler-traits-are-split-by-caller]
 
 No `ActionScheduler` trait exists. The state layer is split into
-`ClientStateManager`, `WorkerStateManager` and `MatchingEnginpensManager`
+`ClientStateManager`, `WorkerStateManager` and `MatchingEngineStateManager`
 in
 <SourceLink file="forge-util/src/operation_state_manager.rs" symbol="operation_state_manager.rs" />,
 plus `WorkerScheduler`, `KnownPlatformPropertyProvider` and
