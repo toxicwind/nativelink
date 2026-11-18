@@ -1,0 +1,68 @@
+[0m[2m[35m$[0m [2m[1mnode scripts/gen-changelog.mjs && node scripts/gen-llms.mjs && next build[0m
+gen-changelog: wrote /home/toxic/pens/barn/nativelink/web/apps/docs/content/docs/reference/changelog.md
+Wrote public/llms.txt (86 pages, 19 KB), public/llms-small.txt (182 KB) and public/llms-full.txt (83 bodies inlined, 3 generated pages linked, 938 KB).
+▲ Next.js 16.3.8 (Turbopack)
+(node:3048765) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ Running next.config.mjs took 25ms
+⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+
+[MDX] generated files in 15.607264999999984ms
+⚠ The Edge Runtime is deprecated. You can use the "nodejs" runtime instead. Learn more: https://nextjs.org/docs/messages/edge-runtime-deprecated
+  Creating an optimized production build ...
+(node:3048765) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049011) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049130) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ Compiled successfully in 14.7s
+  Running TypeScript ...
+  Finished TypeScript in 318ms ...
+  Collecting page data using 8 workers ...
+(node:3050489) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3050468) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3050496) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3050475) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3050503) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3050482) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3050452) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+⚠ Using edge runtime on a page currently disables static generation for that page
+  Generating static pages using 8 workers (0/117) ...
+(node:3050509) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  Generating static pages using 8 workers (29/117) 
+  Generating static pages using 8 workers (58/117) 
+  Generating static pages using 8 workers (87/117) 
+✓ Generating static pages using 8 workers (117/117) in 2.6s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /_not-found
+├   /[[...slug]]
+│ ├ ● /agents
+│ ├ ● /
+│ ├ ● /weave
+│ └ ● [+109 more paths]
+├ ƒ /api/search
+├ ○ /icon.svg
+├ ƒ /opengraph-image
+└ ○ /sitemap.xml
+
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

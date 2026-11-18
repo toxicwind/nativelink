@@ -15,3 +15,23 @@ content/docs/reference/changelog.md
 public/llms.txt
 public/llms-small.txt
 public/llms-full.txt
+# pensctl audit-gitignore --fix (standard pollution)
+.venv/
+# pensctl audit-gitignore --fix (standard pollution)
+venv/
+# pensctl audit-gitignore --fix (standard pollution)
+node_modules/
+# pensctl audit-gitignore --fix (standard pollution)
+__pycache__/
+# pensctl audit-gitignore --fix (standard pollution)
+dist/
+# pensctl audit-gitignore --fix (standard pollution)
+build/
+# pensctl audit-gitignore --fix (standard pollution)
+.cache/
+# pensctl audit-gitignore --fix (standard pollution)
+target/
+# pensctl audit-gitignore --fix (standard pollution)
+blobs/
+# pensctl audit-gitignore --fix (standard pollution)
+sessions/

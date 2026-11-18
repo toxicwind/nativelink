@@ -1,0 +1,9 @@
+{
+  "/[[...slug]]/page": "app/[[...slug]]/page.js",
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/search/route": "app/api/search/route.js",
+  "/icon.svg/route": "app/icon.svg/route.js",
+  "/opengraph-image/route": "app-edge-has-no-entrypoint",
+  "/sitemap.xml/route": "app/sitemap.xml/route.js"
+}

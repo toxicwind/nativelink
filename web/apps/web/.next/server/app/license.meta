@@ -1,0 +1,35 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/license/layout,_N_T_/license/page,_N_T_/license"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/_index",
+    "/license/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 0,
+    "slots": {
+      "children": {
+        "hints": 64,
+        "slots": {
+          "children": {
+            "hints": 160,
+            "slots": null
+          }
+        }
+      }
+    }
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/4af6664f0980bb52e1c38215daf8e30b8cbe02a53a762b7baf288f1599246fe8/$/license",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/license/page"
+    },
+    "isFallback": false
+  }
+}

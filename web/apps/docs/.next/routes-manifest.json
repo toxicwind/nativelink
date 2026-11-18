@@ -1,0 +1,324 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    },
+    {
+      "source": "/config/production-config",
+      "destination": "/operate/production-config",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/config/production-config(?:/)?$"
+    },
+    {
+      "source": "/getting-started/other-build-systems/reclient",
+      "destination": "/getting-started/connect-your-build/siso",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/getting-started/other-build-systems/reclient(?:/)?$"
+    },
+    {
+      "source": "/deployment/chromium",
+      "destination": "/getting-started/connect-your-build/chromium",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/deployment/chromium(?:/)?$"
+    },
+    {
+      "source": "/deployment/kubernetes",
+      "destination": "/operate",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/deployment/kubernetes(?:/)?$"
+    },
+    {
+      "source": "/deployment/metrics",
+      "destination": "/operate/observability",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/deployment/metrics(?:/)?$"
+    },
+    {
+      "source": "/deployment/oci-object-storage",
+      "destination": "/how-to/stores/oci-object-storage",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/deployment/oci-object-storage(?:/)?$"
+    },
+    {
+      "source": "/deployment/on-prem-overview",
+      "destination": "/operate/deploy-bare-metal",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/deployment/on-prem-overview(?:/)?$"
+    },
+    {
+      "source": "/deployment/persistent-workers",
+      "destination": "/remote-execution/persistent-workers",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/deployment/persistent-workers(?:/)?$"
+    },
+    {
+      "source": "/getting-started/on-prem",
+      "destination": "/getting-started/shared-cache",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/getting-started/on-prem(?:/)?$"
+    },
+    {
+      "source": "/getting-started/other-build-systems",
+      "destination": "/getting-started/connect-your-build",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/getting-started/other-build-systems(?:/)?$"
+    },
+    {
+      "source": "/getting-started/other-build-systems/:slug*",
+      "destination": "/getting-started/connect-your-build/:slug*",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/getting-started/other-build-systems(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+    },
+    {
+      "source": "/getting-started/setup",
+      "destination": "/getting-started/quickstart",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/getting-started/setup(?:/)?$"
+    },
+    {
+      "source": "/rbe",
+      "destination": "/remote-execution",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/rbe(?:/)?$"
+    },
+    {
+      "source": "/rbe/local-testing",
+      "destination": "/remote-execution/local-testing",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/rbe/local-testing(?:/)?$"
+    },
+    {
+      "source": "/rbe/local-remote-execution",
+      "destination": "/remote-execution/toolchains-and-hermeticity",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/rbe/local-remote-execution(?:/)?$"
+    },
+    {
+      "source": "/rbe/examples",
+      "destination": "/remote-execution/examples-and-templates",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/rbe/examples(?:/)?$"
+    },
+    {
+      "source": "/rbe/nix-templates",
+      "destination": "/remote-execution/examples-and-templates",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/rbe/nix-templates(?:/)?$"
+    },
+    {
+      "source": "/rbe/:slug*",
+      "destination": "/remote-execution/:slug*",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/rbe(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+    },
+    {
+      "source": "/configuration/intro",
+      "destination": "/configuration",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/configuration/intro(?:/)?$"
+    },
+    {
+      "source": "/configuration/basic",
+      "destination": "/configuration/stores",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/configuration/basic(?:/)?$"
+    },
+    {
+      "source": "/configuration/production",
+      "destination": "/operate/production-config",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/configuration/production(?:/)?$"
+    },
+    {
+      "source": "/configuration/compression",
+      "destination": "/how-to/stores/compression",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/configuration/compression(?:/)?$"
+    },
+    {
+      "source": "/configuration/chunking",
+      "destination": "/how-to/stores/chunking-and-dedup",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/configuration/chunking(?:/)?$"
+    },
+    {
+      "source": "/faq/architecture",
+      "destination": "/explanations/architecture#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/architecture(?:/)?$"
+    },
+    {
+      "source": "/faq/caching",
+      "destination": "/getting-started/quickstart#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/caching(?:/)?$"
+    },
+    {
+      "source": "/faq/clients",
+      "destination": "/getting-started/connect-your-build#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/clients(?:/)?$"
+    },
+    {
+      "source": "/faq/configuration",
+      "destination": "/configuration/config-file#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/configuration(?:/)?$"
+    },
+    {
+      "source": "/faq/contributing",
+      "destination": "/contribute/guidelines#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/contributing(?:/)?$"
+    },
+    {
+      "source": "/faq/cost",
+      "destination": "/getting-started/shared-cache#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/cost(?:/)?$"
+    },
+    {
+      "source": "/faq/deployment",
+      "destination": "/operate/deploy-bare-metal#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/deployment(?:/)?$"
+    },
+    {
+      "source": "/faq/hermeticity",
+      "destination": "/remote-execution/toolchains-and-hermeticity#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/hermeticity(?:/)?$"
+    },
+    {
+      "source": "/faq/lre",
+      "destination": "/explanations/lre#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/lre(?:/)?$"
+    },
+    {
+      "source": "/faq/nix",
+      "destination": "/contribute/nix#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/nix(?:/)?$"
+    },
+    {
+      "source": "/faq/observability",
+      "destination": "/operate/observability#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/observability(?:/)?$"
+    },
+    {
+      "source": "/faq/remote-execution",
+      "destination": "/remote-execution/from-cache-to-execution#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/remote-execution(?:/)?$"
+    },
+    {
+      "source": "/faq/rust",
+      "destination": "/explanations/history#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/rust(?:/)?$"
+    },
+    {
+      "source": "/faq/stores",
+      "destination": "/reference/forge-config/store-overview#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/stores(?:/)?$"
+    },
+    {
+      "source": "/faq/toolchains",
+      "destination": "/remote-execution/toolchains-and-hermeticity#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/toolchains(?:/)?$"
+    },
+    {
+      "source": "/faq/troubleshooting",
+      "destination": "/getting-started/quickstart#faq",
+      "statusCode": 308,
+      "regex": "^(?!/_next)/faq/troubleshooting(?:/)?$"
+    }
+  ],
+  "headers": [],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/[[...slug]]",
+      "regex": "^(?:/(.+?))?(?:/)?$",
+      "routeKeys": {
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^(?:/(?<nxtPslug>.+?))?(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/api/search",
+      "regex": "^/api/search(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/search(?:/)?$"
+    },
+    {
+      "page": "/icon.svg",
+      "regex": "^/icon\\.svg(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/icon\\.svg(?:/)?$"
+    },
+    {
+      "page": "/opengraph-image",
+      "regex": "^/opengraph\\-image(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/opengraph\\-image(?:/)?$"
+    },
+    {
+      "page": "/sitemap.xml",
+      "regex": "^/sitemap\\.xml(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/sitemap\\.xml(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

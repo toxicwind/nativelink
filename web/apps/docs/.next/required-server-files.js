@@ -1,0 +1,596 @@
+self.__SERVER_FILES_MANIFEST={
+  "version": 1,
+  "config": {
+    "env": {},
+    "typescript": {
+      "ignoreBuildErrors": false
+    },
+    "typedRoutes": false,
+    "distDir": ".next",
+    "cleanDistDir": true,
+    "assetPrefix": "",
+    "cacheMaxMemorySize": 52428800,
+    "configOrigin": "next.config.mjs",
+    "useFileSystemPublicRoutes": true,
+    "generateEtags": true,
+    "pageExtensions": [
+      "mdx",
+      "md",
+      "jsx",
+      "js",
+      "tsx",
+      "ts"
+    ],
+    "instrumentationClientInject": [],
+    "poweredByHeader": true,
+    "compress": true,
+    "images": {
+      "deviceSizes": [
+        640,
+        750,
+        828,
+        1080,
+        1200,
+        1920,
+        2048,
+        3840
+      ],
+      "imageSizes": [
+        32,
+        48,
+        64,
+        96,
+        128,
+        256,
+        384
+      ],
+      "path": "/_next/image",
+      "loader": "default",
+      "loaderFile": "",
+      "domains": [],
+      "disableStaticImages": false,
+      "minimumCacheTTL": 14400,
+      "formats": [
+        "image/webp"
+      ],
+      "maximumRedirects": 3,
+      "maximumResponseBody": 50000000,
+      "dangerouslyAllowLocalIP": false,
+      "dangerouslyAllowSVG": false,
+      "contentSecurityPolicy": "script-src 'none'; frame-src 'none'; sandbox;",
+      "contentDispositionType": "attachment",
+      "localPatterns": [
+        {
+          "pathname": "**",
+          "search": ""
+        }
+      ],
+      "remotePatterns": [],
+      "qualities": [
+        75
+      ],
+      "unoptimized": false,
+      "customCacheHandler": false
+    },
+    "devIndicators": {
+      "position": "bottom-left"
+    },
+    "onDemandEntries": {
+      "maxInactiveAge": 60000,
+      "pagesBufferLength": 5
+    },
+    "basePath": "",
+    "sassOptions": {},
+    "trailingSlash": false,
+    "i18n": null,
+    "productionBrowserSourceMaps": false,
+    "excludeDefaultMomentLocales": true,
+    "reactProductionProfiling": false,
+    "reactStrictMode": true,
+    "reactMaxHeadersLength": 6000,
+    "httpAgentOptions": {
+      "keepAlive": true
+    },
+    "logging": {
+      "serverFunctions": true,
+      "browserToTerminal": "warn"
+    },
+    "compiler": {},
+    "expireTime": 31536000,
+    "staticPageGenerationTimeout": 60,
+    "modularizeImports": {
+      "@mui/icons-material": {
+        "transform": "@mui/icons-material/{{member}}"
+      },
+      "lodash": {
+        "transform": "lodash/{{member}}"
+      }
+    },
+    "outputFileTracingRoot": "/home/toxic/pens/barn/nativelink/web",
+    "enablePrerenderSourceMaps": true,
+    "cacheComponents": false,
+    "cacheLife": {
+      "default": {
+        "stale": 300,
+        "revalidate": 900,
+        "expire": 4294967294
+      },
+      "seconds": {
+        "stale": 30,
+        "revalidate": 1,
+        "expire": 60
+      },
+      "minutes": {
+        "stale": 300,
+        "revalidate": 60,
+        "expire": 3600
+      },
+      "hours": {
+        "stale": 300,
+        "revalidate": 3600,
+        "expire": 86400
+      },
+      "days": {
+        "stale": 300,
+        "revalidate": 86400,
+        "expire": 604800
+      },
+      "weeks": {
+        "stale": 300,
+        "revalidate": 604800,
+        "expire": 2592000
+      },
+      "max": {
+        "stale": 300,
+        "revalidate": 2592000,
+        "expire": 31536000
+      }
+    },
+    "cacheHandlers": {},
+    "experimental": {
+      "appNewScrollHandler": true,
+      "coldCacheBadge": false,
+      "devValidationWorker": true,
+      "useSkewCookie": false,
+      "cssChunking": true,
+      "multiZoneDraftMode": false,
+      "appNavFailHandling": false,
+      "prerenderEarlyExit": true,
+      "serverMinification": true,
+      "linkNoTouchStart": false,
+      "caseSensitiveRoutes": false,
+      "cachedNavigations": false,
+      "dynamicOnHover": false,
+      "useOffline": false,
+      "varyParams": true,
+      "optimisticRouting": true,
+      "instrumentationClientRouterTransitionEvents": false,
+      "prefetchInlining": {
+        "maxSize": 2048,
+        "maxBundleSize": 10240
+      },
+      "preloadEntriesOnStart": true,
+      "clientRouterFilter": true,
+      "clientRouterFilterRedirects": false,
+      "fetchCacheKeyPrefix": "",
+      "proxyPrefetch": "flexible",
+      "optimisticClientCache": true,
+      "manualClientBasePath": false,
+      "cpus": 15,
+      "memoryBasedWorkersCount": false,
+      "imgOptConcurrency": null,
+      "imgOptOperationCache": null,
+      "imgOptTimeoutInSeconds": 7,
+      "imgOptMaxInputPixels": 268402689,
+      "imgOptSequentialRead": null,
+      "isrFlushToDisk": true,
+      "workerThreads": false,
+      "optimizeCss": false,
+      "nextScriptWorkers": false,
+      "scrollRestoration": false,
+      "externalDir": false,
+      "devMemoryThresholdRestart": true,
+      "disableOptimizedLoading": false,
+      "gzipSize": true,
+      "craCompat": false,
+      "esmExternals": true,
+      "fullySpecified": false,
+      "swcTraceProfiling": false,
+      "forceSwcTransforms": false,
+      "requestInsights": false,
+      "largePageDataBytes": 128000,
+      "typedEnv": false,
+      "parallelServerCompiles": false,
+      "parallelServerBuildTraces": false,
+      "ppr": false,
+      "authInterrupts": false,
+      "webpackMemoryOptimizations": false,
+      "optimizeServerReact": true,
+      "strictRouteTypes": false,
+      "useTypeScriptCli": true,
+      "removeUncaughtErrorAndRejectionListeners": false,
+      "validateRSCRequestHeaders": true,
+      "staleTimes": {
+        "dynamic": 0,
+        "static": 300
+      },
+      "reactDebugChannel": true,
+      "serverComponentsHmrCache": true,
+      "serverComponentsHmrCancellation": false,
+      "staticGenerationMaxConcurrency": 8,
+      "staticGenerationMinPagesPerWorker": 25,
+      "transitionIndicator": false,
+      "gestureTransition": false,
+      "inlineCss": false,
+      "useCache": false,
+      "globalNotFound": false,
+      "browserDebugInfoInTerminal": "warn",
+      "lockDistDir": true,
+      "proxyClientMaxBodySize": 10485760,
+      "hideLogsAfterAbort": false,
+      "mcpServer": true,
+      "turbopackFileSystemCacheForDev": true,
+      "turbopackFileSystemCacheForBuild": true,
+      "turbopackInferModuleSideEffects": true,
+      "turbopackPluginRuntimeStrategy": "childProcesses",
+      "turbopackMemoryEvictionMode": "auto",
+      "optimizePackageImports": [
+        "lucide-react",
+        "date-fns",
+        "lodash-es",
+        "ramda",
+        "antd",
+        "react-bootstrap",
+        "ahooks",
+        "@ant-design/icons",
+        "@headlessui/react",
+        "@headlessui-float/react",
+        "@heroicons/react/20/solid",
+        "@heroicons/react/24/solid",
+        "@heroicons/react/24/outline",
+        "@visx/visx",
+        "@tremor/react",
+        "rxjs",
+        "@mui/material",
+        "@mui/icons-material",
+        "recharts",
+        "react-use",
+        "effect",
+        "@effect/schema",
+        "@effect/platform",
+        "@effect/platform-node",
+        "@effect/platform-browser",
+        "@effect/platform-bun",
+        "@effect/sql",
+        "@effect/sql-mssql",
+        "@effect/sql-mysql2",
+        "@effect/sql-pg",
+        "@effect/sql-sqlite-node",
+        "@effect/sql-sqlite-bun",
+        "@effect/sql-sqlite-wasm",
+        "@effect/sql-sqlite-react-native",
+        "@effect/rpc",
+        "@effect/rpc-http",
+        "@effect/typeclass",
+        "@effect/experimental",
+        "@effect/opentelemetry",
+        "@material-ui/core",
+        "@material-ui/icons",
+        "@tabler/icons-react",
+        "mui-core",
+        "react-icons/ai",
+        "react-icons/bi",
+        "react-icons/bs",
+        "react-icons/cg",
+        "react-icons/ci",
+        "react-icons/di",
+        "react-icons/fa",
+        "react-icons/fa6",
+        "react-icons/fc",
+        "react-icons/fi",
+        "react-icons/gi",
+        "react-icons/go",
+        "react-icons/gr",
+        "react-icons/hi",
+        "react-icons/hi2",
+        "react-icons/im",
+        "react-icons/io",
+        "react-icons/io5",
+        "react-icons/lia",
+        "react-icons/lib",
+        "react-icons/lu",
+        "react-icons/md",
+        "react-icons/pi",
+        "react-icons/ri",
+        "react-icons/rx",
+        "react-icons/si",
+        "react-icons/sl",
+        "react-icons/tb",
+        "react-icons/tfi",
+        "react-icons/ti",
+        "react-icons/vsc",
+        "react-icons/wi"
+      ],
+      "useCacheTimeout": 54,
+      "instantInsights": {
+        "validationLevel": "warning"
+      },
+      "trustHostHeader": false,
+      "isExperimentalCompile": false
+    },
+    "htmlLimitedBots": "[\\w-]+-Google|Google-[\\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight",
+    "bundlePagesRouterDependencies": false,
+    "configFileName": "next.config.mjs",
+    "transpilePackages": [
+      "@forge/ui"
+    ],
+    "turbopack": {
+      "rules": {
+        "*.{md,mdx}": {
+          "loaders": [
+            {
+              "loader": "fumadocs-mdx/webpack/mdx",
+              "options": {
+                "configPath": "source.config.ts",
+                "outDir": ".source",
+                "absoluteCompiledConfigPath": "/home/toxic/pens/barn/nativelink/web/apps/docs/.source/source.config.mjs",
+                "isDev": false
+              }
+            }
+          ],
+          "as": "*.js"
+        },
+        "*.json": {
+          "loaders": [
+            {
+              "loader": "fumadocs-mdx/webpack/meta",
+              "options": {
+                "configPath": "source.config.ts",
+                "outDir": ".source",
+                "absoluteCompiledConfigPath": "/home/toxic/pens/barn/nativelink/web/apps/docs/.source/source.config.mjs",
+                "isDev": false
+              }
+            }
+          ],
+          "as": "*.json"
+        },
+        "*.yaml": {
+          "loaders": [
+            {
+              "loader": "fumadocs-mdx/webpack/meta",
+              "options": {
+                "configPath": "source.config.ts",
+                "outDir": ".source",
+                "absoluteCompiledConfigPath": "/home/toxic/pens/barn/nativelink/web/apps/docs/.source/source.config.mjs",
+                "isDev": false
+              }
+            }
+          ],
+          "as": "*.js"
+        }
+      },
+      "root": "/home/toxic/pens/barn/nativelink/web"
+    },
+    "repoRoot": "/home/toxic/pens/barn/nativelink/web",
+    "distDirRoot": ".next",
+    "_originalRedirects": [
+      {
+        "source": "/config/production-config",
+        "destination": "/operate/production-config",
+        "permanent": true
+      },
+      {
+        "source": "/getting-started/other-build-systems/reclient",
+        "destination": "/getting-started/connect-your-build/siso",
+        "permanent": true
+      },
+      {
+        "source": "/deployment/chromium",
+        "destination": "/getting-started/connect-your-build/chromium",
+        "permanent": true
+      },
+      {
+        "source": "/deployment/kubernetes",
+        "destination": "/operate",
+        "permanent": true
+      },
+      {
+        "source": "/deployment/metrics",
+        "destination": "/operate/observability",
+        "permanent": true
+      },
+      {
+        "source": "/deployment/oci-object-storage",
+        "destination": "/how-to/stores/oci-object-storage",
+        "permanent": true
+      },
+      {
+        "source": "/deployment/on-prem-overview",
+        "destination": "/operate/deploy-bare-metal",
+        "permanent": true
+      },
+      {
+        "source": "/deployment/persistent-workers",
+        "destination": "/remote-execution/persistent-workers",
+        "permanent": true
+      },
+      {
+        "source": "/getting-started/on-prem",
+        "destination": "/getting-started/shared-cache",
+        "permanent": true
+      },
+      {
+        "source": "/getting-started/other-build-systems",
+        "destination": "/getting-started/connect-your-build",
+        "permanent": true
+      },
+      {
+        "source": "/getting-started/other-build-systems/:slug*",
+        "destination": "/getting-started/connect-your-build/:slug*",
+        "permanent": true
+      },
+      {
+        "source": "/getting-started/setup",
+        "destination": "/getting-started/quickstart",
+        "permanent": true
+      },
+      {
+        "source": "/rbe",
+        "destination": "/remote-execution",
+        "permanent": true
+      },
+      {
+        "source": "/rbe/local-testing",
+        "destination": "/remote-execution/local-testing",
+        "permanent": true
+      },
+      {
+        "source": "/rbe/local-remote-execution",
+        "destination": "/remote-execution/toolchains-and-hermeticity",
+        "permanent": true
+      },
+      {
+        "source": "/rbe/examples",
+        "destination": "/remote-execution/examples-and-templates",
+        "permanent": true
+      },
+      {
+        "source": "/rbe/nix-templates",
+        "destination": "/remote-execution/examples-and-templates",
+        "permanent": true
+      },
+      {
+        "source": "/rbe/:slug*",
+        "destination": "/remote-execution/:slug*",
+        "permanent": true
+      },
+      {
+        "source": "/configuration/intro",
+        "destination": "/configuration",
+        "permanent": true
+      },
+      {
+        "source": "/configuration/basic",
+        "destination": "/configuration/stores",
+        "permanent": true
+      },
+      {
+        "source": "/configuration/production",
+        "destination": "/operate/production-config",
+        "permanent": true
+      },
+      {
+        "source": "/configuration/compression",
+        "destination": "/how-to/stores/compression",
+        "permanent": true
+      },
+      {
+        "source": "/configuration/chunking",
+        "destination": "/how-to/stores/chunking-and-dedup",
+        "permanent": true
+      },
+      {
+        "source": "/faq/architecture",
+        "destination": "/explanations/architecture#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/caching",
+        "destination": "/getting-started/quickstart#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/clients",
+        "destination": "/getting-started/connect-your-build#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/configuration",
+        "destination": "/configuration/config-file#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/contributing",
+        "destination": "/contribute/guidelines#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/cost",
+        "destination": "/getting-started/shared-cache#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/deployment",
+        "destination": "/operate/deploy-bare-metal#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/hermeticity",
+        "destination": "/remote-execution/toolchains-and-hermeticity#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/lre",
+        "destination": "/explanations/lre#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/nix",
+        "destination": "/contribute/nix#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/observability",
+        "destination": "/operate/observability#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/remote-execution",
+        "destination": "/remote-execution/from-cache-to-execution#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/rust",
+        "destination": "/explanations/history#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/stores",
+        "destination": "/reference/forge-config/store-overview#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/toolchains",
+        "destination": "/remote-execution/toolchains-and-hermeticity#faq",
+        "permanent": true
+      },
+      {
+        "source": "/faq/troubleshooting",
+        "destination": "/getting-started/quickstart#faq",
+        "permanent": true
+      }
+    ]
+  },
+  "appDir": "/home/toxic/pens/barn/nativelink/web/apps/docs",
+  "relativeAppDir": "apps/docs",
+  "files": [
+    ".next/package.json",
+    ".next/routes-manifest.json",
+    ".next/server/pages-manifest.json",
+    ".next/build-manifest.json",
+    ".next/prerender-manifest.json",
+    ".next/server/functions-config-manifest.json",
+    ".next/server/middleware-manifest.json",
+    ".next/server/middleware-build-manifest.js",
+    ".next/server/app-paths-manifest.json",
+    ".next/app-path-routes-manifest.json",
+    ".next/server/server-reference-manifest.js",
+    ".next/server/server-reference-manifest.json",
+    ".next/server/prefetch-hints.json",
+    ".next/BUILD_ID",
+    ".next/server/next-font-manifest.js",
+    ".next/server/next-font-manifest.json",
+    ".next/required-server-files.json"
+  ],
+  "ignore": []
+}

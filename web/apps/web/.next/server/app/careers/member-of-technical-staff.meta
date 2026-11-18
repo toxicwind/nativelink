@@ -1,0 +1,40 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/careers/layout,_N_T_/careers/member-of-technical-staff/layout,_N_T_/careers/member-of-technical-staff/page,_N_T_/careers/member-of-technical-staff"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/_index",
+    "/careers/member-of-technical-staff/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 0,
+    "slots": {
+      "children": {
+        "hints": 64,
+        "slots": {
+          "children": {
+            "hints": 96,
+            "slots": {
+              "children": {
+                "hints": 160,
+                "slots": null
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/c6dade2563d6865a89afffd63b177c32bd934beba7b3e452ac22aef71abf5be1/$/careers/member-of-technical-staff",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/careers/member-of-technical-staff/page"
+    },
+    "isFallback": false
+  }
+}

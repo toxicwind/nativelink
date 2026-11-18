@@ -1,0 +1,7 @@
+User-Agent: *
+Allow: /
+Disallow: /lab
+Disallow: /api/
+
+Host: https://forge.com
+Sitemap: https://forge.com/sitemap.xml

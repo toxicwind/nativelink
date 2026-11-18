@@ -1,0 +1,21 @@
+1:"$Sreact.fragment"
+3:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js"],"OutletBoundary"]
+4:"$Sreact.suspense"
+8:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js"],"ViewportBoundary"]
+9:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js"],"MetadataBoundary"]
+a:I[27201,["/_next/static/chunks/0h2qsuyze9ds1.js"],"IconMark"]
+c:I[39756,["/_next/static/chunks/0h2qsuyze9ds1.js"],"default"]
+d:I[37457,["/_next/static/chunks/0h2qsuyze9ds1.js"],"default"]
+7:X
+f:X
+f:C
+0:{"buildId":"KOFMzPd7o5DOrtfpDCIcw","data":[{"rsc":["$","$1","c",{"children":["$L2",null,["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":"$@6","staleTime":"$7","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$L8",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L9",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"UI Lab — Forge"}],["$","meta","1",{"name":"description","content":"When agents write your code, your build system is the bottleneck. Forge is the high-performance remote build cache and execution platform for Bazel and beyond."}],["$","meta","2",{"name":"robots","content":"noindex, nofollow"}],["$","meta","3",{"property":"og:title","content":"UI Lab — Forge"}],["$","meta","4",{"property":"og:description","content":"When agents write your code, your build system is the bottleneck. Forge is the high-performance remote build cache and execution platform for Bazel and beyond."}],["$","meta","5",{"property":"og:image","content":"https://forge.com/opengraph-image?16b70f57540c2e48"}],["$","meta","6",{"property":"og:image:type","content":"image/png"}],["$","meta","7",{"property":"og:image:width","content":"1200"}],["$","meta","8",{"property":"og:image:height","content":"630"}],["$","meta","9",{"property":"og:image:alt","content":"Forge — Remote build execution & caching, engineered for scale"}],["$","meta","10",{"name":"twitter:card","content":"summary_large_image"}],["$","meta","11",{"name":"twitter:title","content":"UI Lab — Forge"}],["$","meta","12",{"name":"twitter:description","content":"When agents write your code, your build system is the bottleneck. Forge is the high-performance remote build cache and execution platform for Bazel and beyond."}],["$","meta","13",{"name":"twitter:image","content":"https://forge.com/opengraph-image?16b70f57540c2e48"}],["$","meta","14",{"name":"twitter:image:alt","content":"Forge — Remote build execution & caching, engineered for scale"}],["$","meta","15",{"name":"twitter:image:type","content":"image/png"}],["$","meta","16",{"name":"twitter:image:width","content":"1200"}],["$","meta","17",{"name":"twitter:image:height","content":"630"}],["$","link","18",{"rel":"icon","href":"/icon.svg?icon.1u05eo7bsa_k9.svg","sizes":"any","type":"image/svg+xml"}],["$","$La","19",{}]]}]}]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],"isPartial":"$@b","staleTime":"$7","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Lc",null,{"parallelRouterKey":"children","template":["$","$Ld",null,{}]}]]}],"isPartial":"$@e","staleTime":"$7","varyParams":"$f"}],"isUpgradeableISRFallback":false,"a":"$@10","rootVaryParams":null,"needsRuntimeRequest":"$@11"}
+2:E{"digest":"NEXT_HTTP_ERROR_FALLBACK;404"}
+5:null
+11:true
+7:300
+7:C
+10:0
+b:"$undefined"
+e:"$undefined"
+6:"$undefined"

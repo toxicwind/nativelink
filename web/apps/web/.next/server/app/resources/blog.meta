@@ -1,0 +1,40 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/resources/layout,_N_T_/resources/blog/layout,_N_T_/resources/blog/page,_N_T_/resources/blog"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/_index",
+    "/resources/blog/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 0,
+    "slots": {
+      "children": {
+        "hints": 64,
+        "slots": {
+          "children": {
+            "hints": 96,
+            "slots": {
+              "children": {
+                "hints": 160,
+                "slots": null
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/c984dbd0ad20a411f8d361946ca8ce0486902454eb70ea1597eb883656789bcf/$/resources/blog",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/resources/blog/page"
+    },
+    "isFallback": false
+  }
+}

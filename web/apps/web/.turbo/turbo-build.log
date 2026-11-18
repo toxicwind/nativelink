@@ -1,0 +1,96 @@
+[0m[2m[35m$[0m [2m[1mbun scripts/gen-llms.ts && next build[0m
+gen-changelog: wrote /home/toxic/pens/barn/nativelink/web/apps/docs/content/docs/reference/changelog.md
+gen-llms: wrote llms.txt 26 KB, llms-small.txt 212 KB, llms-full.txt 1049 KB to public/ and the repository root.
+▲ Next.js 16.3.8 (Turbopack)
+(node:3048766) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ Running next.config.mjs took 9ms
+⚠ No build cache found. Please configure build caching for faster rebuilds. Read more: https://nextjs.org/docs/messages/no-cache
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+
+⚠ The Edge Runtime is deprecated. You can use the "nodejs" runtime instead. Learn more: https://nextjs.org/docs/messages/edge-runtime-deprecated
+  Creating an optimized production build ...
+(node:3048766) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3048922) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3048983) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ Compiled successfully in 7.4s
+  Running TypeScript ...
+  Finished TypeScript in 253ms ...
+  Collecting page data using 15 workers ...
+(node:3049475) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049461) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049483) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049476) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049510) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049503) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049455) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049489) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049497) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049546) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049538) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049454) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049524) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049517) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3049531) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+⚠ Using edge runtime on a page currently disables static generation for that page
+  Generating static pages using 15 workers (0/33) ...
+  Generating static pages using 15 workers (8/33) 
+  Generating static pages using 15 workers (16/33) 
+  Generating static pages using 15 workers (24/33) 
+✓ Generating static pages using 15 workers (33/33) in 741ms
+  Finalizing page optimization ...
+
+Route (app)                                      Revalidate  Expire
+┌ ○ /
+├ ○ /_not-found
+├ ○ /agents
+├ ○ /careers
+├ ○ /careers/member-of-technical-staff
+├ ○ /community                                           6h      1y
+├ ○ /company
+├ ○ /contact
+├ ○ /icon.svg
+├ ○ /lab
+├ ○ /license
+├ ƒ /opengraph-image
+├ ○ /pricing
+├ ○ /product
+├ ○ /resources
+├ ○ /resources/blog
+├   /resources/blog/[slug]
+│ ├ ● /resources/blog/re-api-fellow
+│ ├ ● /resources/blog/case-study-menlo-security
+│ ├ ● /resources/blog/rules-omniverse-0-3-0
+│ └ ● [+10 more paths]
+├ ○ /robots.txt
+├ ○ /security                                            6h      1y
+├ ○ /sitemap.xml
+└ ○ /terms
+
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

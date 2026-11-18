@@ -1,0 +1,75 @@
+{
+  "app": {
+    "[project]/apps/web/app/_not-found/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/agents/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/careers/member-of-technical-staff/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/careers/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/community/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/company/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/contact/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/lab/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/license/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/pricing/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/product/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/resources/blog/[slug]/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/resources/blog/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/resources/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/security/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ],
+    "[project]/apps/web/app/terms/page": [
+      "static/media/GeistMono_Variable.p.1bcgm0qa26ixg.woff2",
+      "static/media/Geist_Variable-s.p.2jnbhtjpal5b3.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pages": {},
+  "pagesUsingSizeAdjust": false
+}

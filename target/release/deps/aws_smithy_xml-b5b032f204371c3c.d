@@ -1,0 +1,11 @@
+/home/toxic/pens/barn/nativelink/target/release/deps/aws_smithy_xml-b5b032f204371c3c.d: /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/lib.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/decode.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/encode.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/escape.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/unescape.rs
+
+/home/toxic/pens/barn/nativelink/target/release/deps/libaws_smithy_xml-b5b032f204371c3c.rlib: /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/lib.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/decode.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/encode.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/escape.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/unescape.rs
+
+/home/toxic/pens/barn/nativelink/target/release/deps/libaws_smithy_xml-b5b032f204371c3c.rmeta: /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/lib.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/decode.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/encode.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/escape.rs /home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/unescape.rs
+
+/home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/lib.rs:
+/home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/decode.rs:
+/home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/encode.rs:
+/home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/escape.rs:
+/home/toxic/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aws-smithy-xml-0.60.9/src/unescape.rs:

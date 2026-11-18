@@ -1,0 +1,70 @@
+1:"$Sreact.fragment"
+2:T982,text-[1.0625rem] leading-[1.75] text-muted-foreground [&_h1]:mb-6 [&_h1]:text-4xl [&_h1]:font-semibold [&_h1]:leading-[1.15] [&_h1]:tracking-[-0.025em] [&_h1]:text-foreground [&_h2]:mt-12 [&_h2]:mb-4 [&_h2]:text-[1.6rem] [&_h2]:font-semibold [&_h2]:leading-[1.25] [&_h2]:tracking-[-0.02em] [&_h2]:text-foreground [&_h3]:mt-9 [&_h3]:mb-3 [&_h3]:text-xl [&_h3]:font-semibold [&_h3]:leading-[1.3] [&_h3]:text-foreground [&_h4]:mt-8 [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-foreground [&_p]:my-[1.15em] [&_strong]:font-semibold [&_strong]:text-foreground [&_a]:font-medium [&_a]:text-brand [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-brand-strong [&_ul]:my-[1.15em] [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-[1.15em] [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-1.5 [&_li]:pl-1 [&_blockquote]:my-8 [&_blockquote]:border-l-2 [&_blockquote]:border-brand/50 [&_blockquote]:pl-6 [&_blockquote]:text-foreground [&_blockquote_p]:my-0 [&_blockquote_p:first-of-type]:text-[1.5rem] [&_blockquote_p:first-of-type]:leading-[1.3] [&_blockquote_p:first-of-type]:font-medium [&_blockquote_p:first-of-type]:tracking-[-0.02em] md:[&_blockquote_p:first-of-type]:text-[1.75rem] [&_blockquote_p:not(:first-of-type)]:mt-3 [&_blockquote_p:not(:first-of-type)]:text-[0.95rem] [&_blockquote_p:not(:first-of-type)]:font-normal [&_blockquote_p:not(:first-of-type)]:leading-normal [&_blockquote_p:not(:first-of-type)]:tracking-normal [&_blockquote_p:not(:first-of-type)]:text-muted-foreground [&_blockquote_p:not(:first-of-type)]:not-italic [&_table]:my-6 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[0.95em] [&_th]:border-b [&_th]:border-border [&_th]:py-2.5 [&_th]:pr-4 [&_th]:text-left [&_th]:font-semibold [&_th]:text-foreground [&_td]:border-b [&_td]:border-border/60 [&_td]:py-2.5 [&_td]:pr-4 [&_td]:align-top [&_tr:last-child_td]:border-b-0 [&_img]:my-8 [&_img]:rounded-xl [&_hr]:my-10 [&_hr]:border-border/60 [&_code]:rounded [&_code]:bg-foreground/5 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:my-6 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:bg-foreground/[0.03] [&_pre]:p-4 [&_pre]:font-mono [&_pre]:text-sm [&_pre]:leading-relaxed [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-inherit blog-prose max-w-none [&_img:not(.glance-logo)]:my-6 [&_img:not(.glance-logo)]:max-w-full [&_img:not(.glance-logo)]:rounded-xl3:T1711,<h4></h4>
+<h4><em>How Forge’s open software development and validation platform helped a robotics innovator deliver safer products faster (at less cost)</em></h4>
+<p>“Our business relies on delivering autonomous systems with an exceptional level of safety. With Forge’s massively-parallel cloud service, we can now iterate faster and continuously learn from our testing, without wasting time managing build cycles and cloud resources. It’s very fast, stable. It just works.”</p>
+<p>Nate Gallaher, DevOps Team Lead, Thirdwave Automation</p>
+<h3>Summary</h3>
+<p>Founded in 2018 and funded by Toyota’s growth fund plus Innovation Endeavors, Norwest Venture Partners, Woven Capital, and Qualcomm Ventures, Third Wave Automation (TWA) leverages machine learning and artificial intelligence to manage fleets of automated forklifts and respond to edge cases in a timely and effective manner.</p>
+<p>Using automotive grade 3D LIDAR, TWA’s robotic forklifts incorporate Collision Shield, the industry-leading autonomous obstacle detection system running on forklifts. Other innovations include its Shared Autonomy Platform, enabling the TWA Reach line of forklifts to operate autonomously or seek help from remote operators who can take control from the safety of their office.</p>
+<p>Key elements of the company’s value proposition are safety, scalability, adaptability, repeatability, stability, and affordability. In order to preserve developer velocity and ensure timely delivery of its solutions, Thirdwave turned to Forge to help take its build and validation infrastructure to the next level.</p>
+<h3>Key Outcomes</h3>
+<ul>
+<li>80% reduction in build times</li>
+<li>50% reduction in cloud costs</li>
+<li>Transparent cloud scaling (Running 50K simultaneous jobs)</li>
+<li>Now testing daily vs. weekly or monthly</li>
+<li>Hundreds of developer hours saved per year</li>
+<li>Rapid deployment | Bazel compatible</li>
+</ul>
+<h3>The Challenge</h3>
+<p>The company develops complex software for intelligent material-handing, including semi-autonomous robots as well as a fleet management system with remote operation and assistance capabilities.</p>
+<p>Written in C/C++ and Python, the TWA software is built upon a micro-services architecture that makes extensive use of containers.</p>
+<p>As the code base and number of developers have grown, the team&#39;s ability to iterate quickly was significantly hindered by prolonged build and test times, reducing developer productivity.</p>
+<p>But given the critical importance of safety, it became even more important to run testing on a more frequent basis, including unit tests, subsystem tests, and system-wide tests. Keeping developer velocity high by reducing test turnaround time was also a key requirement.</p>
+<p>At the same time, the company was concerned it was running compilation tasks on the same expensive GPUs as their ML tests. They were looking for a more flexible and configurable approach to save on cloud computing costs.</p>
+<h3>The Solution</h3>
+<p>Massively parallel architecture with remote execution and caching</p>
+<p>Leveraging Forge’s remote execution and build caching platform, built on a massively-parallel, cloud-optimized service, the firm reduced build times by up to 80% while also removing developer overhead and friction.</p>
+<p>Incremental builds are also faster because cache artifacts are reused whenever possible. Developers never need to build or test the same thing twice and can share code across different environments.</p>
+<p>Nate reports that having faster cycles actually changed developer behavior by encouraging developers to run tests more frequently, without concerns about potential bottlenecks.</p>
+<p>Deterministic builds</p>
+<p>As a deterministic build system, Forge prevents cross-platform divergence by enforcing a hermetic toolchain and pinning all external dependencies to a given version, helping to prevent the common occurrence of “but it worked fine on my machine” syndrome.</p>
+<p>This also helps enforce critical governance controls around the software supply chain, preventing tampering and producing an SBOM required by compliance mandates.</p>
+<p>Open and extensible platform built on Bazel</p>
+<p>Licensed as Apache 2.0 open source, Forge seamlessly integrates with Bazel, the modern build client developed by Google and now used by 1,000+ organizations including Tesla, Nvidia, Ford, Stripe, Dropbox, Datadog, and Databricks.</p>
+<p>Forge works with all client-side build tools that support the Remote Bazel Execution (RBE) protocol such as Bazel, Buck2, Pantsbuild, and Siso.</p>
+<p>You can customize Forge via JSON or YAML, as well as via Starlark, a Python-based declarative language for configuring Bazel with custom build rules and macros for specific projects and platforms.</p>
+<h3>About Forge</h3>
+<p>Forge is the world&#39;s first open software development and validation platform purpose-built for diverse target platforms such as robots, autonomous vehicles, and edge devices.</p>
+<p>The platform is also optimized for developers building other types of large artifacts such as Chromium-based browsers, system software, and next-generation semiconductors.</p>
+<p>Designed to meet the growing scalability demands and complexity of large-scale software projects, Forge accelerates time-to-market by 10x or more without sacrificing reliability, safety, security, or efficiency.</p>
+<p>Forge is currently deployed in some of the world&#39;s largest and most complex environments, including Brex, Citrix, and Menlo Security.</p>
+<p>TraceMachina, developer of Forge, is backed by leading investors including Sequoia, Wellington Management, Verissimo Ventures, and prominent angel investors.</p>
+<p>To learn more about Forge, read our documentation, check out our GitHub Repository, or contact our team directly at <a href="mailto:hello@forge.com">hello@forge.com</a>.</p>
+7:X
+c:X
+c:C
+0:{"buildId":"KOFMzPd7o5DOrtfpDCIcw","data":[{"rsc":["$","$1","c",{"children":[[["$","section",null,{"className":"relative overflow-hidden","children":[["$","div",null,{"className":"pointer-events-none absolute inset-x-0 top-0 -z-10 h-[400px] bg-[radial-gradient(ellipse_900px_400px_at_50%_-10%,rgb(var(--nl-color-brand)/0.10),transparent_70%)]"}],["$","section",null,{"className":"relative px-6 py-20 pt-24 pb-6 md:pt-32 md:pb-8","children":["$","div",null,{"className":"mx-auto w-full max-w-[1200px]","children":["$","div",null,{"className":"mx-auto max-w-[760px]","children":[["$","a",null,{"href":"/resources/blog","className":"font-mono text-sm text-brand transition-colors hover:text-foreground","children":"← All posts"}],["$","div",null,{"className":"mt-8 flex flex-wrap items-center gap-2","children":[["$","span","news",{"className":"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] leading-none border-border-strong bg-transparent text-foreground","children":"news"}],["$","span","case-studies",{"className":"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] leading-none border-border-strong bg-transparent text-foreground","children":"case-studies"}]]}],["$","h1",null,{"className":"mt-5 text-balance text-[32px] font-semibold leading-[1.12] tracking-[-0.03em] md:text-[42px]","children":"Thirdwave Automation and Forge"}],["$","p",null,{"className":"mt-4 font-mono text-xs tracking-wide text-muted","children":["March 6, 2025"," · 7 minutes"]}]]}]}]}]]}],["$","section",null,{"className":"relative px-6 py-20 pt-2 pb-28 md:pt-0","children":["$","div",null,{"className":"mx-auto w-full max-w-[1200px]","children":["$","div",null,{"className":"mx-auto max-w-[760px]","children":[["$","div",null,{"className":"$2","dangerouslySetInnerHTML":{"__html":"$3"}}],"$L4"]}]}]}]],null,"$L5"]}],"isPartial":"$@6","staleTime":"$7","varyParams":null},{"rsc":"$L8","isPartial":"$@9","staleTime":"$7","varyParams":null},{"rsc":"$La","isPartial":"$@b","staleTime":"$7","varyParams":"$c"},{"rsc":"$Ld","isPartial":"$@e","staleTime":"$7","varyParams":"$c"},{"rsc":"$Lf","isPartial":"$@10","staleTime":"$7","varyParams":"$c"}],"isUpgradeableISRFallback":false,"a":"$@11","rootVaryParams":null,"needsRuntimeRequest":"$@12"}
+13:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js"],"OutletBoundary"]
+14:"$Sreact.suspense"
+16:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js"],"ViewportBoundary"]
+17:I[97367,["/_next/static/chunks/0h2qsuyze9ds1.js"],"MetadataBoundary"]
+18:I[27201,["/_next/static/chunks/0h2qsuyze9ds1.js"],"IconMark"]
+19:I[39756,["/_next/static/chunks/0h2qsuyze9ds1.js"],"default"]
+1a:I[37457,["/_next/static/chunks/0h2qsuyze9ds1.js"],"default"]
+4:["$","div",null,{"className":"mt-16 border-t border-border pt-8","children":[["$","p",null,{"className":"font-mono uppercase tracking-[0.18em] text-muted text-[10px]","children":"Forge Blog"}],["$","p",null,{"className":"mt-3 text-sm text-muted-foreground","children":["$","a",null,{"href":"/resources/blog","className":"text-brand transition-colors hover:text-foreground","children":"← Back to all posts"}]}]]}]
+5:["$","$L13",null,{"children":["$","$14",null,{"name":"Next.MetadataOutlet","children":"$@15"}]}]
+8:["$","$1","h",{"children":[null,["$","$L16",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L17",null,{"children":["$","$14",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Thirdwave Automation and Forge — Forge"}],["$","meta","1",{"name":"description","content":"“Our business relies on delivering autonomous systems with an exceptional level of safety. With Forge’s massively-parallel cloud service, we can now iterate faster and continuously learn from our t…"}],["$","meta","2",{"property":"og:title","content":"Thirdwave Automation and Forge"}],["$","meta","3",{"property":"og:description","content":"“Our business relies on delivering autonomous systems with an exceptional level of safety. With Forge’s massively-parallel cloud service, we can now iterate faster and continuously learn from our t…"}],["$","meta","4",{"property":"og:image","content":"https://forge-cdn.s3.us-east-1.amazonaws.com/forge_logo.webp"}],["$","meta","5",{"property":"og:type","content":"article"}],["$","meta","6",{"name":"twitter:card","content":"summary_large_image"}],["$","meta","7",{"name":"twitter:title","content":"Thirdwave Automation and Forge"}],["$","meta","8",{"name":"twitter:description","content":"“Our business relies on delivering autonomous systems with an exceptional level of safety. With Forge’s massively-parallel cloud service, we can now iterate faster and continuously learn from our t…"}],["$","meta","9",{"name":"twitter:image","content":"https://forge-cdn.s3.us-east-1.amazonaws.com/forge_logo.webp"}],["$","link","10",{"rel":"icon","href":"/icon.svg?icon.1u05eo7bsa_k9.svg","sizes":"any","type":"image/svg+xml"}],["$","$L18","11",{}]]}]}]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}]
+a:["$","$1","c",{"children":[null,["$","$L19",null,{"parallelRouterKey":"children","template":["$","$L1a",null,{}]}]]}]
+d:["$","$1","c",{"children":[null,["$","$L19",null,{"parallelRouterKey":"children","template":["$","$L1a",null,{}]}]]}]
+f:["$","$1","c",{"children":[null,["$","$L19",null,{"parallelRouterKey":"children","template":["$","$L1a",null,{}]}]]}]
+12:true
+15:null
+7:300
+7:C
+11:0
+9:"$undefined"
+b:"$undefined"
+e:"$undefined"
+10:"$undefined"
+6:"$undefined"
